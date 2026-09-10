@@ -1,0 +1,17 @@
+{
+  "auth": {
+    "authorizedDomains": [
+      "localhost",
+      "127.0.0.1",
+      "robinhacks-2026-ajs.web.app",
+      "robinhacks-2026-ajs.firebaseapp.com"
+    ],
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "RobinHacks",
+        "supportEmail": "organizer@example.com"
+      }
+    }
+  }
+}

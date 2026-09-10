@@ -1,0 +1,22 @@
+/** Versioned constants. Change only before an event opens registration. */
+export const RULES = Object.freeze({
+  version: 1,
+  initialWalletMinor: 1_000_000,
+  primaryPriceMinor: 10_000,
+  issuedShares: 500,
+  primaryShares: 100,
+  openingPoolShares: 400,
+  openingPoolCashMinor: 4_000_000,
+  maxSeedCommitmentMinor: 500_000,
+  maxHoldingShares: 25,
+  maxSeedRequestShares: 25,
+  tradesPerWindow: 15,
+  tradeCooldownMs: 10_000,
+  maxTradingWindows: 3,
+  seedDurationMinutes: 20,
+  tradingDurationMinutes: 30,
+  maxTeams: 30,
+  firstPlaceMinor: 17_500,
+  lastPlaceMinor: 2_500,
+  singleIssuerMinor: 10_000,
+});

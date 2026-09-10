@@ -1,0 +1,18 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    { "collectionGroup": "receipts", "fieldPath": "entries", "indexes": [] },
+    { "collectionGroup": "receipts", "fieldPath": "payloadKey", "indexes": [] },
+    { "collectionGroup": "commandReceipts", "fieldPath": "result", "indexes": [] },
+    { "collectionGroup": "commandReceipts", "fieldPath": "payloadKey", "indexes": [] },
+    { "collectionGroup": "manifests", "fieldPath": "teams", "indexes": [] },
+    { "collectionGroup": "manifests", "fieldPath": "requests", "indexes": [] },
+    { "collectionGroup": "manifests", "fieldPath": "allocations", "indexes": [] },
+    { "collectionGroup": "views", "fieldPath": "entries", "indexes": [] },
+    { "collectionGroup": "results", "fieldPath": "teams", "indexes": [] },
+    { "collectionGroup": "results", "fieldPath": "issuers", "indexes": [] },
+    { "collectionGroup": "notes", "fieldPath": "thesis", "indexes": [] },
+    { "collectionGroup": "notes", "fieldPath": "reconsider", "indexes": [] },
+    { "collectionGroup": "commitments", "fieldPath": "shares", "indexes": [] }
+  ]
+}

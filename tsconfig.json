@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node", "vite/client", "vitest/globals"],
+    "baseUrl": ".",
+    "paths": {
+      "@robinhacks/core": ["packages/core/src/index.ts"],
+      "@robinhacks/application": ["packages/application/src/index.ts"]
+    }
+  },
+  "include": [
+    "apps/*/src",
+    "packages/*/src",
+    "tests",
+    "apps/web/vite.config.ts",
+    "vitest.config.ts"
+  ]
+}

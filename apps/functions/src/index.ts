@@ -1,0 +1,138 @@
+import { initializeApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions';
+import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
+import { z } from 'zod';
+import {
+  ApplicationError,
+  GameService,
+  SystemClock,
+  identifier,
+  parseCommand,
+} from '@robinhacks/application';
+import { DomainError } from '@robinhacks/core';
+import { FirestoreRepository } from './firestore-repository';
+import { RequestLimiter } from './request-limiter';
+
+initializeApp();
+const repository = new FirestoreRepository(getFirestore());
+const clock = new SystemClock();
+const limiter = new RequestLimiter();
+const envelope = z.object({ eventId: identifier }).strict();
+const commandEnvelope = z.object({ eventId: identifier, command: z.unknown() }).strict();
+const poolEnvelope = z.object({ eventId: identifier, issuerId: identifier }).strict();
+const configuredOrigins = process.env.ALLOWED_ORIGINS?.split(',')
+  .map((value) => value.trim())
+  .filter(Boolean);
+const options = {
+  region: process.env.FUNCTION_REGION || 'us-west1',
+  minInstances: 0,
+  maxInstances: 2,
+  memory: '256MiB' as const,
+  timeoutSeconds: 60,
+  enforceAppCheck: process.env.ENFORCE_APP_CHECK === 'true',
+  cors: configuredOrigins?.length
+    ? configuredOrigins
+    : [
+        /^https:\/\/[a-z0-9-]+\.(web\.app|firebaseapp\.com)$/,
+        /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/,
+      ],
+};
+
+function actor(request: CallableRequest, action: string, rate = 60) {
+  if (!request.auth)
+    throw new HttpsError('unauthenticated', 'Sign in before opening this event.', {
+      code: 'SIGN_IN_REQUIRED',
+    });
+  limiter.check(request.auth.uid, action, rate);
+  return {
+    uid: request.auth.uid,
+    displayName: typeof request.auth.token.name === 'string' ? request.auth.token.name : undefined,
+  };
+}
+
+function requireSmallPayload(data: unknown) {
+  if (Buffer.byteLength(JSON.stringify(data) ?? '', 'utf8') > 16 * 1024)
+    throw new HttpsError('invalid-argument', 'This request exceeds the 16 KiB command limit.', {
+      code: 'PAYLOAD_TOO_LARGE',
+    });
+}
+
+async function transport<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    if (error instanceof z.ZodError)
+      throw new HttpsError(
+        'invalid-argument',
+        error.issues[0]?.message ?? 'The request is invalid.',
+        { code: 'INVALID_ARGUMENT' },
+      );
+    if (error instanceof ApplicationError || error instanceof DomainError) {
+      const permissions = /REQUIRED|CANNOT_COMPETE|ALREADY_REGISTERED/.test(error.code);
+      throw new HttpsError(
+        permissions ? 'permission-denied' : 'failed-precondition',
+        error.message,
+        { code: error.code },
+      );
+    }
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error.code === 10 || error.code === 'aborted')
+    )
+      throw new HttpsError(
+        'aborted',
+        'The shared state changed too often. Retry this same request after refreshing.',
+        { code: 'RETRYABLE_CONTENTION' },
+      );
+    // Never log input, identity tokens, credentials, private notes, or command payloads.
+    logger.error('Unhandled game service error', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+    throw new HttpsError(
+      'internal',
+      'The request could not be completed. Keep its request ID when retrying.',
+      { code: 'INTERNAL_ERROR' },
+    );
+  }
+}
+
+export const gameCommand = onCall(options, (request) =>
+  transport(async () => {
+    const identity = actor(request, 'command', 90);
+    requireSmallPayload(request.data);
+    const data = commandEnvelope.parse(request.data);
+    return new GameService(repository, data.eventId, clock).execute(
+      identity,
+      parseCommand(data.command),
+    );
+  }),
+);
+
+export const gameSnapshot = onCall(options, (request) =>
+  transport(async () => {
+    const identity = actor(request, 'snapshot', 60);
+    const data = envelope.parse(request.data);
+    return new GameService(repository, data.eventId, clock).snapshot(identity.uid);
+  }),
+);
+
+export const gamePool = onCall(options, (request) =>
+  transport(async () => {
+    const identity = actor(request, 'pool', 90);
+    const data = poolEnvelope.parse(request.data);
+    return new GameService(repository, data.eventId, clock).pool(identity.uid, data.issuerId);
+  }),
+);
+
+export const gameExport = onCall(options, (request) =>
+  transport(async () => {
+    const identity = actor(request, 'export', 2);
+    const data = envelope.parse(request.data);
+    return new GameService(repository, data.eventId, clock).exportEvent(identity.uid);
+  }),
+);

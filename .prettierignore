@@ -1,0 +1,11 @@
+node_modules
+apps/web/dist
+apps/functions/lib
+package-lock.json
+apps/functions/package-lock.json
+.firebase
+artifacts
+docs
+firebase.*.local.json
+output
+.playwright-cli

@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Assumed model: events/{eventId} stores public event metadata only;
+    // members/{uid} stores approved/pending/suspended status, teamId and role.
+    // views/market contains bounded public profiles, pools and revealed funding.
+    // Wallets, commitments, notes, membership details and unpublished results
+    // are fetched through authenticated callable application services only.
+    function approved(eventId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid)).data.status == 'approved';
+    }
+    match /events/{eventId} {
+      allow get: if approved(eventId);
+      allow list, create, update, delete: if false;
+      match /members/{uid} {
+        allow get: if request.auth != null && request.auth.uid == uid;
+        allow list, create, update, delete: if false;
+      }
+      match /views/market {
+        allow get: if approved(eventId);
+        allow list, create, update, delete: if false;
+      }
+    }
+    // No client-side creates or updates exist, so data validation and role
+    // enforcement live in the shared command schemas and trusted services.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@robinhacks/application",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@robinhacks/core": "*",
+    "zod": "^3.25.76"
+  }
+}
