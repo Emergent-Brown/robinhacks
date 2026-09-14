@@ -1,4 +1,4 @@
-import { EventPolicy, RULES } from '@robinhacks/core';
+import { EventPolicy, RULES, emptyPlatformSnapshot } from '@robinhacks/core';
 import type {
   AccessRequest,
   AppSnapshot,
@@ -17,7 +17,15 @@ import type {
   ResultsView,
   Team,
   Wallet,
+  PlatformCommand,
+  FundingCommand,
+  CommunityCommand,
+  FundingRound,
+  TeamConversation,
 } from '@robinhacks/core';
+import { fundingCommandTypes, platformCommandTypes } from './platform-schema';
+import { FundingService } from './services/funding-service';
+import { CommunityService } from './services/community-service';
 import { canonicalJson, identifier, parseCommand } from './command-schema';
 import { requireState } from './errors';
 import { EventPaths } from './paths';
@@ -37,6 +45,8 @@ interface AcceptedCommand {
 export interface Actor {
   uid: string;
   displayName?: string;
+  email?: string;
+  emailVerified?: boolean;
 }
 const emptyMarket = (): MarketView => ({ entries: [], asOf: 0, phaseVersion: 0 });
 const emptySnapshot = (event: EventConfig | null, member: Member | null): AppSnapshot => ({
@@ -62,6 +72,8 @@ export class GameService {
   private readonly market = new MarketService();
   private readonly membership = new MembershipService();
   private readonly operations = new OperationService();
+  private readonly funding = new FundingService();
+  private readonly community = new CommunityService();
 
   constructor(
     private readonly repository: Repository,
@@ -87,11 +99,29 @@ export class GameService {
       ]);
       requireState(event, 'EVENT_NOT_FOUND', 'This event has not been configured yet.');
       requireState(
-        event.rulesVersion === RULES.version,
+        event.rulesVersion === (event.platform ? 2 : RULES.version),
         'RULES_MISMATCH',
         'This deployment does not support the event’s frozen rules version.',
       );
       if (command.type !== 'requestMembership') Permissions.member(member);
+      if (event.platform) {
+        requireState(
+          actor.emailVerified !== false,
+          'EMAIL_VERIFICATION_REQUIRED',
+          'Verify your email before making changes.',
+        );
+        requireState(
+          ![
+            'executeTrade',
+            'setSeedCommitments',
+            'prepareResults',
+            'publishResults',
+            'continueOperation',
+          ].includes(command.type),
+          'SEALED_ROUNDS_ONLY',
+          'This event uses sealed funding rounds. Shares and trading are disabled.',
+        );
+      }
       if (prior) {
         this.assertReplay(prior.payloadKey, payloadKey);
         return prior.result;
@@ -123,68 +153,91 @@ export class GameService {
         payloadKey,
       };
       let result: CommandResult;
-      switch (command.type) {
-        case 'executeTrade':
-          return this.market.trade(context, command);
-        case 'requestMembership':
-          result = await this.membership.request(context, command);
-          break;
-        case 'approveMembership':
-          result = await this.membership.approve(context, command);
-          break;
-        case 'setMemberRole':
-          result = await this.membership.role(context, command);
-          break;
-        case 'updateTeam':
-          result = await this.membership.profile(context, command);
-          break;
-        case 'setSeedCommitments':
-          result = await this.market.commitments(context, command);
-          break;
-        case 'saveNote':
-          result = await this.market.note(context, command);
-          break;
-        case 'transitionEvent':
-          result = await this.transition(context, command);
-          break;
-        case 'setPause':
-          result = await this.pause(context, command);
-          break;
-        case 'setAnnouncement': {
-          Permissions.organizer(context.member);
-          Permissions.editable(event);
-          tx.set(this.paths.root, { ...event, announcement: command.announcement });
-          result = { message: 'Event announcement updated.' };
-          break;
+      if (platformCommandTypes.has(command.type)) {
+        requireState(
+          event.platform,
+          'PLATFORM_REQUIRED',
+          'This event must be upgraded before using funding rounds.',
+        );
+        result = fundingCommandTypes.has(command.type)
+          ? await this.funding.execute(context, command as FundingCommand)
+          : await this.community.execute(context, command as CommunityCommand);
+      } else
+        switch (command.type) {
+          case 'executeTrade':
+            return this.market.trade(context, command);
+          case 'requestMembership':
+            result = await this.membership.request(context, command);
+            break;
+          case 'approveMembership':
+            result = await this.membership.approve(context, command);
+            break;
+          case 'setMemberRole':
+            result = await this.membership.role(context, command);
+            break;
+          case 'updateTeam':
+            result = await this.membership.profile(context, command);
+            break;
+          case 'setSeedCommitments':
+            result = await this.market.commitments(context, command);
+            break;
+          case 'saveNote':
+            result = await this.market.note(context, command);
+            break;
+          case 'transitionEvent':
+            result = await this.transition(context, command);
+            break;
+          case 'setPause':
+            result = await this.pause(context, command);
+            break;
+          case 'setAnnouncement': {
+            Permissions.organizer(context.member);
+            Permissions.editable(event);
+            tx.set(this.paths.root, { ...event, announcement: command.announcement });
+            result = { message: 'Event announcement updated.' };
+            break;
+          }
+          case 'haltIssuer':
+            result = await this.halt(context, command);
+            break;
+          case 'continueOperation': {
+            Permissions.organizer(context.member);
+            result = { operation: await this.operations.continue(context, command) };
+            break;
+          }
+          case 'prepareResults': {
+            Permissions.organizer(context.member);
+            result = { operation: await this.operations.startResults(context, command) };
+            break;
+          }
+          case 'publishResults':
+            Permissions.organizer(context.member);
+            result = await this.operations.publish(context, command);
+            break;
+          case 'refreshMarket': {
+            Permissions.organizer(context.member);
+            if (event.platform) return { message: 'Project information is current.' };
+            const view = await tx.get<MarketView>(this.paths.doc('views', 'market'));
+            if (view && now - view.asOf < 120_000 && view.phaseVersion === event.phaseVersion)
+              return { message: 'Market snapshot is current.' };
+            await this.refreshProjection(tx, now);
+            // Projection refresh is naturally idempotent in this single transaction.
+            return { message: 'Market snapshot refreshed.' };
+          }
+          default:
+            throw new Error('Unsupported command.');
         }
-        case 'haltIssuer':
-          result = await this.halt(context, command);
-          break;
-        case 'continueOperation': {
-          Permissions.organizer(context.member);
-          result = { operation: await this.operations.continue(context, command) };
-          break;
-        }
-        case 'prepareResults': {
-          Permissions.organizer(context.member);
-          result = { operation: await this.operations.startResults(context, command) };
-          break;
-        }
-        case 'publishResults':
-          Permissions.organizer(context.member);
-          result = await this.operations.publish(context, command);
-          break;
-        case 'refreshMarket': {
-          Permissions.organizer(context.member);
-          const view = await tx.get<MarketView>(this.paths.doc('views', 'market'));
-          if (view && now - view.asOf < 120_000 && view.phaseVersion === event.phaseVersion)
-            return { message: 'Market snapshot is current.' };
-          await this.refreshProjection(tx, now);
-          // Projection refresh is naturally idempotent in this single transaction.
-          return { message: 'Market snapshot refreshed.' };
-        }
-      }
       if (
+        (event.platform &&
+          ![
+            'sendMessage',
+            'readConversation',
+            'blockConversation',
+            'reportMessage',
+            'saveJudgingSheet',
+            'saveAllocation',
+            'saveBallot',
+          ].includes(command.type)) ||
         [
           'approveMembership',
           'setMemberRole',
@@ -205,7 +258,7 @@ export class GameService {
       });
       if (
         context.member.role === 'organizer' ||
-        ['updateTeam', 'setMemberRole'].includes(command.type)
+        ['updateTeam', 'setMemberRole', 'publishUpdate', 'submitProject'].includes(command.type)
       ) {
         const audit: AuditEntry = {
           id: `${actor.uid}__${command.commandId}`,
@@ -222,14 +275,29 @@ export class GameService {
     });
   }
 
-  async snapshot(uid: string): Promise<AppSnapshot> {
+  async snapshot(uid: string, identity?: Actor): Promise<AppSnapshot> {
     identifier.parse(uid);
+    requireState(
+      !identity || identity.uid === uid,
+      'IDENTITY_MISMATCH',
+      'The signed-in identity does not match.',
+    );
     return this.repository.transaction(async (tx) => {
       const [event, member] = await Promise.all([
         tx.get<EventConfig>(this.paths.root),
         tx.get<Member>(this.paths.member(uid)),
       ]);
       const snapshot = emptySnapshot(event, member);
+      if (event?.platform) snapshot.platform = emptyPlatformSnapshot();
+      if (
+        member &&
+        identity?.email &&
+        (member.email !== identity.email || member.emailVerified !== identity.emailVerified)
+      ) {
+        member.email = identity.email;
+        member.emailVerified = identity.emailVerified === true;
+        tx.set(this.paths.member(uid), member);
+      }
       if (!event || !member || member.status !== 'approved') {
         if (event) {
           const request = await tx.get<AccessRequest>(this.paths.doc('accessRequests', uid));
@@ -245,6 +313,61 @@ export class GameService {
                   left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
               );
           }
+        }
+        return snapshot;
+      }
+      if (event.platform) {
+        if (['organizer', 'judge'].includes(member.role))
+          requireState(
+            member.teamId === null,
+            'STAFF_CANNOT_COMPETE',
+            'Judges and organizers must use separate staff identities.',
+          );
+        const now = this.clock.now();
+        const context = { tx, paths: this.paths, event, member, now };
+        const teams = await tx.list<Team>(this.paths.collection('teams'), 31);
+        snapshot.market = {
+          entries: teams.map((team) => ({
+            team,
+            pool: {
+              issuerId: team.id,
+              shareReserve: 0,
+              creditReserveMinor: 0,
+              version: 0,
+              halted: team.eligibility !== 'active',
+            },
+            issuer: {
+              issuerId: team.id,
+              issuedShares: 0,
+              primarySharesRemaining: 0,
+              fundingVaultMinor: 0,
+              seedBackers: 0,
+              version: 0,
+            },
+          })),
+          asOf: now,
+          phaseVersion: event.phaseVersion,
+        };
+        snapshot.platform = {
+          ...emptyPlatformSnapshot(),
+          ...(await this.funding.snapshot(context)),
+          ...(await this.community.snapshot(context)),
+        };
+        const members = await tx.list<Member>(this.paths.collection('members'), 501);
+        if (member.role === 'organizer') {
+          snapshot.members = members;
+          snapshot.requests = (
+            await tx.list<AccessRequest>(this.paths.collection('accessRequests'), 501)
+          ).filter((request) => request.status === 'pending');
+          snapshot.audit = (await tx.list<AuditEntry>(this.paths.collection('adminAudit'), 1000))
+            .sort((a, b) => b.createdAt - a.createdAt)
+            .slice(0, 100);
+        } else {
+          snapshot.members = members
+            .filter((entry) => entry.teamId && entry.teamId === member.teamId)
+            .map(({ email, emailVerified, ...safe }) => safe);
+          if (member.teamId)
+            snapshot.notes = await tx.list<Note>(this.paths.notes(member.teamId), 31);
         }
         return snapshot;
       }
@@ -298,11 +421,46 @@ export class GameService {
     });
   }
 
+  async publicSnapshot(): Promise<AppSnapshot> {
+    return this.repository.transaction(async (tx) => {
+      const event = await tx.get<EventConfig>(this.paths.root);
+      const snapshot = emptySnapshot(
+        event ? { ...event, tieSeed: '', activeOperationId: null } : null,
+        null,
+      );
+      if (event?.platform) snapshot.platform = emptyPlatformSnapshot();
+      return snapshot;
+    });
+  }
+
+  async conversation(uid: string, otherTeamId: string): Promise<TeamConversation | null> {
+    identifier.parse(uid);
+    identifier.parse(otherTeamId);
+    return this.repository.transaction(async (tx) => {
+      const member = await tx.get<Member>(this.paths.member(uid));
+      Permissions.member(member);
+      const event = await tx.get<EventConfig>(this.paths.root);
+      requireState(
+        event?.platform,
+        'PLATFORM_REQUIRED',
+        'Messaging is not enabled for this event.',
+      );
+      return this.community.readConversation(tx, this.paths, member, otherTeamId);
+    });
+  }
+
   async pool(uid: string, issuerId: string): Promise<Pool> {
     identifier.parse(uid);
     identifier.parse(issuerId);
     return this.repository.transaction(async (tx) => {
-      Permissions.member(await tx.get<Member>(this.paths.member(uid)));
+      const member = await tx.get<Member>(this.paths.member(uid));
+      Permissions.member(member);
+      const event = await tx.get<EventConfig>(this.paths.root);
+      requireState(
+        !event?.platform && member.role !== 'judge',
+        'SEALED_ROUNDS_ONLY',
+        'This event has no tradable shares.',
+      );
       const pool = await tx.get<Pool>(this.paths.pool(issuerId));
       requireState(pool, 'NOT_FOUND', 'This exchange does not exist.');
       return pool;
@@ -336,6 +494,46 @@ export class GameService {
         exportedAt: this.clock.now(),
         event,
       };
+      if (event.platform) {
+        const rounds = await tx.list<FundingRound>(this.paths.collection('fundingRounds'), 4);
+        requireState(
+          !rounds.some((round) => round.state === 'open'),
+          'ROUND_SEALED',
+          'Close the sealed round before exporting allocations. Pausing does not reveal them.',
+        );
+        requireState(
+          ['FINALIZED', 'CANCELLED', 'ARCHIVED'].includes(event.phase),
+          'EXPORT_AFTER_RESULTS',
+          'Export the complete private event record only after publication or cancellation.',
+        );
+        data.schemaVersion = 2;
+        for (const name of [
+          'teams',
+          'members',
+          'fundingRounds',
+          'roundAllocations',
+          'roundEntitlements',
+          'projectUpdates',
+          'submissions',
+          'judgeAssignments',
+          'judgingSheets',
+          'communityBallots',
+          'awardResults',
+          'adminAudit',
+          'accessRequests',
+        ])
+          data[name] = await tx.list(this.paths.collection(name), 1000);
+        const exportId = `export_${uid.slice(0, 60)}_${this.clock.now()}`;
+        tx.set(this.paths.doc('adminAudit', exportId), {
+          id: exportId,
+          actorUid: uid,
+          action: 'exportEvent',
+          detail:
+            'Exported the sealed funding record and final judging records after publication or cancellation.',
+          createdAt: this.clock.now(),
+        });
+        return data;
+      }
       for (const name of [
         'teams',
         'members',
@@ -394,6 +592,36 @@ export class GameService {
       'EVENT_CHANGED',
       'The event changed. Refresh its controls.',
     );
+    if (event.platform) {
+      requireState(
+        command.target === 'CANCELLED' &&
+          !['FINALIZED', 'ARCHIVED', 'CANCELLED'].includes(event.phase),
+        'USE_FUNDING_WORKFLOW',
+        'Use the funding and judging controls for this event.',
+      );
+      const rounds = await tx.list<FundingRound>(context.paths.collection('fundingRounds'), 4);
+      for (const round of rounds)
+        if (round.state === 'open')
+          tx.set(context.paths.doc('fundingRounds', round.id), {
+            ...round,
+            state: 'void',
+            totals: {},
+            voidReason: 'Event cancelled',
+            version: round.version + 1,
+          });
+      tx.set(context.paths.root, {
+        ...event,
+        phase: 'CANCELLED',
+        phaseVersion: event.phaseVersion + 1,
+        closesAt: null,
+        paused: false,
+        pauseReason: '',
+        platform: { ...event.platform, submissionsOpen: false, ballotOpen: false },
+      });
+      return {
+        message: 'Event cancelled. History is preserved; investor rewards will not be paid.',
+      };
+    }
     EventPolicy.assertTransition(event, command.target);
     requireState(
       !['FINALIZING', 'FINALIZED'].includes(command.target),
@@ -471,6 +699,43 @@ export class GameService {
       'REASON_REQUIRED',
       'Give a short reason for the pause.',
     );
+    if (event.platform) {
+      requireState(
+        command.paused !== event.paused,
+        'PAUSE_UNCHANGED',
+        'The pause state already matches.',
+      );
+      const pausedAt = event.pausedAt ?? context.now;
+      const extension = command.paused ? 0 : Math.max(0, context.now - pausedAt);
+      const extend = (deadline: number | null) =>
+        deadline && deadline > pausedAt ? deadline + extension : deadline;
+      const rounds = await tx.list<FundingRound>(paths.collection('fundingRounds'), 4);
+      for (const round of rounds)
+        if (round.state === 'open' && !command.paused && round.closesAt > pausedAt)
+          tx.set(paths.doc('fundingRounds', round.id), {
+            ...round,
+            closesAt: round.closesAt + extension,
+            version: round.version + 1,
+          });
+      tx.set(paths.root, {
+        ...event,
+        paused: command.paused,
+        pausedAt: command.paused ? context.now : null,
+        pauseReason: command.paused ? command.reason : '',
+        phaseVersion: event.phaseVersion + 1,
+        closesAt: extend(event.closesAt),
+        platform: {
+          ...event.platform,
+          submissionClosesAt: extend(event.platform.submissionClosesAt),
+          ballotClosesAt: extend(event.platform.ballotClosesAt),
+        },
+      });
+      return {
+        message: command.paused
+          ? 'Event paused. Remaining submission time is preserved for everyone.'
+          : 'Event resumed. Active deadlines were extended equally.',
+      };
+    }
     tx.set(paths.root, {
       ...event,
       paused: command.paused,
@@ -498,6 +763,32 @@ export class GameService {
       'PAUSE_REQUIRED',
       'Pause the event before changing project eligibility.',
     );
+    if (event.platform) {
+      const team = await tx.get<Team>(paths.team(command.issuerId));
+      requireState(team, 'NOT_FOUND', 'The project does not exist.');
+      const rounds = await tx.list<FundingRound>(paths.collection('fundingRounds'), 4);
+      requireState(
+        !rounds.some((round) => round.state === 'open'),
+        'ROUND_OPEN',
+        'Close or formally void the open round before changing project eligibility.',
+      );
+      requireState(
+        !event.platform.rulesLockedAt ||
+          command.eligibility !== 'active' ||
+          team.eligibility === 'active',
+        'ROSTER_LOCKED',
+        'A withdrawn project cannot re-enter after funding begins.',
+      );
+      tx.set(paths.team(team.id), {
+        ...team,
+        eligibility: command.eligibility,
+        version: team.version + 1,
+      });
+      tx.set(paths.root, { ...event, phaseVersion: event.phaseVersion + 1 });
+      return {
+        message: `${team.name} is ${command.eligibility}. Existing investments are preserved without refunds.`,
+      };
+    }
     const [team, pool] = await Promise.all([
       tx.get<Team>(paths.team(command.issuerId)),
       tx.get<Pool>(paths.pool(command.issuerId)),
@@ -577,6 +868,32 @@ export class GameService {
       tx.get(this.paths.doc('views', 'seedPublication')),
     ]);
     requireState(event, 'EVENT_NOT_FOUND', 'This event does not exist.');
+    if (event.platform) {
+      const teams = await tx.list<Team>(this.paths.collection('teams'), 31);
+      tx.set(this.paths.doc('views', 'market'), {
+        entries: teams.map((team) => ({
+          team,
+          pool: {
+            issuerId: team.id,
+            shareReserve: 0,
+            creditReserveMinor: 0,
+            version: 0,
+            halted: false,
+          },
+          issuer: {
+            issuerId: team.id,
+            issuedShares: 0,
+            primarySharesRemaining: 0,
+            fundingVaultMinor: 0,
+            seedBackers: 0,
+            version: 0,
+          },
+        })),
+        asOf: now,
+        phaseVersion: event.phaseVersion,
+      });
+      return;
+    }
     await this.market.projection(tx, this.paths, event.phaseVersion, now, Boolean(seedPublication));
   }
 

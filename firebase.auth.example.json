@@ -9,7 +9,7 @@
     "providers": {
       "emailPassword": true,
       "googleSignIn": {
-        "oAuthBrandDisplayName": "RobinHacks",
+        "oAuthBrandDisplayName": "Emergent Hacks",
         "supportEmail": "organizer@example.com"
       }
     }

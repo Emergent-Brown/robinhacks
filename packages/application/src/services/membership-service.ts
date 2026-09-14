@@ -9,6 +9,23 @@ const colors = ['#5b55e7', '#167d8d', '#d8713e', '#bf5898', '#3c8c67', '#6b72b8'
 export class MembershipService {
   async request(context: CommandContext, command: Extract<Command, { type: 'requestMembership' }>) {
     const { tx, paths, event, actor, now } = context;
+    if (event.platform) {
+      requireState(
+        actor.emailVerified === true && !!actor.email,
+        'EMAIL_VERIFICATION_REQUIRED',
+        'Verify your email before requesting event access.',
+      );
+      requireState(
+        !command.staffRole || !command.teamId,
+        'INVALID_REQUEST',
+        'Staff accounts cannot also request a competing team.',
+      );
+      requireState(
+        !event.platform.rulesLockedAt || !!command.staffRole,
+        'ROSTER_LOCKED',
+        'Team rosters are locked after the first funding round opens. Contact an organizer.',
+      );
+    }
     const registrationOpen = ['DRAFT', 'REGISTRATION'].includes(event.phase);
     requireState(
       !event.activeOperationId &&
@@ -18,7 +35,7 @@ export class MembershipService {
       'Access requests are closed during settlement or after the event. Contact an organizer.',
     );
     requireState(
-      registrationOpen || !!command.teamId,
+      registrationOpen || !!command.teamId || !!command.staffRole,
       'REGISTRATION_CLOSED',
       'New teams can be created only before funding opens. Choose an existing team.',
     );
@@ -52,6 +69,8 @@ export class MembershipService {
       teamId: command.teamId ?? null,
       requestedAt: now,
       status: 'pending',
+      ...(command.staffRole ? { requestedRole: command.staffRole } : {}),
+      ...(actor.email ? { email: actor.email, emailVerified: actor.emailVerified === true } : {}),
     };
     tx.set(paths.doc('accessRequests', actor.uid), request);
     tx.set<Member>(paths.member(actor.uid), {
@@ -61,6 +80,7 @@ export class MembershipService {
       role: 'member',
       status: 'pending',
       version: (member?.version ?? 0) + 1,
+      ...(actor.email ? { email: actor.email, emailVerified: actor.emailVerified === true } : {}),
     });
     return { message: 'Request sent. An organizer will verify your team and approve access.' };
   }
@@ -69,6 +89,12 @@ export class MembershipService {
     const { tx, paths, event, member, now } = context;
     Permissions.organizer(member);
     Permissions.rosterEditable(event);
+    if (event.platform)
+      requireState(
+        !event.platform.rulesLockedAt,
+        'ROSTER_LOCKED',
+        'Competing rosters are locked once funding begins.',
+      );
     const [request, currentMember, teams, members] = await Promise.all([
       tx.get<AccessRequest>(paths.doc('accessRequests', command.uid)),
       tx.get<Member>(paths.member(command.uid)),
@@ -80,6 +106,12 @@ export class MembershipService {
       'REQUEST_NOT_PENDING',
       'This access request is no longer pending.',
     );
+    if (event.platform)
+      requireState(
+        currentMember.emailVerified === true && !request.requestedRole,
+        'EMAIL_VERIFICATION_REQUIRED',
+        'Verify this attendee identity and use staff approval for staff requests.',
+      );
     requireState(
       command.uid !== member.uid,
       'ORGANIZER_CANNOT_COMPETE',
@@ -167,33 +199,39 @@ export class MembershipService {
         version: 0,
       };
       tx.set(paths.team(teamId), team);
-      tx.set(paths.wallet(teamId), wallet);
-      tx.set(paths.pool(teamId), pool);
-      tx.set(paths.issuer(teamId), issuer);
-      tx.set(
-        paths.receipt(teamId, `genesis_${teamId}`),
-        receipt(context, command, 'Initial virtual credits and project shares issued.', {
-          id: `genesis_${teamId}`,
-          kind: 'genesis',
-          teamId,
-          entries: [
-            { account: `wallet:${teamId}`, asset: 'credits', delta: RULES.initialWalletMinor },
-            { account: `pool:${teamId}`, asset: 'credits', delta: RULES.openingPoolCashMinor },
-            {
-              account: 'system:genesis',
-              asset: 'credits',
-              delta: -(RULES.initialWalletMinor + RULES.openingPoolCashMinor),
-            },
-            { account: `primary:${teamId}`, asset: `shares:${teamId}`, delta: RULES.primaryShares },
-            {
-              account: `pool:${teamId}`,
-              asset: `shares:${teamId}`,
-              delta: RULES.openingPoolShares,
-            },
-            { account: 'system:genesis', asset: `shares:${teamId}`, delta: -RULES.issuedShares },
-          ],
-        }),
-      );
+      if (!event.platform) {
+        tx.set(paths.wallet(teamId), wallet);
+        tx.set(paths.pool(teamId), pool);
+        tx.set(paths.issuer(teamId), issuer);
+        tx.set(
+          paths.receipt(teamId, `genesis_${teamId}`),
+          receipt(context, command, 'Initial virtual credits and project shares issued.', {
+            id: `genesis_${teamId}`,
+            kind: 'genesis',
+            teamId,
+            entries: [
+              { account: `wallet:${teamId}`, asset: 'credits', delta: RULES.initialWalletMinor },
+              { account: `pool:${teamId}`, asset: 'credits', delta: RULES.openingPoolCashMinor },
+              {
+                account: 'system:genesis',
+                asset: 'credits',
+                delta: -(RULES.initialWalletMinor + RULES.openingPoolCashMinor),
+              },
+              {
+                account: `primary:${teamId}`,
+                asset: `shares:${teamId}`,
+                delta: RULES.primaryShares,
+              },
+              {
+                account: `pool:${teamId}`,
+                asset: `shares:${teamId}`,
+                delta: RULES.openingPoolShares,
+              },
+              { account: 'system:genesis', asset: `shares:${teamId}`, delta: -RULES.issuedShares },
+            ],
+          }),
+        );
+      }
     } else {
       requireState(
         existing.eligibility === 'active',
@@ -215,6 +253,9 @@ export class MembershipService {
       role: command.role,
       status: 'approved',
       version: currentMember.version + 1,
+      ...(currentMember.email
+        ? { email: currentMember.email, emailVerified: currentMember.emailVerified === true }
+        : {}),
     };
     tx.set(paths.member(command.uid), approved);
     tx.set(`${paths.team(teamId)}/members/${command.uid}`, approved);
@@ -234,6 +275,24 @@ export class MembershipService {
       tx.list<Member>(paths.collection('members'), 501),
     ]);
     requireState(target, 'NOT_FOUND', 'This member does not exist.');
+    if (event.platform) {
+      if (command.status === 'approved')
+        requireState(
+          target.emailVerified === true,
+          'EMAIL_VERIFICATION_REQUIRED',
+          'This account must verify its email before approval.',
+        );
+      requireState(
+        !event.platform.rulesLockedAt || target.teamId === null || command.status === 'suspended',
+        'ROSTER_LOCKED',
+        'Competing team assignments and roles are locked after funding starts.',
+      );
+      requireState(
+        !event.platform.rulesLockedAt || !target.teamId || command.role === target.role,
+        'ROSTER_LOCKED',
+        'A suspension cannot change a frozen team role.',
+      );
+    }
     if (member.role !== 'organizer') {
       requireState(
         member.role === 'captain' &&
@@ -247,7 +306,7 @@ export class MembershipService {
         'Only the captain can designate a teammate before funding; later changes require an organizer.',
       );
     } else Permissions.organizer(member);
-    if (command.role === 'organizer')
+    if (command.role === 'organizer' || command.role === 'judge')
       requireState(
         target.teamId === null && member.role === 'organizer',
         'ORGANIZER_CANNOT_COMPETE',
@@ -268,7 +327,9 @@ export class MembershipService {
         'Keep at least one approved organizer.',
       );
     requireState(
-      command.role === 'organizer' || target.teamId !== null || command.status !== 'approved',
+      ['organizer', 'judge'].includes(command.role) ||
+        target.teamId !== null ||
+        command.status !== 'approved',
       'TEAM_REQUIRED',
       'Approve a pending person into a team using their request.',
     );
@@ -299,6 +360,12 @@ export class MembershipService {
     const request = await tx.get<AccessRequest>(paths.doc('accessRequests', target.uid));
     if (request?.status === 'pending' && command.status === 'suspended')
       tx.set(paths.doc('accessRequests', target.uid), { ...request, status: 'rejected' });
+    if (
+      request?.status === 'pending' &&
+      command.status === 'approved' &&
+      ['organizer', 'judge'].includes(command.role)
+    )
+      tx.set(paths.doc('accessRequests', target.uid), { ...request, status: 'approved' });
     tx.set(paths.root, { ...event, phaseVersion: event.phaseVersion + 1 });
     return { message: 'Event membership updated.' };
   }
@@ -309,6 +376,28 @@ export class MembershipService {
     const teamId = Permissions.team(member);
     const team = await tx.get<Team>(paths.team(teamId));
     requireState(team, 'NOT_FOUND', 'Your team does not exist.');
+    if (event.platform) {
+      requireState(
+        member.role === 'captain' || member.role === 'trader',
+        'CAPTAIN_REQUIRED',
+        'Your captain or designated investor can edit the project.',
+      );
+      requireState(
+        !(await tx.get(paths.doc('submissions', teamId))),
+        'SUBMISSION_LOCKED',
+        'Your final submission is locked.',
+      );
+      requireState(
+        event.phase !== 'SEED_OPEN',
+        'ROUND_OPEN',
+        'Project profiles stay fixed during a funding round. Publish changes between rounds.',
+      );
+      requireState(
+        !('category' in command.patch) && !('update' in command.patch),
+        'USE_CHECKPOINT_UPDATE',
+        'Use the timestamped checkpoint update form. Categories are not used.',
+      );
+    }
     requireState(
       team.version === command.expectedVersion,
       'TEAM_CHANGED',

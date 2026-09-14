@@ -6,6 +6,8 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
+  sendEmailVerification,
+  reload,
   signOut,
   onAuthStateChanged,
   connectAuthEmulator,
@@ -33,6 +35,7 @@ import type {
   EventConfig,
   MarketView,
   Pool,
+  TeamConversation,
 } from '@robinhacks/core';
 import type { AppGateway, SessionUser } from '../app/gateway';
 import { MarketRefreshScheduler } from '../app/MarketRefreshScheduler';
@@ -104,6 +107,7 @@ export class FirebaseGateway implements AppGateway {
             uid: user.uid,
             displayName: user.displayName || user.email?.split('@')[0] || 'Participant',
             email: user.email || '',
+            emailVerified: user.emailVerified,
           }
         : null;
       if (user)
@@ -164,17 +168,40 @@ export class FirebaseGateway implements AppGateway {
         },
         () => undefined,
       ),
-      onSnapshot(
-        doc(this.db, `events/${this.eventId}/views/market`),
-        (snapshot) => {
-          if (snapshot.exists() && this.cache) {
-            this.cache = { ...this.cache, market: snapshot.data() as MarketView };
-            this.emit();
-          }
-        },
-        () => undefined,
-      ),
+      ...(this.cache?.member?.role === 'judge'
+        ? []
+        : [
+            onSnapshot(
+              doc(this.db, `events/${this.eventId}/views/market`),
+              (snapshot) => {
+                if (snapshot.exists() && this.cache) {
+                  if (this.cache.event?.platform) this.invalidate();
+                  else this.cache = { ...this.cache, market: snapshot.data() as MarketView };
+                  this.emit();
+                }
+              },
+              () => undefined,
+            ),
+          ]),
     ];
+    if (this.cache?.event?.platform && this.cache.member?.teamId) {
+      const teamId = this.cache.member.teamId;
+      let initial = true;
+      this.marketStops.push(
+        onSnapshot(
+          doc(this.db, `events/${this.eventId}/teamInboxes/${teamId}`),
+          () => {
+            if (initial) {
+              initial = false;
+              return;
+            }
+            this.invalidate();
+            this.emit();
+          },
+          () => undefined,
+        ),
+      );
+    }
   }
   private emit() {
     this.listeners.forEach((listener) => listener());
@@ -201,6 +228,25 @@ export class FirebaseGateway implements AppGateway {
       if ((error as { code?: string }).code !== 'auth/user-not-found') throw error;
     }
   }
+  async verifyEmail() {
+    const user = this.auth.currentUser;
+    if (!user) throw new Error('Sign in first.');
+    await sendEmailVerification(user);
+  }
+  async refreshIdentity() {
+    const user = this.auth.currentUser;
+    if (!user) return;
+    await reload(user);
+    await user.getIdToken(true);
+    this.user = {
+      uid: user.uid,
+      displayName: user.displayName || user.email?.split('@')[0] || 'Participant',
+      email: user.email || '',
+      emailVerified: user.emailVerified,
+    };
+    this.invalidate();
+    this.emit();
+  }
   private async call<T>(name: string, data: Record<string, unknown>): Promise<T> {
     try {
       const result = await httpsCallable<Record<string, unknown>, T>(
@@ -218,11 +264,10 @@ export class FirebaseGateway implements AppGateway {
     }
   }
   async snapshot(force = false): Promise<AppSnapshot> {
-    if (!this.user) return signedOutSnapshot();
     if (this.cache && !force) return this.cache;
     if (this.pendingSnapshot) return this.pendingSnapshot;
     const generation = this.generation;
-    const request = this.call<AppSnapshot>('gameSnapshot', {})
+    const request = this.call<AppSnapshot>(this.user ? 'gameSnapshot' : 'gamePublic', {})
       .then((snapshot) => {
         if (generation === this.generation) {
           this.cache = snapshot;
@@ -249,5 +294,8 @@ export class FirebaseGateway implements AppGateway {
   }
   async exportEvent(): Promise<Record<string, unknown>> {
     return this.call('gameExport', {});
+  }
+  async conversation(otherTeamId: string): Promise<TeamConversation | null> {
+    return this.call('gameConversation', { otherTeamId });
   }
 }

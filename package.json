@@ -26,7 +26,8 @@
     "reconcile": "node scripts/reconcile-export.mjs",
     "format": "prettier --write apps packages scripts tests *.json *.ts",
     "format:check": "prettier --check apps packages scripts tests *.json *.ts",
-    "test:smoke": "node scripts/smoke-firebase.mjs",
+    "test:smoke": "node scripts/smoke-platform.mjs",
+    "test:legacy-smoke": "node scripts/smoke-firebase.mjs",
     "bootstrap:firebase": "node --env-file=.env.operations scripts/bootstrap-firebase.mjs"
   },
   "devDependencies": {

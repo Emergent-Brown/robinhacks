@@ -23,7 +23,7 @@ async function start() {
   } catch (error) {
     root.render(
       <main style={{ maxWidth: 600, margin: '12vh auto', padding: 24, fontFamily: 'sans-serif' }}>
-        <h1>RobinHacks needs configuration</h1>
+        <h1>Emergent Hacks needs configuration</h1>
         <p>{error instanceof Error ? error.message : 'Unable to start the application.'}</p>
         <p>
           For a local demo, set <code>VITE_APP_MODE=demo</code> and restart the development server.

@@ -1,5 +1,7 @@
 # Market rules
 
+> **Historical version-one document (September 8–10, 2026).** This trading proposal/implementation record is preserved for context. [11 · Sealed funding rounds](11-sealed-rounds.md) supersedes its current product rules, lifecycle and architecture. Do not use the old buy/sell instructions for a version-two event.
+
 Status: selected recommendation for the first implementation. Numerical defaults below are a coherent starting configuration for an event with 10–30 teams and approximately 150 people; they are not claims about a tested live economy.
 
 This is a play-money game about discovering good projects. Credits have no cash value. Shares are game units, not legal ownership, revenue rights, or money contributed to a real business. The core hackathon result comes from independent judging. Funding and portfolio results provide additional recognition.

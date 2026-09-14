@@ -1,12 +1,12 @@
 {
-  "name": "RobinHacks",
-  "short_name": "RobinHacks",
-  "description": "The hackathon investment game",
+  "name": "Emergent Hacks",
+  "short_name": "Emergent Hacks",
+  "description": "Build projects and back other teams at Emergent Hacks.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f0f4f8",
   "theme_color": "#87ceeb",
   "icons": [
-    { "src": "/favicon.svg?v=2", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    { "src": "/favicon.svg?v=3", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
 }

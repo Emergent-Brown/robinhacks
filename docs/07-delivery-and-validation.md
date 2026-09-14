@@ -1,5 +1,7 @@
 # Delivery and validation plan
 
+> **Historical version-one document (September 8–10, 2026).** This trading proposal/implementation record is preserved for context. [11 · Sealed funding rounds](11-sealed-rounds.md) supersedes its current product rules, lifecycle and architecture. Do not use the old buy/sell instructions for a version-two event.
+
 Status: build plan, not completed implementation. The workspace currently contains documentation only. Commands below are the proposed developer experience to implement, not scripts that already exist.
 
 ## Build one playable event before expanding

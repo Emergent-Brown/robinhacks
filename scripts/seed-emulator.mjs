@@ -10,19 +10,32 @@ for (const key of ['FIRESTORE_EMULATOR_HOST', 'FIREBASE_AUTH_EMULATOR_HOST']) {
   process.env[key] ||= expected;
 }
 const bundled = await build({
-  entryPoints: ['packages/application/src/fixtures.ts'],
+  entryPoints: [
+    process.argv.includes('--legacy')
+      ? 'packages/application/src/fixtures.ts'
+      : 'packages/application/src/platform-fixtures.ts',
+  ],
   bundle: true,
   platform: 'node',
   format: 'esm',
   write: false,
 });
-const { createDemoDocuments, DEMO_EVENT_ID, DEMO_USERS } = await import(
+const fixture = await import(
   'data:text/javascript;base64,' + Buffer.from(bundled.outputFiles[0].text).toString('base64')
 );
+const { DEMO_EVENT_ID } = fixture;
+const createDemoDocuments = fixture.createPlatformDemoDocuments || fixture.createDemoDocuments;
+const DEMO_USERS = fixture.PLATFORM_USERS || fixture.DEMO_USERS;
 const app = initializeApp({ projectId: 'demo-robinhacks' });
 const db = getFirestore(app),
   auth = getAuth(app);
-const documents = createDemoDocuments(process.argv.includes('--seed') ? 'seed' : 'trading');
+const documents = createDemoDocuments(
+  process.argv.includes('--judging')
+    ? 'judging'
+    : process.argv.includes('--seed')
+      ? 'seed'
+      : 'trading',
+);
 for (const user of Object.values(DEMO_USERS)) {
   try {
     await auth.createUser({ ...user, password: 'hackathon-demo-2026', emailVerified: true });
@@ -39,5 +52,5 @@ for (let start = 0; start < entries.length; start += 400) {
   await batch.commit();
 }
 console.log(
-  `Seeded ${entries.length} documents in LOCAL demo-robinhacks.\nCaptain: alex@example.test\nOrganizer: organizer@example.test\nMember: sam@example.test\nPassword for these emulator-only users: hackathon-demo-2026`,
+  `Seeded ${entries.length} documents in LOCAL demo-robinhacks.\nCaptain: alex@example.test\nOrganizer: organizer@example.test\nMember: sam@example.test\nJudge: judge@example.test (sealed-round fixture)\nPassword for these emulator-only users: hackathon-demo-2026`,
 );

@@ -1,5 +1,7 @@
 # Implementation and maintenance
 
+> **Historical version-one document (September 8–10, 2026).** This trading proposal/implementation record is preserved for context. [11 · Sealed funding rounds](11-sealed-rounds.md) supersedes its current product rules, lifecycle and architecture. Do not use the old buy/sell instructions for a version-two event.
+
 Status: implemented application, updated September 10, 2026. This document describes the repository’s current behavior. Documents 01–08 remain the original design blueprint; use this document and the code where their proposed API names, read permissions, jobs or operational details differ. Cloud setup and deployment state are documented separately in [Firebase setup](FIREBASE-SETUP.md).
 
 ## 1. Supported application

@@ -18,7 +18,7 @@ export class Permissions {
   }
   static team(member: Member): string {
     requireState(
-      member.teamId && member.role !== 'organizer',
+      member.teamId && !['organizer', 'judge'].includes(member.role),
       'TEAM_REQUIRED',
       'This action belongs to a competing team.',
     );

@@ -7,3 +7,5 @@ export * from './portfolio-accounting.js';
 export * from './funding-allocator.js';
 export * from './result-scorer.js';
 export * from './event-policy.js';
+export * from './platform';
+export * from './sealed-funding';

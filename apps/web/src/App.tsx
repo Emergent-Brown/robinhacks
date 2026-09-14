@@ -22,6 +22,7 @@ import { Admin, phaseNames } from './features/Admin';
 import './styles.css';
 
 import { AppNavigation, type Tab } from './ui/AppNavigation';
+import { PlatformApp } from './platform/PlatformApp';
 
 function readRoute() {
   const path = location.hash.replace(/^#\/?/, '').split('/');
@@ -110,6 +111,28 @@ export default function App({ gateway }: { gateway: AppGateway }) {
         ? 'Window closed'
         : phaseNames[event.phase]
     : 'Event';
+  if (!data)
+    return (
+      <div className="platform-app">
+        <header className="p-header">
+          <div className="p-header-inner">
+            <span className="p-wordmark">
+              emergent<span>hacks</span>
+            </span>
+          </div>
+        </header>
+        <main className="p-main" aria-busy={!error}>
+          <p role={error ? 'alert' : 'status'}>{error || 'Loading event…'}</p>
+          {error && (
+            <button className="button secondary" onClick={() => void refresh()}>
+              Try again
+            </button>
+          )}
+        </main>
+      </div>
+    );
+  if (data.event?.platform)
+    return <PlatformApp data={data} actions={actions} error={error} notice={notice} />;
   return (
     <div className={`app ${approved ? 'authenticated' : ''}`}>
       <a

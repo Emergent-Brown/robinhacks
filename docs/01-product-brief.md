@@ -1,5 +1,7 @@
 # RobinHacks: product brief
 
+> **Historical version-one document (September 8–10, 2026).** This trading proposal/implementation record is preserved for context. [11 · Sealed funding rounds](11-sealed-rounds.md) supersedes its current product rules, lifecycle and architecture. Do not use the old buy/sell instructions for a version-two event.
+
 Status: recommended first-release design, September 8, 2026. This is a product specification, not an implemented application.
 
 ## The idea

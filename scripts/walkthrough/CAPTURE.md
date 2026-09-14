@@ -1,6 +1,8 @@
-# Capturing the app directly
+# Historical version-one capture tools
 
-The completed 17-scene walkthrough uses `record.mjs` and `render-video.py`. Follow the [walkthrough guide](../../docs/WALKTHROUGH.md) for its exact setup, scenario, recording and rendering commands. The manual examples below describe the underlying capture tools.
+**Legacy tooling, not adapted for the September 14 sealed-round application.** The completed 17-scene September 9 walkthrough uses `record.mjs` and `render-video.py` and demonstrates version-one funding, buy/sell trades and results. Its selectors, fixtures and narration are incompatible with the current default app. Rerendering a current product walkthrough with these scripts is unsupported.
+
+The [historical walkthrough guide](../../docs/WALKTHROUGH.md) preserves the original setup and capture record. Reproducing that film requires the matching version-one application and fixture. The low-level capture examples below remain reference material; new version-two recording must validate new locators, actions, fixtures and narration first.
 
 This machine has Playwright 1.63.0-alpha-2026-08-31 with native page screencasting. It records browser page content, without capturing the user's desktop or ordinary Chrome profile. The installed `@playwright/mcp` package no longer exports the binary expected by the old skill wrapper, so `pwcli.sh` resolves the CLI already bundled inside `playwright-core`.
 

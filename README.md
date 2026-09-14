@@ -1,140 +1,133 @@
-# RobinHacks
+# Emergent Hacks
 
-A mobile-friendly hackathon market. Every team builds a project, starts with 10,000 fictional credits, and invests in other teams through a shared portfolio. Organizers control funding, trading windows and the judged finish.
+A mobile-friendly hackathon platform for building projects, meeting other teams, and investing through **three sealed funding rounds**. Each team allocates credits privately; rounds close together and award fixed, conditional shares of a separate investor reward pool. Judges evaluate the projects independently.
 
-The application is implemented with React, TypeScript and Firebase. It includes a local demo, Firebase emulator support, server-authorized commands, resumable funding/results operations and a separate organizer console. **Live app: [robinhacks-2026-ajs.web.app](https://robinhacks-2026-ajs.web.app).** Sign in with the configured organizer Google account for organizer access. The event starts in Registration; approve real teams before opening funding. See the [Firebase setup guide](docs/FIREBASE-SETUP.md) for deployment and maintenance.
+The repository retains the technical name `robinhacks`. The participant-facing event is **Emergent Hacks**, with **Silicon Valley** as its theme. React and TypeScript provide the interface; Firebase Authentication, Firestore and callable Functions provide the deployed backend. The local demo runs the same application services and economic rules without a cloud account.
 
-## Current design and event readiness
+**Deployed September 14, 2026:** the [live event](https://robinhacks-2026-ajs.web.app) uses the sealed-round platform. The [populated demo](https://robinhacks-2026-ajs--walkthrough-pyhnt4be.web.app/) supports captain, teammate, organizer and judge perspectives. The empty production event was upgraded with its existing organizer preserved. See the [deployment record](docs/FIREBASE-SETUP.md#deployment-record) for verification and remaining rehearsal checks.
 
-The September 10 interface follows the compact blue navigation, Verdana typography, bordered tables and direct labels in [Builders Club](https://github.com/Emergent-Brown/buildersclubemergent). RobinHacks uses its own pixel robin mark. Shared styles are split into `base.css`, `shell.css`, `components.css` and `pages.css`; feature components retain the same application and gateway boundaries.
+## Start locally
 
-Existing-team discovery, late teammate requests and password recovery are implemented. Read the [event-readiness audit](docs/10-product-audit.md) for the remaining priorities: backup organizer controls, verified identity during approval and saved judging drafts.
-
-## Watch and try it
-
-**[Watch the 4:19 walkthrough](https://robinhacks-2026-ajs--walkthrough-pyhnt4be.web.app/walkthrough/)** or **[try the interactive demo](https://robinhacks-2026-ajs--walkthrough-pyhnt4be.web.app/)**. The preview links expire on **October 9, 2026**.
-
-The video was recorded September 9 and shows the earlier interface; the interactive demo has the September 10 redesign. The video has 17 chapters, English captions and a transcript. It follows a fictional event with 12 teams and 48 participants through real local application commands, from seed funding to published results, including captain, teammate, organizer and mobile views. Narration uses a locally generated synthetic voice. The interactive preview starts in the default trading preset; the video uses a separate Foundry seed scenario. All sample credits are fictional, and preview activity stays in your browser.
-
-Video files are generated locally in `output/playwright/walkthrough/` and are not included in the repository. See the [walkthrough guide](docs/WALKTHROUGH.md) for the recorded chapters and exact commands to recreate the fixture, narration, browser capture and video.
-
-## Run it locally
-
-Requires Node.js **22.12 or newer** and npm.
+Requires Node.js **22.12 or newer** and npm:
 
 ```sh
 npm ci
 npm run dev
 ```
 
-Open [localhost:5173](http://localhost:5173). The default mode is a seeded browser demo with 12 projects. No Firebase account or environment file is needed. Use **Demo** to switch between captain, member and organizer, reset trading, or start a fresh funding round. Demo activity stays in that browser’s local storage.
+Open [localhost:5173](http://localhost:5173). Demo mode contains 12 fictional projects and uses browser-local storage. It does not create production participants or send email.
 
-To exercise real Firebase Authentication, Firestore rules and callable Functions locally, install **Java 21 or newer**, then run:
+The **Demo** controls switch between captain, teammate, organizer and judge. The preset identifiers are retained for compatibility:
+
+| Preset    | Current experience                                                  |
+| --------- | ------------------------------------------------------------------- |
+| `seed`    | Registration, before any funding opens                              |
+| `trading` | Second sealed funding round open, first-round entitlements visible  |
+| `judging` | Three completed rounds, final submissions, independent judging open |
+
+These presets exercise the sealed-round application. They do not enable the original buy/sell game.
+
+For real local Firebase Auth, Firestore and Functions, install **Java 21+** and run:
 
 ```sh
 npm run dev:firebase
 ```
 
-This builds Functions, starts the emulators, seeds local accounts and opens the Vite development server. The emulator project is always `demo-robinhacks`; the seed command refuses remote emulator hosts. The Firebase Emulator UI is available at [localhost:4000](http://localhost:4000). If port 5173 is already in use, start this mode with `WEB_PORT=5174 npm run dev:firebase`.
+The local project is `demo-robinhacks`; the seed script refuses remote emulator hosts. The Emulator UI is at [localhost:4000](http://localhost:4000). Use `WEB_PORT=5174 npm run dev:firebase` if only the web port conflicts. The documented localhost test password, `hackathon-demo-2026`, belongs only to fictional emulator accounts, never production identities. See the emulator startup output for available accounts.
 
-All three local test accounts use the password `hackathon-demo-2026`:
+## What is included
 
-| Role        | Email                    |
-| ----------- | ------------------------ |
-| Captain     | `alex@example.test`      |
-| Organizer   | `organizer@example.test` |
-| Team member | `sam@example.test`       |
+- A public event homepage with editable event details, schedule, registration link and contact.
+- Verified email/Google sign-in, organizer approval, team and staff access requests, backup organizer controls and locked team rosters.
+- Project profiles, public team names, rotating discovery suggestions, archived checkpoints, and immutable final submissions with demo, repository and full Git commit.
+- Private team-to-team messages, shared inboxes, blocking and reports.
+- Autosaved team allocations, deadline enforcement, simultaneous closing, per-round entitlements, audit records and exact payout calculations.
+- An independent judge portal with assignments, conflicts, saved drafts, submitted score locks and reviewed awards.
+- A private community ballot, results publication, and post-event export/reconciliation.
+- A short onboarding tour and replayable rules; layouts support desktop and phone screens.
 
-The demo password and role switcher belong only to local demo/emulator modes. Production uses Firebase Authentication and approved event membership.
+The interface keeps compact blue navigation, Verdana typography, simple tables and direct labels. There are no live share prices, buy/sell controls, liquidation marks or category fields in the sealed-round experience. The official Emergent logo and real event facts remain organizer-supplied configuration/assets; unconfirmed dates, venues and prizes should not be invented.
 
-## What teams can do
+## Default rules
 
-- Explore projects, read progress updates, and open a focused investment sheet.
-- Reserve up to 5,000 credits in one sealed funding round at 100 credits per share.
-- Buy and sell during up to three organizer-controlled trading windows.
-- Manage shared holdings, receipts and private investment notes.
-- Edit their team profile and see fundraising, project and investment standings separately.
+| Setting                 | Default                                                              |
+| ----------------------- | -------------------------------------------------------------------- |
+| Account                 | One allocation account per approved team                             |
+| Funding checkpoints     | Initial pitch → working prototype → final demo                       |
+| Budget                  | 100 new credits per team, per round                                  |
+| Allocation              | Increments of 10; at most 60 per project; no own-project allocation  |
+| Unused credits          | Expire when that round closes                                        |
+| Investor reward weights | 40% / 35% / 25% for the three rounds                                 |
+| Minimum denominator     | 200 credits per project, per round                                   |
+| Actual prize amounts    | Unconfigured: zero until the organizer announces and configures them |
+| Results review          | 30 minutes before publication                                        |
 
-A team can hold at most 25 shares in another project and cannot buy its own shares. Each window permits 15 successful trades per team, with 10 seconds between accepted trades. Funding raised stays in a locked project vault. It never increases the issuer team’s spending power.
+A team's entitlement is `round weight × its allocation ÷ max(200, that project's round total)`. Later rounds cannot dilute earlier entitlements. The investor pool is a **maximum possible payout**, separate from builder prizes; unallocated funds follow the published reserve policy. Publishing a result creates a prize record, not a bank transfer.
 
-Final portfolio values use independent judging results. They are report scores, not new credits deposited into wallets. All credits are fictional and have no cash value.
+Read [11 · Sealed rounds](docs/11-sealed-rounds.md) for the complete current rules, privacy model, lifecycle, architecture and meeting requirement mapping.
 
 ## Run an event
 
-1. Complete [Firebase setup](docs/FIREBASE-SETUP.md), then sign in with the separate organizer account.
-2. In **Admin → Teams & access**, approve verified requests. The first captain approval creates a team, wallet and project exchange; later members join an existing team. Approve at least two active teams before opening funding.
-3. Open the seed round. At close, run **Continue settlement** until all team allocations reconcile. Funding remains sealed until the whole operation finishes.
-4. Open trading windows around build checkpoints. Close each into build time. Pause blocks financial actions without extending the original deadline.
-5. End trading permanently, collect judge scores externally, and enter aggregate scores from 0 to 100. Preview the share values, lock scores, complete the results operation, then publish.
-6. Export the event from a paused or closed phase for an auditable copy of its ledger and reports.
+1. Complete [Firebase setup and migration](docs/FIREBASE-SETUP.md). Rehearse sign-in with the primary organizer, a backup and a judge.
+2. Fill **Admin → Settings** with confirmed event details, prize amounts, reserve policy and judging rubric. Approve actual attendees and separate staff accounts in **Admin → Access**.
+3. Collect an initial checkpoint from every active team. Open round one; this locks the funding/judging rules and competing rosters.
+4. At the deadline, close the round to reveal totals and freeze entitlements. Teams build, publish the next checkpoint and allocate a fresh budget in round two.
+5. Open final submissions before round three. Every active project must submit final evidence and its final checkpoint before the last funding window opens.
+6. Finish funding, open judging, assign projects, and collect complete independent score sheets. Run the separate community ballot.
+7. Close ballots, prepare awards, check the scores and conditional payouts during the review period, then publish. Export the final event record and reconcile it before distributing any prizes.
 
-Keep an organizer session visible during an open market for its two-minute public-price refresh. The displayed snapshot includes its age; trade review fetches a fresh individual pool. Deadlines and authorization are enforced by the server even if the browser shows old data.
+Pause preserves everyone's remaining time equally. A revealed round cannot reopen; an event-wide technical failure can void the whole completed round without deleting its history. Participant allocations and live ballots are private even from organizers. Complete exports become available only after publication or cancellation.
 
-## Code organization
+## Organization and maintenance
 
 ```text
-apps/web/                  React features, reusable UI, demo/Firebase gateways
-apps/functions/            Authenticated callable endpoints and Firestore adapter
-packages/core/             Pure economic rules, pricing, allocation and scoring
-packages/application/      GameService, feature services and repository contracts
-firebase/                  Firestore rules and index exemptions
-scripts/                   Emulator startup, seeding, bootstrap and reconciliation
-tests/                     Application integration and Firestore emulator tests
+apps/web/src/platform/                 Current event features and shared presentation helpers
+apps/web/src/adapters/                 Demo and Firebase gateways
+apps/functions/src/                   Callable transport, limits and Firestore adapter
+packages/core/src/platform.ts          Version-two types and default configuration
+packages/core/src/sealed-funding.ts    Pure allocation, entitlement and payout rules
+packages/application/src/              GameService, schemas, repositories and fixtures
+packages/application/src/services/     Funding, projects, messaging, judging, ballots and permissions
+firebase/                             Deny-by-default client rules and indexes
+scripts/                              Bootstrap, migration, emulators, smoke and export checks
 ```
 
-Small domain classes own economic invariants. Application services own authorization and transaction boundaries. Repository and gateway interfaces keep infrastructure out of the rules and UI. React components remain ordinary functional components. The local demo and deployed Functions use the same `GameService` and domain calculations.
+Small domain classes own economic invariants. Application services own permissions and transactions. Repository and gateway interfaces separate infrastructure from rules and UI. React uses functional components; domain and application responsibilities stay outside those components.
 
-See [implementation and maintenance](docs/09-implementation.md) for the actual module boundaries, API/read model, operational limits and differences from the original blueprint.
+Version-one pricing, trading and settlement code remains isolated for historical events and compatibility tests. Version-two events reject those legacy financial commands. New work should target the platform contracts and services rather than add conditions to the old trading screens.
 
-## Repository hygiene
-
-Environment files, local Auth configuration, generated builds, dependencies, emulator data, logs, browser captures and rendered videos are excluded from Git. Tracked `.env` examples and `firebase.auth.example.json` contain placeholders; copy and configure them locally using the [Firebase setup guide](docs/FIREBASE-SETUP.md). Keep Firebase CLI sessions, service-account keys, tokens and production event exports outside the repository.
-
-Firebase project IDs, web app IDs, domains and browser API keys identify the public client; they do not grant administrator access. Administrator credentials must never appear in frontend `VITE_` variables. The documented emulator password belongs only to fictional localhost test accounts and is not a production credential.
-
-## Verify changes
+## Verification
 
 ```sh
 npm run check
 npm run test:emulator
 ```
 
-With `npm run dev:firebase` running in another terminal, exercise the Auth/Functions transport:
+`check` runs TypeScript, domain/application tests and production builds. The emulator suite checks real Firestore transaction behavior and client privacy. With `npm run dev:firebase` running, reset the disposable local event to Registration before exercising the authenticated transport:
 
 ```sh
+npm run seed -- --seed
 npm run test:smoke
 ```
 
-`check` runs TypeScript, unit/application tests, and production web/Functions builds. `test:emulator` separately verifies Firestore client permissions and the real server repository against a local Firestore emulator. It requires Java 21+ and never targets the configured production project.
-
-To validate an organizer export:
+Validate a post-event export locally:
 
 ```sh
 npm run reconcile -- /absolute/path/to/event-export.json
 ```
 
-The smoke test uses only local `demo-robinhacks`, exercises authentication, a real trade, replay rejection and an organizer export, and leaves one accepted test purchase in the fixture. The export check validates balances, project share supply, total credits and balanced receipt entries. The test suites also cover replay conflicts, concurrent spending, expired deadlines, holding limits, funding recovery, final report immutability and 10/20/30-team market simulations. Automated checks do not establish that a real event is manipulation-proof or fun; rehearse the event flow with the organizers.
+Tests and local rehearsal do not establish production Google sign-in, a completed cloud migration, or whether the event is enjoyable. The [readiness audit](docs/10-product-audit.md) records the remaining operational checks without treating implementation as a live pilot.
 
-## Firebase and operating costs
+## Hosting and repository hygiene
 
-Production uses Firebase Authentication, **Firestore Standard** and callable Cloud Functions in `us-west1`, with classic Firebase Hosting serving the web client. Functions are configured with zero minimum instances and at most two instances per endpoint. A billing-enabled Firebase plan is needed for Functions deployment; the aim is normal small-event usage within no-cost allowances.
+Classic Firebase Hosting serves the client. Firebase Auth, Firestore Standard and six callable Functions use the existing `robinhacks-2026-ajs` project, with Functions in `us-west1`. Bounded data and zero minimum instances aim to keep a small event within no-cost allowances. Blaze can still incur charges; budget alerts are not spending caps. See [Firebase setup](docs/FIREBASE-SETUP.md).
 
-There is no hard $0 guarantee. Cached private snapshots, bounded team counts, public market snapshots, hidden-tab listener cleanup and request burst limits reduce usage. App Check can be enabled after configuring its site key. Per-instance request limits reset on cold starts and are not a billing cap. See [Firebase setup](docs/FIREBASE-SETUP.md), [implementation notes](docs/09-implementation.md), and the original [cost model](docs/06-cost-and-platform.md). The original model is a planning estimate, not a measurement of this build.
+Environment files, local Auth configuration, production exports, credentials, dependencies, builds, emulator state, logs and recordings are excluded from Git. Tracked examples contain placeholders. Keep administrator credentials out of frontend `VITE_` variables. Public Firebase project/app identifiers do not grant administrator access.
 
-## Documentation
+## Documentation and historical recordings
 
-Documents 01–08 are the original product and engineering blueprint. [09 · Implementation](docs/09-implementation.md) describes what the code currently implements and takes precedence where implementation details differ.
-
-| Document                                                                 | Contents                                                                |
-| ------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
-| [Firebase setup](docs/FIREBASE-SETUP.md)                                 | Cloud configuration, bootstrap, deployment and concrete recovery steps  |
-| [Walkthrough](docs/WALKTHROUGH.md)                                       | Completed video, chapters, transcript and reproducible capture commands |
-| [01 · Product brief](docs/01-product-brief.md)                           | Product purpose, roles, event rhythm and scope                          |
-| [02 · Market rules](docs/02-market-rules.md)                             | Pricing, funding, accounting and final scoring                          |
-| [03 · Experience design](docs/03-experience-design.md)                   | Design rationale and mobile interactions                                |
-| [04 · Architecture](docs/04-architecture.md)                             | Original architecture and boundaries                                    |
-| [05 · Data and command contracts](docs/05-data-and-command-contracts.md) | Original storage/API specification                                      |
-| [06 · Cost and platform](docs/06-cost-and-platform.md)                   | Original operating estimate and platform sources                        |
-| [07 · Delivery and validation](docs/07-delivery-and-validation.md)       | Original delivery plan and test strategy                                |
-| [08 · Event operations](docs/08-event-operations.md)                     | Event policies and organizer procedures                                 |
-| [09 · Implementation](docs/09-implementation.md)                         | Current code, commands, decisions and maintenance guidance              |
+- [11 · Sealed rounds](docs/11-sealed-rounds.md): authoritative current product and engineering guide.
+- [10 · Readiness audit](docs/10-product-audit.md): event facts, staffing, deployment and rehearsal still to confirm.
+- [Firebase setup](docs/FIREBASE-SETUP.md): infrastructure, safe migration and release steps.
+- Documents **01–09**: historical September 8–10 trading proposal and implementation notes, superseded by document 11.
+- [Historical walkthrough](docs/WALKTHROUGH.md): the September 9 video demonstrates the retired trading model. Its recording scripts have not been adapted for the sealed-round product; old preview links are not a current product walkthrough.

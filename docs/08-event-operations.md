@@ -1,5 +1,7 @@
 # Event operations
 
+> **Historical version-one document (September 8–10, 2026).** This trading proposal/implementation record is preserved for context. [11 · Sealed funding rounds](11-sealed-rounds.md) supersedes its current product rules, lifecycle and architecture. Do not use the old buy/sell instructions for a version-two event.
+
 Status: proposed runbook. Screens and commands described here must be implemented and rehearsed before an event.
 
 ## Organizer responsibilities

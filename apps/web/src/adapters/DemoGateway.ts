@@ -5,20 +5,20 @@ import {
   type DocumentMap,
 } from '../../../../packages/application/src/memory-repository';
 import {
-  createDemoDocuments,
+  createPlatformDemoDocuments,
   DEMO_EVENT_ID,
-  DEMO_USERS,
-} from '../../../../packages/application/src/fixtures';
+  PLATFORM_USERS,
+} from '../../../../packages/application/src/platform-fixtures';
 import type { AppSnapshot, Command } from '@robinhacks/core';
 import type { AppGateway, SessionUser } from '../app/gateway';
 import { MarketRefreshScheduler } from '../app/MarketRefreshScheduler';
-const STORE = 'robinhacks-demo-v1';
+const STORE = 'emergent-hacks-demo-v2';
 export class DemoGateway implements AppGateway {
   readonly mode = 'demo' as const;
-  user: SessionUser | null = DEMO_USERS.captain;
+  user: SessionUser | null = PLATFORM_USERS.captain;
   private listeners = new Set<() => void>();
   private latestSnapshot: AppSnapshot | null = null;
-  private repository = new MemoryRepository(createDemoDocuments(), {
+  private repository = new MemoryRepository(createPlatformDemoDocuments(), {
     load: () => {
       try {
         return JSON.parse(localStorage.getItem(STORE) ?? 'null') as DocumentMap | null;
@@ -48,7 +48,7 @@ export class DemoGateway implements AppGateway {
     };
   }
   async signIn() {
-    this.user = DEMO_USERS.captain;
+    this.user = PLATFORM_USERS.captain;
     this.emit();
   }
   async signOut() {
@@ -56,33 +56,24 @@ export class DemoGateway implements AppGateway {
     this.emit();
   }
   async snapshot(): Promise<AppSnapshot> {
-    if (!this.user)
-      return {
-        event: null,
-        member: null,
-        market: { entries: [], asOf: 0, phaseVersion: 0 },
-        wallet: null,
-        positions: [],
-        commitments: null,
-        notes: [],
-        receipts: [],
-        members: [],
-        requests: [],
-        operation: null,
-        results: null,
-        audit: [],
-      };
-    this.latestSnapshot = await this.service.snapshot(this.user.uid);
+    if (!this.user) return this.service.publicSnapshot();
+    this.latestSnapshot = await this.service.snapshot(this.user.uid, this.user);
     return this.latestSnapshot;
   }
   async command(command: Command) {
     if (!this.user) throw new Error('Sign in to continue.');
-    const result = await this.service.execute(
-      { uid: this.user.uid, displayName: this.user.displayName },
-      command,
-    );
+    const result = await this.service.execute({ ...this.user, emailVerified: true }, command);
     this.emit();
     return result;
+  }
+  async verifyEmail() {
+    /* Every fictional demo identity is already verified. */
+  }
+  async refreshIdentity() {
+    this.emit();
+  }
+  async conversation(otherTeamId: string) {
+    return this.service.conversation(this.user?.uid ?? '', otherTeamId);
   }
   async pool(issuerId: string) {
     return this.service.pool(this.user?.uid ?? '', issuerId);
@@ -90,13 +81,13 @@ export class DemoGateway implements AppGateway {
   async exportEvent() {
     return this.service.exportEvent(this.user?.uid ?? '');
   }
-  async switchDemoRole(role: keyof typeof DEMO_USERS) {
-    this.user = DEMO_USERS[role];
+  async switchDemoRole(role: keyof typeof PLATFORM_USERS) {
+    this.user = PLATFORM_USERS[role];
     this.emit();
   }
-  async resetDemo(phase: 'seed' | 'trading' = 'trading') {
-    this.repository.replace(createDemoDocuments(phase));
-    this.user = DEMO_USERS.captain;
+  async resetDemo(phase: 'seed' | 'trading' | 'judging' = 'trading') {
+    this.repository.replace(createPlatformDemoDocuments(phase));
+    this.user = PLATFORM_USERS.captain;
     this.emit();
   }
 }

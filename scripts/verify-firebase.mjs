@@ -271,7 +271,9 @@ async function main() {
       eventDocument.exists &&
         event?.id === EVENT &&
         event.phase === 'REGISTRATION' &&
-        event.rulesVersion === 1,
+        event.rulesVersion === 2 &&
+        event.platform?.version === 2 &&
+        event.platform.currentRound === 0,
       'The production event is not in its initial supported REGISTRATION phase. This initial-state verifier did not change it.',
     );
     assert(
@@ -290,7 +292,28 @@ async function main() {
         wallets.empty,
       'The production event has teams or wallets, or its market projection is missing. This initial-state verifier did not change it.',
     );
-    pass('Firestore contains REGISTRATION, approved organizer, and zero teams or wallets');
+    pass(
+      'Firestore contains sealed-round REGISTRATION, approved organizer, and zero teams or wallets',
+    );
+    const publicResponse = await fetch(
+      `https://${REGION}-${PROJECT}.cloudfunctions.net/gamePublic`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: { eventId: EVENT } }),
+        signal: AbortSignal.timeout(30_000),
+      },
+    );
+    const publicBody = await publicResponse.json();
+    assert(
+      publicResponse.ok &&
+        publicBody.result?.event?.platform?.version === 2 &&
+        publicBody.result.member === null &&
+        publicBody.result.market?.entries?.length === 0 &&
+        publicBody.result.members?.length === 0,
+      'The public homepage endpoint did not return isolated sealed-round event metadata.',
+    );
+    pass('Deployed gamePublic serves event metadata without private membership or funding records');
     console.log(
       JSON.stringify(
         {
@@ -299,7 +322,6 @@ async function main() {
           project: PROJECT,
           eventId: EVENT,
           phase: event.phase,
-          organizerEmail: OWNER,
           teams: 0,
           checks: checks.length,
           applicationWrites: 0,
@@ -307,7 +329,7 @@ async function main() {
           runtimeServiceAccount,
           runtimeRoles,
           runtimeFirestoreRoleConfigured,
-          manualCheck: `Open https://${PROJECT}.web.app, sign in through Google as ${OWNER}, and confirm the organizer controls and empty registration roster.`,
+          manualCheck: `Open https://${PROJECT}.web.app, sign in through the configured organizer Google account, and confirm the organizer controls and empty registration roster.`,
           credentials:
             'Credentials remained in memory and were not printed or persisted by this verifier.',
         },

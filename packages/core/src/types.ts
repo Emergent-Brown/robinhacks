@@ -1,3 +1,4 @@
+import type { PlatformCommand, PlatformConfig, PlatformSnapshot } from './platform';
 export type Phase =
   | 'DRAFT'
   | 'REGISTRATION'
@@ -10,8 +11,10 @@ export type Phase =
   | 'FINALIZED'
   | 'CANCELLED'
   | 'ARCHIVED';
-export type Role = 'organizer' | 'captain' | 'trader' | 'member';
+export type Role = 'organizer' | 'judge' | 'captain' | 'trader' | 'member';
 export interface EventConfig {
+  platform?: PlatformConfig;
+  pausedAt?: number | null;
   id: string;
   name: string;
   venue: string;
@@ -29,6 +32,8 @@ export interface EventConfig {
   tieSeed: string;
 }
 export interface Member {
+  email?: string;
+  emailVerified?: boolean;
   uid: string;
   displayName: string;
   teamId: string | null;
@@ -166,6 +171,9 @@ export interface Operation {
   state: 'running' | 'ready' | 'complete';
 }
 export interface AccessRequest {
+  requestedRole?: 'judge' | 'organizer';
+  email?: string;
+  emailVerified?: boolean;
   uid: string;
   displayName: string;
   teamName: string;
@@ -181,6 +189,7 @@ export interface AuditEntry {
   createdAt: number;
 }
 export interface AppSnapshot {
+  platform?: PlatformSnapshot;
   event: EventConfig | null;
   member: Member | null;
   /** Names and IDs for access requests; never includes market or roster data. */
@@ -210,10 +219,12 @@ export type TradeCommand = {
   minCreditMinor?: number;
 };
 export type Command =
+  | PlatformCommand
   | TradeCommand
   | {
       type: 'requestMembership';
       commandId: string;
+      staffRole?: 'judge' | 'organizer';
       displayName: string;
       teamName: string;
       teamId?: string;

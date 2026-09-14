@@ -21,6 +21,7 @@ const limiter = new RequestLimiter();
 const envelope = z.object({ eventId: identifier }).strict();
 const commandEnvelope = z.object({ eventId: identifier, command: z.unknown() }).strict();
 const poolEnvelope = z.object({ eventId: identifier, issuerId: identifier }).strict();
+const conversationEnvelope = z.object({ eventId: identifier, otherTeamId: identifier }).strict();
 const configuredOrigins = process.env.ALLOWED_ORIGINS?.split(',')
   .map((value) => value.trim())
   .filter(Boolean);
@@ -48,14 +49,22 @@ function actor(request: CallableRequest, action: string, rate = 60) {
   return {
     uid: request.auth.uid,
     displayName: typeof request.auth.token.name === 'string' ? request.auth.token.name : undefined,
+    email: typeof request.auth.token.email === 'string' ? request.auth.token.email : undefined,
+    emailVerified: request.auth.token.email_verified === true,
   };
 }
 
 function requireSmallPayload(data: unknown) {
-  if (Buffer.byteLength(JSON.stringify(data) ?? '', 'utf8') > 16 * 1024)
-    throw new HttpsError('invalid-argument', 'This request exceeds the 16 KiB command limit.', {
-      code: 'PAYLOAD_TOO_LARGE',
-    });
+  const type = (data as { command?: { type?: string } } | null)?.command?.type;
+  const limit = type === 'saveJudgingSheet' ? 192 : type === 'configurePlatform' ? 64 : 16;
+  if (Buffer.byteLength(JSON.stringify(data) ?? '', 'utf8') > limit * 1024)
+    throw new HttpsError(
+      'invalid-argument',
+      `This request exceeds the ${limit} KiB command limit.`,
+      {
+        code: 'PAYLOAD_TOO_LARGE',
+      },
+    );
 }
 
 async function transport<T>(work: () => Promise<T>): Promise<T> {
@@ -117,7 +126,27 @@ export const gameSnapshot = onCall(options, (request) =>
   transport(async () => {
     const identity = actor(request, 'snapshot', 60);
     const data = envelope.parse(request.data);
-    return new GameService(repository, data.eventId, clock).snapshot(identity.uid);
+    return new GameService(repository, data.eventId, clock).snapshot(identity.uid, identity);
+  }),
+);
+
+export const gamePublic = onCall({ ...options, enforceAppCheck: false }, (request) =>
+  transport(async () => {
+    // A room of 150 attendees can share one public IP and load the homepage together.
+    limiter.check(request.rawRequest.ip || 'public', 'public', 600);
+    const data = envelope.parse(request.data);
+    return new GameService(repository, data.eventId, clock).publicSnapshot();
+  }),
+);
+
+export const gameConversation = onCall(options, (request) =>
+  transport(async () => {
+    const identity = actor(request, 'conversation', 30);
+    const data = conversationEnvelope.parse(request.data);
+    return new GameService(repository, data.eventId, clock).conversation(
+      identity.uid,
+      data.otherTeamId,
+    );
   }),
 );
 

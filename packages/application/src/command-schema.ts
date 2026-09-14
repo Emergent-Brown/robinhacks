@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Command } from '@robinhacks/core';
+import { platformCommandSchema } from './platform-schema';
 
 export const identifier = z
   .string()
@@ -32,7 +33,7 @@ const phase = z.enum([
   'CANCELLED',
   'ARCHIVED',
 ]);
-const role = z.enum(['organizer', 'captain', 'trader', 'member']);
+const role = z.enum(['organizer', 'judge', 'captain', 'trader', 'member']);
 const status = z.enum(['approved', 'pending', 'suspended']);
 const boundedMap = (value: z.ZodTypeAny) =>
   z
@@ -44,7 +45,7 @@ const boundedMap = (value: z.ZodTypeAny) =>
       'At most 30 valid project entries are permitted.',
     );
 
-export const commandSchema = z.discriminatedUnion('type', [
+const legacyCommandSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('executeTrade'),
@@ -63,6 +64,7 @@ export const commandSchema = z.discriminatedUnion('type', [
     .object({
       type: z.literal('requestMembership'),
       commandId,
+      staffRole: z.enum(['judge', 'organizer']).optional(),
       displayName: name,
       teamName: name,
       teamId: identifier.optional(),
@@ -168,6 +170,7 @@ export const commandSchema = z.discriminatedUnion('type', [
     .strict(),
   z.object({ type: z.literal('refreshMarket'), commandId }).strict(),
 ]);
+export const commandSchema = z.union([platformCommandSchema, legacyCommandSchema]);
 
 export function parseCommand(value: unknown): Command {
   return commandSchema.parse(value) as Command;

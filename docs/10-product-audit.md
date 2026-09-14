@@ -1,59 +1,47 @@
 # Event-readiness audit
 
-Reviewed September 10, 2026, for a first event with 10–30 teams and up to 150 participants. This review traced the application and server code, then verified the onboarding changes with integration tests. It did not change production event records or verify interactive live sign-in.
+Reviewed September 14, 2026, against the sealed-round implementation for 10–30 teams and up to 150 participants. [11 · Sealed rounds](11-sealed-rounds.md) is the current product and technical specification. Documents 01–09 describe the earlier trading system.
 
-**The core game supports a supervised event. The most important remaining work is operator backup, verified participant identity and a durable judging sheet.** Two onboarding gaps found in the review are now fixed, alongside password recovery. The onboarding server update and redesigned interface were deployed September 10. Rehearse the complete sign-in and approval flow before the event.
+**The requested application capabilities are implemented. Real event details, staffing, prize commitments and an end-to-end production rehearsal still need organizer confirmation.** The client, backend and rules were deployed and the empty production event was migrated on September 14; the deployment record contains the verification evidence. A full hosted pilot is still separate from these checks.
 
-## Already implemented
+## Implemented since the previous audit
 
-- **Account approval and financial permissions.** Approval creates a new team’s wallet/exchange; requesting membership creates no credits. Captains can designate one trader before funding. Organizers can correct the roster while paused. Private records go through authorized callables, and direct client writes are denied. See [membership service](../packages/application/src/services/membership-service.ts#L68), [roster policy](../packages/application/src/services/permissions.ts#L40), and [Firestore rules](../firebase/firestore.rules#L14).
-- **Trading with recovery.** The server checks role, phase, deadline, wallet/pool versions, reviewed price, cash and holding limits. An uncertain trade keeps its original request ID so retrying retrieves the receipt without executing twice. See [trade service](../packages/application/src/services/market-service.ts#L20) and [pending request recovery](../apps/web/src/features/Trading.tsx#L141).
-- **Running and finishing an event.** Manual windows, announcements, pause/resume, eligibility changes, resumable funding/results, independent aggregate judging, explicit publication and audited exports exist. Settlement uses persistent team units and reconciliation. See [organizer controls](../apps/web/src/features/Admin.tsx#L176), [settlement continuation](../packages/application/src/services/operation-service.ts#L197), [publication](../packages/application/src/services/operation-service.ts#L330), and [export](../packages/application/src/game-service.ts#L312).
+The three former priorities are now covered in the application: separate backup-organizer approval, verified participant email identity, and durable independent judging drafts. Team rosters lock at the first funding round; judges and organizers use separate team-less accounts. Staff approval does not give a team extra credits.
 
-## Fixed during this review
+The meeting changes are implemented across the homepage and event settings, Emergent Hacks naming, first-use onboarding, project discovery, public team rosters, archived updates, private team conversations, formal immutable submissions, an independent judge portal and a private community ballot. Category fields and old buy/sell interactions are absent from the current experience.
 
-**Existing-team discovery:** new participants previously received an empty market, leaving their team selector unreachable. Their snapshot now includes a bounded `joinableTeams` directory containing only active team IDs and names. Wallets, holdings, notes, receipts, other memberships and results remain private. See [game-service.ts:237](../packages/application/src/game-service.ts#L237) and [AppSnapshot](../packages/core/src/types.ts#L183).
+The investing model is now three sealed, amount-based allocation rounds with expiring budgets, a concentration limit, separate fixed round entitlements and the minimum funding denominator. Current allocations are private, including from organizers. Judges cannot inspect funding totals while judging. Builder prizes, the grand-prize investor pool and the community award remain separate. Awards require complete eligible judging coverage, a reviewed preview and an explicit publication step.
 
-**Late teammates:** previously every access request was rejected once funding opened, even for an existing team. Requests to an existing active team now work during seed funding, build time, trading and frozen judging. Settlement and terminal phases reject them. A late request remains pending until an organizer pauses the event and approves it. New competing teams remain restricted to Registration, and no wallet or allocation changes when a teammate joins. See [membership-service.ts:10](../packages/application/src/services/membership-service.ts#L10).
+## Confirm before announcing the event
 
-**Password recovery:** the sign-in flow now offers a Firebase password-reset email with a neutral response that does not disclose whether an account exists. See [FirebaseGateway.ts](../apps/web/src/adapters/FirebaseGateway.ts#L196) and [AccessScreen](../apps/web/src/features/Team.tsx#L380). Email verification remains separate work.
+| Item | What remains | Where it is handled |
+| --- | --- | --- |
+| Event facts | Confirm date, venue, time zone, eligibility, registration destination, schedule and support contact. Empty fields must not be presented as established facts. | Admin → Settings and public homepage |
+| Branding asset | Supply/confirm the official Emergent logo asset. The product name is implemented; a guessed logo should not be represented as official. | Frontend brand asset |
+| Prize commitments | Confirm actual builder prizes, investor reserve, community prize and destination of unallocated rewards. Current prize defaults are zero. | Admin → Settings, before round one |
+| Judging policy | Confirm the published rubric, grand-prize tiebreak procedure and results-review duration. Explain remaining exact-score ties and the community ballot tie order. | Admin → Settings and event rules |
+| Event staff | Name, verify and approve the actual backup organizer and judges; assign every eligible submission to a non-conflicted judge. | Admin → Access / Judging |
+| Pilot | Rehearse the complete hosted event flow with actual organizer/judge browser sign-in and a separate test event or local fixtures. | Organizer acceptance rehearsal |
 
-## Three practical priorities
+The named staff roles and approval controls exist. No additional real judge or backup organizer account should be granted access without the organizer identifying the person.
 
-### 1. Add a backup organizer before the event
+## Rehearsal acceptance checklist
 
-Bootstrap provisions one specific organizer ([bootstrap-firebase.mjs:19](../scripts/bootstrap-firebase.mjs#L19)). Admin exposes captain/trader/member assignment and displays organizers as a static role, with no action to add another organizer ([Admin.tsx:362](../apps/web/src/features/Admin.tsx#L362)). A lost session or unavailable operator can therefore interrupt event control.
+- Open the public homepage signed out; confirm every published event fact and prize statement.
+- Sign in through Google and through a verified email account. Exercise explicit verification-email sending, refreshed verification status, access requests and organizer approval.
+- Confirm a teammate shares the same allocation sheet; a judge or organizer receives no competing wallet. Verify the backup organizer can operate the event.
+- Have at least two teams publish initial checkpoints. Open a round, edit allocations from two tabs, confirm conflict handling and the private view from every role.
+- Pause and resume an active deadline; confirm the same remaining time is restored for everyone. Close at the deadline and inspect immutable entitlements.
+- Exchange team messages, block a conversation, report a selected message, and confirm unrelated teams and staff cannot read the conversation.
+- Submit final code commit and demo evidence before the final round. Confirm edits and late submissions are rejected after the relevant lock.
+- Assign independent judges, declare a conflict, reload saved drafts, submit complete sheets and confirm scores lock.
+- Submit private team ballots, close voting, prepare awards and inspect original scores, rankings, exact investor totals and reserve. Confirm publication cannot bypass the review delay.
+- Publish, export and independently reconcile the record. Prize transfer is an organizer process outside this application.
 
-The backend already permits promoting a separate, team-less account and protects the last approved organizer ([membership-service.ts:250](../packages/application/src/services/membership-service.ts#L250)). An in-memory check confirmed promotion works, but leaves that person’s original request pending.
+## Intentional operating limits
 
-**Current workaround:** developer-assisted use of the existing command after verifying the backup’s identity. The [operating blueprint](08-event-operations.md#organizer-responsibilities) already calls for a backup.
+This is a single configured hackathon, not a general event marketplace. Funding opens manually at announced checkpoints; deadlines are enforced on the server. It has no resale, price chart, order book, private share transfer or payment processor. Funding receipts do not finance a team's spending account. An official project update and the final submission are different records.
 
-**Smallest useful change:** expose a reviewed “Add organizer” action for a verified, team-less account, resolve its pending request and retain the audit event. Rehearse resuming an interrupted settlement with the backup account. Captain handoff already works by demoting the old captain and promoting the new one while paused; an atomic handoff is a later convenience.
+Current messages are bounded to 250 per conversation and 1,000 characters, with one send per five seconds for the whole team. Ordinary messaging remains available during building periods. Reports disclose the selected message to organizers, not the full conversation. There are at most 50 judge assignment records, with notes bounded to 1,500 characters per project. Submitted judge sheets lock; organizers cannot quietly rewrite a submitted score. A revealed funding round can be voided as a whole and cannot be replayed.
 
-### 2. Verify email identity before approving access
-
-Email signup does not send verification, and the callable checks authentication without requiring a verified email ([FirebaseGateway.ts:187](../apps/web/src/adapters/FirebaseGateway.ts#L187), [functions/index.ts:42](../apps/functions/src/index.ts#L42)). The approval card shows a submitted name and team name, without a verified account email ([Admin.tsx:744](../apps/web/src/features/Admin.tsx#L744)). Manual approval protects access, but identifying the right person is unnecessarily difficult.
-
-**Current workaround:** use Google sign-in and verify attendees in person.
-
-**Smallest useful change:** add verification/resend for email accounts, require verification before requesting membership, and show the verified email only to organizers. A Google-only first event is also a reasonable smaller product decision. Shareable team join links would reduce queue management, but the new team selector makes them optional for this pilot.
-
-### 3. Preserve and review the judging sheet
-
-Scores currently live only in component state and can be lost on reload/navigation ([Admin.tsx:50](../apps/web/src/features/Admin.tsx#L50)). Final review shows rank, project and share value, but omits the entered judge score ([Admin.tsx:602](../apps/web/src/features/Admin.tsx#L602)). Locking creates an immutable manifest and starts finalization, with no supported score-correction command afterward ([operation-service.ts:163](../packages/application/src/services/operation-service.ts#L163)).
-
-**Current workaround:** keep authoritative scores in an external sheet and have a second person check the entries before locking. “Edit scores” works before the lock.
-
-**Smallest useful change:** save an organizer-only draft and show original score, rank and share value together in the final review. A spreadsheet import can avoid retyping 30 rows. If post-lock corrections become a requirement, use a versioned replacement report that preserves the original manifest and never rewrites trades.
-
-## Useful improvements that can wait
-
-A small event-settings form for name, venue, help contact and a visible agenda would reduce developer involvement. Today the event ID is selected at build time ([FirebaseGateway.ts:60](../apps/web/src/adapters/FirebaseGateway.ts#L60)), and bootstrap supplies its initial name/venue ([bootstrap-firebase.mjs:343](../scripts/bootstrap-firebase.mjs#L343)). Multi-event selection is a later capability, not a prerequisite for this configured event.
-
-Automatic phase opening, a native judge portal, price-history charts and extra funding rounds can wait. Existing server deadlines reject late financial actions ([event-policy.ts:39](../packages/core/src/event-policy.ts#L39)); the organizer advances phases manually. Keep an organizer tab visible for public-price refresh and export at checkpoints. App Check remains a deployment hardening step documented in [Firebase setup](FIREBASE-SETUP.md#cost-controls-and-app-check).
-
-## Validation boundary
-
-All 77 application/domain tests and 84 Firestore security/transaction tests pass. The 22 new [onboarding integration cases](../tests/membership-onboarding.test.ts) and 20 existing GameService cases pass together. They verify directory privacy/bounds, pending access, late requests, paused approval, unchanged finances, inactive teams, closed phases, new-team restrictions and the participant cap. TypeScript also passes. No production records were changed.
-
-The setup guide still records interactive hosted Google sign-in as an outstanding check ([deployment record](FIREBASE-SETUP.md#deployment-record)). Verify that flow with the primary and backup organizer before the live event; this code audit does not establish production browser authentication.
+These are implemented product choices, not missing prerequisites. A full production rehearsal has not yet been confirmed. Automated validation, deployment and migration outcomes should be recorded in the [Firebase deployment record](FIREBASE-SETUP.md#deployment-record) only after they complete.

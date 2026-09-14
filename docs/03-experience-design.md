@@ -1,5 +1,7 @@
 # Experience and interface design
 
+> **Historical version-one document (September 8–10, 2026).** This trading proposal/implementation record is preserved for context. [11 · Sealed funding rounds](11-sealed-rounds.md) supersedes its current product rules, lifecycle and architecture. Do not use the old buy/sell instructions for a version-two event.
+
 Status: proposed product specification. [Market rules](02-market-rules.md) owns pricing, scoring, limits, and settlement; this document owns how participants understand and use them. Screen examples illustrate those rules; they do not define additional game rules.
 
 ## 1. Design intent

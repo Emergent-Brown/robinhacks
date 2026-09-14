@@ -15,6 +15,7 @@ import { initializeApp, deleteApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { Firestore } from 'firebase-admin/firestore';
 import { OAuth2Client } from 'google-auth-library';
+import { build } from 'esbuild';
 
 const ORGANIZER_EMAIL = process.env.ROBINHACKS_ORGANIZER_EMAIL?.trim().toLowerCase() || '';
 const EVENT_ID = 'robinhacks-2026';
@@ -91,7 +92,7 @@ async function locateFirebaseTools() {
   return candidates[0].path;
 }
 
-async function cliCredential() {
+export async function cliCredential() {
   const packageDir = await locateFirebaseTools();
   // Do not enable the CLI's debug/file logger: credential-related internals may log responses.
   const { logger } = require(join(packageDir, 'lib', 'logger.js'));
@@ -192,9 +193,11 @@ function verifyExistingUser(user, googleSubject) {
   );
 }
 
-function verifyExistingEvent(event, member, market, uid) {
+export function verifyExistingEvent(event, member, market, uid) {
   assert(
-    event.id === EVENT_ID && event.rulesVersion === 1,
+    event.id === EVENT_ID &&
+      ((event.rulesVersion === 1 && !event.platform) ||
+        (event.rulesVersion === 2 && event.platform?.version === 2)),
     'An incompatible event already exists at this ID. This script never overwrites an existing event.',
   );
   assert(
@@ -208,6 +211,38 @@ function verifyExistingEvent(event, member, market, uid) {
     Array.isArray(market?.entries),
     'The existing event is missing its market projection. Bootstrap will not overwrite or repair a running event.',
   );
+}
+
+/** New events use the same unconfigured rules as the app and migration. */
+export async function createInitialEvent(now = Date.now()) {
+  const bundle = await build({
+    entryPoints: [join(ROOT, 'packages/core/src/platform.ts')],
+    bundle: true,
+    format: 'esm',
+    platform: 'node',
+    write: false,
+  });
+  const { defaultPlatformConfig } = await import(
+    'data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64')
+  );
+  return {
+    id: EVENT_ID,
+    name: 'Emergent Hacks 2026',
+    venue: '',
+    phase: 'REGISTRATION',
+    phaseVersion: 0,
+    paused: false,
+    pauseReason: '',
+    windowId: 0,
+    closesAt: null,
+    createdAt: now,
+    rulesVersion: 2,
+    activeOperationId: null,
+    publishedResultId: null,
+    announcement: '',
+    tieSeed: randomUUID(),
+    platform: defaultPlatformConfig(),
+  };
 }
 
 async function main() {
@@ -286,7 +321,7 @@ async function main() {
         : 'Create verified organizer Auth identity and link Google provider',
       firestore: eventSnap.exists
         ? 'Existing event and organizer match; no event writes'
-        : 'Create REGISTRATION event, empty market projection and separate organizer membership atomically',
+        : 'Create sealed-round REGISTRATION event with unconfigured prizes, empty project projection and separate organizer membership atomically',
       expectedWrites: {
         auth: eventSnap.exists ? 0 : user ? (needsGoogleLink ? 1 : 0) : 2,
         firestore: eventSnap.exists ? 0 : 3,
@@ -296,7 +331,7 @@ async function main() {
     console.log(JSON.stringify(summary, null, 2));
     if (!args.apply) {
       console.log(
-        `\nTo apply this plan: node scripts/bootstrap-firebase.mjs --project ${args.project} --apply`,
+        `\nTo apply this plan: node --env-file=.env.operations scripts/bootstrap-firebase.mjs --project ${args.project} --apply`,
       );
       return;
     }
@@ -306,6 +341,7 @@ async function main() {
       );
       return;
     }
+    const event = await createInitialEvent();
     if (!user) {
       try {
         user = await auth.createUser({
@@ -315,7 +351,7 @@ async function main() {
           displayName:
             typeof identity.name === 'string' && identity.name.trim()
               ? identity.name.trim().slice(0, 60)
-              : 'AJ Shulman',
+              : 'Organizer',
         });
       } catch (error) {
         if (error.code !== 'auth/email-already-exists' && error.code !== 'auth/uid-already-exists')
@@ -338,32 +374,17 @@ async function main() {
           providerId: 'google.com',
           uid: identity.sub,
           email: ORGANIZER_EMAIL,
-          displayName: user.displayName ?? 'AJ Shulman',
+          displayName: user.displayName ?? 'Organizer',
         },
       });
     }
     verifyExistingUser(user, identity.sub);
-    const now = Date.now();
-    const event = {
-      id: EVENT_ID,
-      name: 'RobinHacks',
-      venue: 'Hackathon',
-      phase: 'REGISTRATION',
-      phaseVersion: 0,
-      paused: false,
-      pauseReason: '',
-      windowId: 0,
-      closesAt: null,
-      createdAt: now,
-      rulesVersion: 1,
-      activeOperationId: null,
-      publishedResultId: null,
-      announcement: '',
-      tieSeed: randomUUID(),
-    };
+    const now = event.createdAt;
     const organizer = {
       uid,
-      displayName: user.displayName?.slice(0, 60) || 'AJ Shulman',
+      displayName: user.displayName?.slice(0, 60) || 'Organizer',
+      email: user.email,
+      emailVerified: user.emailVerified === true,
       teamId: null,
       role: 'organizer',
       status: 'approved',
@@ -406,18 +427,19 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  if (error instanceof BootstrapError) console.error(`Bootstrap stopped: ${error.message}`);
-  else {
-    const code =
-      typeof error?.code === 'string' && /^[a-zA-Z0-9_/-]{1,80}$/.test(error.code)
-        ? error.code
-        : typeof error?.code === 'number'
-          ? String(error.code)
-          : 'unknown';
-    console.error(
-      `Bootstrap stopped (service code: ${code}). Confirm Firebase Authentication and Firestore Standard are initialized in the configured project, and reauthenticate with: npx -y firebase-tools@latest login --reauth. Credentials and service response bodies have been withheld.`,
-    );
-  }
-  process.exitCode = 1;
-});
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  main().catch((error) => {
+    if (error instanceof BootstrapError) console.error(`Bootstrap stopped: ${error.message}`);
+    else {
+      const code =
+        typeof error?.code === 'string' && /^[a-zA-Z0-9_/-]{1,80}$/.test(error.code)
+          ? error.code
+          : typeof error?.code === 'number'
+            ? String(error.code)
+            : 'unknown';
+      console.error(
+        `Bootstrap stopped (service code: ${code}). Confirm Firebase Authentication and Firestore Standard are initialized in the configured project, and reauthenticate with: npx -y firebase-tools@latest login --reauth. Credentials and service response bodies have been withheld.`,
+      );
+    }
+    process.exitCode = 1;
+  });

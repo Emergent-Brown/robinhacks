@@ -1,5 +1,7 @@
 # Data and command contracts
 
+> **Historical version-one document (September 8–10, 2026).** This trading proposal/implementation record is preserved for context. [11 · Sealed funding rounds](11-sealed-rounds.md) supersedes its current product rules, lifecycle and architecture. Do not use the old buy/sell instructions for a version-two event.
+
 Status: implementation specification for Firestore **Standard edition**, subject to emulator validation. Collection names below are proposed. Numeric economic rules are authoritative in [market rules](02-market-rules.md).
 
 ## Storage conventions

@@ -1,10 +1,24 @@
 import { readFile } from 'node:fs/promises';
+import { reconcileSealedExport } from './reconcile-sealed-export.mjs';
 const path = process.argv[2];
 if (!path) {
   console.error('Usage: npm run reconcile -- /absolute/path/to/event-export.json');
   process.exit(1);
 }
-const data = JSON.parse(await readFile(path, 'utf8'));
+let data;
+try {
+  data = JSON.parse(await readFile(path, 'utf8'));
+} catch {
+  // Native JSON parse errors can include the source, which may contain private event data.
+  console.error('FAIL: Unable to read a valid JSON export. Check the file and try again.');
+  process.exit(1);
+}
+if (data.schemaVersion === 2) {
+  const report = reconcileSealedExport(data);
+  console.log(`${report.valid ? 'PASS' : 'FAIL'} sealed funding reconciliation`);
+  console.log(JSON.stringify(report, null, 2));
+  process.exit(report.valid ? 0 : 1);
+}
 // Supports the canonical document-map export and a documents wrapper.
 let documents = data.documents || data;
 if (data.teamRecords && data.event) {

@@ -19,7 +19,16 @@ service cloud.firestore {
         allow list, create, update, delete: if false;
       }
       match /views/market {
-        allow get: if approved(eventId);
+        allow get: if approved(eventId)
+          && get(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid)).data.role != 'judge';
+        allow list, create, update, delete: if false;
+      }
+      // A shared inbox contains only this team's conversation summaries.
+      // Messages, allocations, judge sheets and reports stay behind authorized callables.
+      match /teamInboxes/{teamId} {
+        allow get: if approved(eventId)
+          && get(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid)).data.teamId == teamId
+          && get(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid)).data.role in ['captain', 'trader', 'member'];
         allow list, create, update, delete: if false;
       }
     }

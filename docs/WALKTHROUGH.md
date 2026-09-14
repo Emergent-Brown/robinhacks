@@ -1,8 +1,8 @@
-# RobinHacks walkthrough
+# Historical version-one walkthrough
 
-**Recording date: September 9, 2026.** This video shows the interface before the September 10 redesign. It has not been re-recorded. The recording scripts now target the redesigned interface for a future recording.
+**Historical recording: September 9, 2026.** This video demonstrates the retired version-one trading model and an earlier interface. It is not a walkthrough of the September 14 sealed-round product. The recording scripts below have not been adapted for version two; running them against the current default app is unsupported. Reproducing the historical film requires the matching version-one application and fixtures. See [11 · Sealed rounds](11-sealed-rounds.md) for the current experience.
 
-**[Watch the walkthrough](https://robinhacks-2026-ajs--walkthrough-pyhnt4be.web.app/walkthrough/)** — **4:19, 17 chapters**, with English captions, chapter navigation and a full transcript. The preview is available until **October 9, 2026**.
+**[Historical preview, if still available](https://robinhacks-2026-ajs--walkthrough-pyhnt4be.web.app/walkthrough/)** — **4:19, 17 chapters**, with English captions, chapter navigation and a full transcript. The original preview was scheduled to expire **October 9, 2026**; availability has not been reverified for this release.
 
 The video follows the fictional **Foundry Weekend 2026** event from project discovery through published results, with **12 teams and 48 participants**. Alex Chen is Mosaic’s captain, Sam Rivera is a teammate, and Jamie Park is the organizer. The phone chapter shows the same application at a mobile viewport.
 
@@ -10,7 +10,7 @@ The recording uses the local demo and performs real application commands for fun
 
 The voice is **Samantha**, an installed macOS English (US) synthetic voice, generated locally at 155 words per minute. No cloud speech service or paid voice API was used. It is product narration, not a recording of an event participant.
 
-**[Try the interactive demo](https://robinhacks-2026-ajs--walkthrough-pyhnt4be.web.app/).** This preview starts in the default trading preset. The video starts from a separate Foundry seed scenario, so its phase, holdings and funding figures differ. Preview activity stays in that browser’s local storage; it does not change the production event. Both preview links expire on October 9.
+The old preview URL may now contain a different application release and should not be assumed to match this film. The video used a separate Foundry seed scenario. Its sample activity stayed in browser-local storage and did not change production records. Current local demo presets are described in the [README](../README.md).
 
 ## Completed artifacts
 
@@ -123,7 +123,7 @@ Results processing calculates each portfolio from frozen cash and holdings. It c
 
 Final standings separate three outcomes: seed fundraising, investing teams, and judged projects. They show which ideas attracted support, how teams invested, and what judges rewarded. Everything here used fictional sample teams and credits.
 
-## Reproduce the walkthrough
+## Historical reproduction only
 
 Run from the repository root. Requirements are Node.js 22.12+, npm dependencies, macOS with the Samantha voice, `ffmpeg` and `ffprobe` on `PATH`, Python 3 with Pillow, and a Playwright CLI with native page screencasting. This recording used Playwright `1.63.0-alpha-2026-08-31`. The wrapper finds an installed CLI; on another workstation, set `ROBINHACKS_PLAYWRIGHT_CLI` to its `playwright-core/lib/tools/cli-client/cli.js`. See [capture tooling](../scripts/walkthrough/CAPTURE.md) for the browser dependency details.
 

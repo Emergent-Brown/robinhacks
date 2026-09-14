@@ -3,6 +3,10 @@ import { initializeApp, deleteApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { GameService } from '@robinhacks/application';
 import type { EventConfig } from '@robinhacks/core';
+import {
+  createPlatformDemoDocuments,
+  PLATFORM_USERS,
+} from '../packages/application/src/platform-fixtures';
 import { FirestoreRepository } from '../apps/functions/src/firestore-repository';
 import {
   createDemoDocuments,
@@ -67,6 +71,16 @@ const privatePaths = [
   'views/seedPublication',
   'adminAudit/admin-command',
   'commandReceipts/captain__admin-command',
+  'fundingRounds/funding-1',
+  'roundAllocations/funding-1__team-a',
+  'roundAllocations/funding-1__team-b',
+  'roundEntitlements/funding-1__team-b',
+  'conversations/team-a__team-b',
+  'teamInboxes/team-b',
+  'judgingSheets/judge',
+  'communityBallots/team-a',
+  'awardResults/current',
+  'messageReports/report-one',
 ];
 
 // The standard unit run excludes this suite. It always requires an explicitly configured emulator.
@@ -104,6 +118,8 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
         doc(db, `${eventRoot}/members/organizer`),
         member('organizer', 'organizer', 'approved', null),
       );
+      batch.set(doc(db, `${eventRoot}/members/judge`), member('judge', 'judge', 'approved', null));
+      batch.set(doc(db, `${eventRoot}/teamInboxes/team-a`), { conversations: [] });
       batch.set(
         doc(db, `${eventRoot}/members/pending`),
         member('pending', 'member', 'pending', null),
@@ -125,6 +141,7 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
       'teammate',
       'other-team',
       'organizer',
+      'judge',
       'pending',
       'suspended',
       'outsider',
@@ -140,6 +157,38 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
 
   afterAll(async () => {
     if (environment) await environment.cleanup();
+  });
+
+  it('keeps the funding projection hidden from judge identities', async () => {
+    await assertSucceeds(getDoc(doc(databases.judge!, eventRoot)));
+    await assertFails(getDoc(doc(databases.judge!, `${eventRoot}/views/market`)));
+    for (const path of [
+      'roundAllocations/funding-1__team-a',
+      'fundingRounds/funding-1',
+      'communityBallots/team-a',
+      'judgingSheets/judge',
+      'awardResults/current',
+    ])
+      await assertFails(getDoc(doc(databases.judge!, `${eventRoot}/${path}`)));
+  });
+
+  it('allows only approved members of a team to read its inbox listener', async () => {
+    for (const uid of ['captain', 'teammate'])
+      await assertSucceeds(getDoc(doc(databases[uid]!, `${eventRoot}/teamInboxes/team-a`)));
+    for (const uid of [
+      'anonymous',
+      'organizer',
+      'judge',
+      'other-team',
+      'suspended',
+      'pending',
+      'forged-claims',
+    ])
+      await assertFails(getDoc(doc(databases[uid]!, `${eventRoot}/teamInboxes/team-a`)));
+    await assertFails(
+      setDoc(doc(databases.captain!, `${eventRoot}/teamInboxes/team-a`), { conversations: [] }),
+    );
+    await assertFails(getDocs(collection(databases.captain!, `${eventRoot}/teamInboxes`)));
   });
 
   it.each(['captain', 'teammate', 'other-team', 'organizer'])(
@@ -337,6 +386,82 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
         settled.market.entries.find((entry) => entry.team.id === 'team-2')?.issuer
           .fundingVaultMinor,
       ).toBe(120_000);
+    } finally {
+      await deleteApp(adminApp);
+    }
+  }, 60_000);
+
+  it('atomically closes a sealed round with the real Firestore repository and private snapshots', async () => {
+    let now = Date.now();
+    const id = 'sealed-adapter-event';
+    const adminApp = initializeApp({ projectId: 'demo-robinhacks' }, 'sealed-adapter');
+    const db = getFirestore(adminApp);
+    try {
+      const batch = db.batch();
+      for (const [path, value] of Object.entries(createPlatformDemoDocuments('seed', now))) {
+        const target = path.replace(`events/${DEMO_EVENT_ID}`, `events/${id}`);
+        batch.set(
+          db.doc(target),
+          target === `events/${id}`
+            ? { ...(value as EventConfig), id }
+            : (value as Record<string, unknown>),
+        );
+      }
+      await batch.commit();
+      const service = new GameService(new FirestoreRepository(db), id, { now: () => now });
+      const initial = await service.snapshot(PLATFORM_USERS.organizer.uid);
+      await service.execute(PLATFORM_USERS.organizer, {
+        type: 'openFundingRound',
+        commandId: 'sealed-open-round-1',
+        expectedPhaseVersion: initial.event!.phaseVersion,
+        durationMinutes: 1,
+      });
+      const command = {
+        type: 'saveAllocation' as const,
+        commandId: 'sealed-allocation-one',
+        roundId: 'funding-1',
+        expectedVersion: 0,
+        amounts: { 'team-2': 60, 'team-3': 40 },
+      };
+      const accepted = await service.execute(PLATFORM_USERS.captain, command);
+      expect(await service.execute(PLATFORM_USERS.captain, command)).toEqual(accepted);
+      expect(
+        (await service.snapshot(PLATFORM_USERS.organizer.uid)).platform?.rounds[0].totals,
+      ).toEqual({});
+      expect((await service.snapshot(PLATFORM_USERS.judge.uid)).platform?.allocation).toBeNull();
+      const competing = await Promise.allSettled([
+        service.execute(PLATFORM_USERS.captain, {
+          ...command,
+          commandId: 'sealed-concurrent-one',
+          expectedVersion: 1,
+          amounts: { 'team-2': 50, 'team-3': 50 },
+        }),
+        service.execute(PLATFORM_USERS.captain, {
+          ...command,
+          commandId: 'sealed-concurrent-two',
+          expectedVersion: 1,
+          amounts: { 'team-2': 40, 'team-3': 60 },
+        }),
+      ]);
+      expect(competing.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      now += 61_000;
+      const before = await service.snapshot(PLATFORM_USERS.organizer.uid);
+      await service.execute(PLATFORM_USERS.organizer, {
+        type: 'closeFundingRound',
+        commandId: 'sealed-close-round-1',
+        roundId: 'funding-1',
+        expectedPhaseVersion: before.event!.phaseVersion,
+      });
+      const closed = await service.snapshot(PLATFORM_USERS.captain.uid);
+      expect(closed.event?.phase).toBe('INTERMISSION');
+      expect(closed.platform?.entitlements[0].spent).toBe(100);
+      expect(
+        Object.values(closed.platform!.rounds[0].totals).reduce((sum, value) => sum + value, 0),
+      ).toBe(100);
+      expect((await service.snapshot(PLATFORM_USERS.judge.uid)).platform?.rounds[0].totals).toEqual(
+        {},
+      );
+      expect((await db.collection(`events/${id}/wallets`).get()).empty).toBe(true);
     } finally {
       await deleteApp(adminApp);
     }

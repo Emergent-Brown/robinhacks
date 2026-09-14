@@ -6,7 +6,7 @@ export interface CommandContext {
   paths: EventPaths;
   event: EventConfig;
   member: Member;
-  actor: { uid: string; displayName?: string };
+  actor: { uid: string; displayName?: string; email?: string; emailVerified?: boolean };
   now: number;
   clock: Clock;
   payloadKey: string;

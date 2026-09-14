@@ -11,6 +11,7 @@ export class MarketRefreshScheduler {
         document.visibilityState !== 'visible' ||
         state?.member?.role !== 'organizer' ||
         state.member.status !== 'approved' ||
+        !!state.event?.platform ||
         state.event?.phase !== 'TRADING_OPEN' ||
         state.event.paused ||
         Date.now() - state.market.asOf < 120_000
