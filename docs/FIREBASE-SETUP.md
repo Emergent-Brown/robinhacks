@@ -10,7 +10,8 @@ This repository uses the existing `robinhacks-2026-ajs` Firebase project. Its pa
 | --- | --- |
 | Project | `robinhacks-2026-ajs` |
 | Firebase console | [Open project](https://console.firebase.google.com/project/robinhacks-2026-ajs/overview) |
-| Hosting URL | [Emergent Hacks](https://robinhacks-2026-ajs.web.app) |
+| Primary URL | [Emergent Hacks](https://emergenthacks.com/) |
+| Firebase Hosting URL | [Firebase domain](https://robinhacks-2026-ajs.web.app/) |
 | Event ID | `robinhacks-2026` |
 | Database | `(default)`, Firestore Standard, `us-west1` |
 | Web app | App ID `1:594324444355:web:beae64a96445b8e3707e76` |
@@ -70,7 +71,7 @@ After reviewing an empty-project preflight:
 node --env-file=.env.operations scripts/bootstrap-firebase.mjs --project robinhacks-2026-ajs --apply
 ```
 
-Fresh bootstrap links the exact verified Google identity and creates a version-two sealed-round Registration event, blank venue/unannounced date, zero prize amounts and separate organizer membership. It loads the same default configuration as the application. It recognizes an existing compatible version-one or version-two event without modifying its metadata or permissions. It uses the CLI session rather than creating a service-account key or exposing a public bootstrap endpoint. The adapter uses Firebase CLI internals; rerun preflight after a CLI upgrade. `FIREBASE_TOOLS_DIR` can select a compatible installed package if automatic discovery selects an older cached copy.
+Fresh bootstrap links the exact verified Google identity and creates a version-two sealed-round Registration event with the September 26–27 schedule at the Nelson Center for Entrepreneurship, zero prize amounts and separate organizer membership. It loads the same default configuration as the application. It recognizes an existing compatible version-one or version-two event without modifying its metadata or permissions. It uses the CLI session rather than creating a service-account key or exposing a public bootstrap endpoint. The adapter uses Firebase CLI internals; rerun preflight after a CLI upgrade. `FIREBASE_TOOLS_DIR` can select a compatible installed package if automatic discovery selects an older cached copy.
 
 ## Migrate an unused legacy event to sealed rounds
 
@@ -180,9 +181,15 @@ Blaze remains capable of charging for usage outside free allowances. Configure a
 
 Client writes are denied; authenticated commands enforce identity, roles, deadlines and versions. App Check is optional until configured and tested. Register a reCAPTCHA Enterprise site key in [Firebase App Check](https://console.firebase.google.com/project/robinhacks-2026-ajs/appcheck), set `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`, rebuild and verify normal clients. Then set `ENFORCE_APP_CHECK=true` in the ignored Functions environment and redeploy if enforcing protected endpoints. `gamePublic` deliberately remains an anonymous, bounded metadata endpoint with its own request limit.
 
-For a custom domain, update Authentication's authorized domains and the Functions `ALLOWED_ORIGINS` list. Default CORS permits Firebase Hosting domains and localhost. Keep all environment files and any App Check debug tokens out of Git.
+For a custom domain, update Authentication's authorized domains and the Functions `ALLOWED_ORIGINS` list. Default CORS permits emergenthacks.com, www.emergenthacks.com, Firebase Hosting domains and localhost. An explicit ALLOWED_ORIGINS value replaces that list, so include the custom domains in any override. Keep all environment files and any App Check debug tokens out of Git.
 
 ## Deployment record
+
+**September 18, 2026 — custom domain:** Hosting and all six Functions were redeployed for `https://emergenthacks.com/`. HTTP and `www` redirect to the HTTPS apex. Both custom domains are authorized in Firebase Authentication and allowed by the default Functions CORS policy. The bare URL opens the public homepage, whose participation section has been removed; root HTML uses `no-cache` so new releases appear promptly. Verification confirmed the deployed asset matches the local build, the public schedule loads with three 30-minute funding windows, all six endpoints allow the new origin, unauthenticated protected requests are rejected, and unrelated origins are not allowed. Browser checks covered the homepage, rules and sign-in form; Google sign-in reached its account chooser without completing account authentication. All 203 tests, type checks and production builds passed. A full authenticated event rehearsal was not performed for this domain release.
+
+**September 18, 2026 — schedule correction:** Hosting and the stored public schedule were updated to three 30-minute investment windows: Saturday 11–11:30 a.m., Saturday 9–9:30 p.m., and Sunday noon–12:30 p.m. Eastern. Building blocks are listed separately. The first-round reveal stays at Saturday 6 p.m.; the allocation deadline is independent. Community voting runs Sunday 12:30–12:45 p.m. and the winner announcement moves to 1:15 p.m. to retain 30 minutes for review. Public copy omits the restaurant name, judging administration and detailed pitch instructions. The separate correction migration preserves venue, other event metadata and all funding rules. All 203 tests and production builds passed. No Functions behavior changed in this correction.
+
+**September 18, 2026 — event schedule:** Hosting and all six Functions were updated for editable planned windows and exact funding deadlines. The registration event now shows September 26–27 at the Nelson Center for Entrepreneurship, with a 13-item public schedule. Default funding windows are Saturday 11 a.m.–6 p.m., Saturday 9 p.m.–Sunday 10 a.m., and Sunday noon–12:15 p.m. (America/New_York). Final submissions run Sunday 10–10:45 a.m.; community voting runs 12:15–12:30 p.m. The publication transaction archived prior public details and preserved game rules and event state. Validation: 203 tests passed, production builds passed, the local organizer editor saved a revised deadline and updated the linked public row, and the public schedule was inspected at a 390-pixel mobile width. See [the schedule runbook](12-september-schedule.md).
 
 **September 8, 2026 — historical version one:** Hosting, four original Functions, Firestore Standard in `us-west1`, Auth, organizer bootstrap and the initial registration event were deployed. Local Firebase smoke checks and infrastructure verification were completed for that release. They do not establish version-two deployment.
 

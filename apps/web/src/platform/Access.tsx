@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { EventSchedule } from '@robinhacks/core';
 import { Field, ExternalLink } from '../ui/primitives';
 import { config, navigate, Panel, useCommand, ErrorMessage, type PageProps } from './shared';
 
@@ -28,8 +29,6 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
             <dd>{details.dateLabel || 'Date to be announced'}</dd>
             <dt>Where</dt>
             <dd>{data.event!.venue || 'Venue to be announced'}</dd>
-            <dt>Who can join</dt>
-            <dd>{details.eligibility || 'Eligibility to be announced'}</dd>
           </dl>
           {details.registrationUrl && (
             <ExternalLink href={details.registrationUrl}>Event registration</ExternalLink>
@@ -62,20 +61,31 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
       <Panel title="Schedule">
         {details.schedule.length ? (
           <ol className="p-schedule">
-            {details.schedule.map((item, i) => (
-              <li key={i}>
-                <time>{item.time}</time>
-                <div>
-                  <strong>{item.title}</strong>
-                  <p>{item.description}</p>
-                </div>
-              </li>
-            ))}
+            {details.schedule.map((item, i) => {
+              const planned = EventSchedule.resolve(details.timing, item.window);
+              return (
+                <li key={i}>
+                  <time>
+                    {planned ? EventSchedule.label(planned, details.timeZone) : item.time}
+                  </time>
+                  <div>
+                    <strong>{item.title}</strong>
+                    {item.description && <p>{item.description}</p>}
+                  </div>
+                </li>
+              );
+            })}
           </ol>
         ) : (
           <p>The organizer will publish the schedule here.</p>
         )}
-        <p className="muted">Event time zone: {details.timeZone}</p>
+        <p className="muted">
+          All times are{' '}
+          {details.timeZone === 'America/New_York'
+            ? 'Eastern'
+            : details.timeZone.replaceAll('_', ' ')}
+          . Schedule subject to change.
+        </p>
       </Panel>
     </>
   );

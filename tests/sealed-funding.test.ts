@@ -464,19 +464,24 @@ describe('sealed funding application boundaries', () => {
     expect(h.currentEvent().phase).toBe('SEED_OPEN');
   });
 
-  it('locks all prize, allocation, and judging settings on first open while allowing event copy edits', async () => {
+  it('allows schedule edits after rules lock without changing the running round or its deadline', async () => {
     const h = fixture();
     await h.open();
     const config = h.currentEvent().platform!;
+    const originalDeadline = h.currentEvent().closesAt;
+    const timing = structuredClone(config.details.timing!);
+    timing.rounds[1].closesAt += 15 * 60_000;
     const command = {
       type: 'configurePlatform',
-      details: { ...config.details, about: 'Doors open at nine.' },
+      details: { ...config.details, about: 'Doors open at nine.', timing },
       funding: config.funding,
       name: 'RobinHacks',
       venue: 'Providence',
     };
     await h.command('organizer', command);
     expect(h.currentEvent().venue).toBe('Providence');
+    expect(h.currentEvent().platform!.details.timing).toEqual(timing);
+    expect(h.currentEvent().closesAt).toBe(originalDeadline);
     await expect(
       h.command('organizer', {
         ...command,
@@ -484,6 +489,38 @@ describe('sealed funding application boundaries', () => {
       }),
     ).rejects.toMatchObject({ code: 'RULES_LOCKED' });
   });
+
+  it('keeps an explicit planned deadline when a funding round opens late', async () => {
+    const h = fixture();
+    h.setNow(120_000);
+    await h.command('organizer', {
+      type: 'openFundingRound',
+      expectedPhaseVersion: h.currentEvent().phaseVersion,
+      durationMinutes: 10,
+      closesAt: 300_000,
+    });
+    expect(h.currentEvent().closesAt).toBe(300_000);
+    expect(
+      (h.repository.dump()[h.paths.doc('fundingRounds', 'funding-1')] as FundingRound).closesAt,
+    ).toBe(300_000);
+  });
+
+  it.each([120_000, 119_999, 120_000 + 1440 * 60_000 + 1])(
+    'rejects an expired or overly distant explicit deadline: %i',
+    async (closesAt) => {
+      const h = fixture();
+      h.setNow(120_000);
+      await expect(
+        h.command('organizer', {
+          type: 'openFundingRound',
+          expectedPhaseVersion: h.currentEvent().phaseVersion,
+          durationMinutes: 10,
+          closesAt,
+        }),
+      ).rejects.toMatchObject({ code: 'INVALID_DEADLINE' });
+      expect(h.currentEvent().platform!.currentRound).toBe(0);
+    },
+  );
 
   it('atomically refuses corrupted saved allocations without publishing any totals or entitlements', async () => {
     const h = fixture();

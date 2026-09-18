@@ -35,6 +35,8 @@ const options = {
   cors: configuredOrigins?.length
     ? configuredOrigins
     : [
+        'https://emergenthacks.com',
+        'https://www.emergenthacks.com',
         /^https:\/\/[a-z0-9-]+\.(web\.app|firebaseapp\.com)$/,
         /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/,
       ],

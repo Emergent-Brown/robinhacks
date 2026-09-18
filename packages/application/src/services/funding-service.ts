@@ -1,4 +1,4 @@
-import { RULES, SealedFunding } from '@robinhacks/core';
+import { EventSchedule, RULES, SealedFunding } from '@robinhacks/core';
 import type {
   CommandResult,
   FundingCommand,
@@ -107,6 +107,12 @@ export class FundingService {
     platform: PlatformConfig,
   ): CommandResult {
     SealedFunding.validateSettings(command.funding);
+    if (command.details.timing) EventSchedule.validate(command.details.timing);
+    requireState(
+      !command.details.schedule.some((item) => item.window && !command.details.timing),
+      'INVALID_SCHEDULE',
+      'Linked schedule items need planned windows.',
+    );
     requireState(
       platform.rulesLockedAt === null || canonical(platform.funding) === canonical(command.funding),
       'RULES_LOCKED',
@@ -222,13 +228,19 @@ export class FundingService {
     );
     const now = context.clock.now();
     context.now = now;
+    const closesAt = command.closesAt ?? now + command.durationMinutes * 60_000;
+    requireState(
+      Number.isSafeInteger(closesAt) && closesAt > now && closesAt <= now + 1_440 * 60_000,
+      'INVALID_DEADLINE',
+      'Choose a funding deadline in the next 24 hours.',
+    );
     const round: FundingRound = {
       id: `funding-${number}`,
       number,
       name: platform.funding.roundNames[number - 1],
       state: 'open',
       openedAt: now,
-      closesAt: now + command.durationMinutes * 60_000,
+      closesAt,
       closedAt: null,
       weightBps: platform.funding.roundWeightsBps[number - 1],
       minimumDenominator: platform.funding.minimumDenominator,

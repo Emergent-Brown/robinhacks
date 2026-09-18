@@ -37,12 +37,12 @@ function localFunction(input: unknown) {
 }
 
 describe('safe bootstrap and migration entry points', () => {
-  it('creates current unconfigured sealed-round defaults without any cloud identity or credential lookup', () => {
+  it('creates the event schedule and unfunded prize defaults without any cloud identity or credential lookup', () => {
     const event = localFunction({ mode: 'create' });
     expect(event).toMatchObject({
       id: 'robinhacks-2026',
       name: 'Emergent Hacks 2026',
-      venue: '',
+      venue: 'Nelson Center for Entrepreneurship',
       phase: 'REGISTRATION',
       rulesVersion: 2,
       createdAt: 123456,
@@ -58,7 +58,7 @@ describe('safe bootstrap and migration entry points', () => {
       builderPrizesMinor: [0, 0, 0],
       communityPrizeMinor: 0,
     });
-    expect(event.platform.details.dateLabel).toBe('');
+    expect(event.platform.details.dateLabel).toBe('September 26–27, 2026');
   });
 
   it('recognizes existing v1 and v2 events without modifying either or accepting contradictory versions', () => {

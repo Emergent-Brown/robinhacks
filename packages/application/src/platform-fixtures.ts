@@ -1,4 +1,4 @@
-import { defaultPlatformConfig, SealedFunding } from '@robinhacks/core';
+import { DEFAULT_EVENT_VENUE, defaultPlatformConfig, SealedFunding } from '@robinhacks/core';
 import type {
   EventConfig,
   FundingRound,
@@ -49,7 +49,7 @@ export function createPlatformDemoDocuments(
   const event: EventConfig = {
     ...(source[root] as EventConfig),
     name: 'Emergent Hacks 2026',
-    venue: '',
+    venue: DEFAULT_EVENT_VENUE,
     rulesVersion: 2,
     phase: open ? 'SEED_OPEN' : 'REGISTRATION',
     phaseVersion: open ? 4 : 1,

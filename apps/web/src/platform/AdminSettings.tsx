@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { EventDetails, FundingSettings } from '@robinhacks/core';
 import { Field } from '../ui/primitives';
+import { EventScheduleEditor } from './EventScheduleEditor';
 import { config, ErrorMessage, Panel, useCommand, type PageProps } from './shared';
 
 export function AdminSettings({ data, actions }: PageProps) {
@@ -102,77 +103,7 @@ export function AdminSettings({ data, actions }: PageProps) {
             />
           </Field>
         </div>
-        <h3>Schedule</h3>
-        {details.schedule.map((item, index) => (
-          <div className="p-schedule-editor" key={index}>
-            <Field label="Time">
-              <input
-                maxLength={100}
-                required
-                value={item.time}
-                onChange={(event) =>
-                  detail(
-                    'schedule',
-                    details.schedule.map((old, i) =>
-                      i === index ? { ...old, time: event.target.value } : old,
-                    ),
-                  )
-                }
-              />
-            </Field>
-            <Field label="Title">
-              <input
-                maxLength={100}
-                required
-                value={item.title}
-                onChange={(event) =>
-                  detail(
-                    'schedule',
-                    details.schedule.map((old, i) =>
-                      i === index ? { ...old, title: event.target.value } : old,
-                    ),
-                  )
-                }
-              />
-            </Field>
-            <Field label="Description">
-              <input
-                maxLength={500}
-                value={item.description}
-                onChange={(event) =>
-                  detail(
-                    'schedule',
-                    details.schedule.map((old, i) =>
-                      i === index ? { ...old, description: event.target.value } : old,
-                    ),
-                  )
-                }
-              />
-            </Field>
-            <button
-              type="button"
-              className="p-link"
-              onClick={() =>
-                detail(
-                  'schedule',
-                  details.schedule.filter((_, i) => i !== index),
-                )
-              }
-            >
-              Remove
-            </button>
-          </div>
-        ))}
-        <button
-          type="button"
-          className="button secondary"
-          disabled={details.schedule.length >= 20}
-          onClick={() =>
-            detail('schedule', [...details.schedule, { time: '', title: '', description: '' }])
-          }
-        >
-          Add schedule item
-        </button>
+        <EventScheduleEditor details={details} onChange={setDetails} />
       </Panel>
       <Panel title="Funding rules and prizes">
         {locked ? (

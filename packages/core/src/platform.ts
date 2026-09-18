@@ -1,4 +1,16 @@
+import { defaultEventDetails } from './event-schedule';
+
 /** Version-two event contracts. Credits are sealed allocations, never tradable money. */
+export interface PlannedWindow {
+  startsAt: number;
+  closesAt: number;
+}
+export interface EventTiming {
+  rounds: PlannedWindow[];
+  submissions: PlannedWindow;
+  ballot: PlannedWindow;
+}
+export type ScheduleWindow = 'round1' | 'round2' | 'round3' | 'submissions' | 'ballot';
 export interface EventDetails {
   theme: string;
   about: string;
@@ -7,7 +19,9 @@ export interface EventDetails {
   eligibility: string;
   registrationUrl: string;
   contactEmail: string;
-  schedule: Array<{ time: string; title: string; description: string }>;
+  schedule: Array<{ time: string; title: string; description: string; window?: ScheduleWindow }>;
+  /** Optional for events created before scheduled windows were introduced. */
+  timing?: EventTiming;
 }
 export interface FundingSettings {
   budget: number;
@@ -202,7 +216,12 @@ export type FundingCommand = WithId<
       name: string;
       venue: string;
     }
-  | { type: 'openFundingRound'; expectedPhaseVersion: number; durationMinutes: number }
+  | {
+      type: 'openFundingRound';
+      expectedPhaseVersion: number;
+      durationMinutes: number;
+      closesAt?: number;
+    }
   | {
       type: 'saveAllocation';
       roundId: string;
@@ -265,16 +284,7 @@ export type CommunityCommand = WithId<
 export type PlatformCommand = FundingCommand | CommunityCommand;
 export const defaultPlatformConfig = (): PlatformConfig => ({
   version: 2,
-  details: {
-    theme: 'Silicon Valley',
-    about: 'Build a project, share your progress, and back the teams you believe in.',
-    dateLabel: '',
-    timeZone: 'America/New_York',
-    eligibility: '',
-    registrationUrl: '',
-    contactEmail: '',
-    schedule: [],
-  },
+  details: defaultEventDetails(),
   funding: {
     budget: 100,
     increment: 10,

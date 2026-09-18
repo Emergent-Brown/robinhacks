@@ -37,6 +37,12 @@ const timeZone = text(80)
       return false;
     }
   }, 'Use a valid time zone, such as America/New_York.');
+const plannedWindow = z
+  .object({
+    startsAt: z.number().int().positive().max(253402300799999),
+    closesAt: z.number().int().positive().max(253402300799999),
+  })
+  .strict();
 const details = z
   .object({
     theme: text(80),
@@ -47,8 +53,25 @@ const details = z
     registrationUrl: url,
     contactEmail: email,
     schedule: z
-      .array(z.object({ time: text(100), title: text(100), description: text(500) }).strict())
+      .array(
+        z
+          .object({
+            time: text(100),
+            title: text(100),
+            description: text(500),
+            window: z.enum(['round1', 'round2', 'round3', 'submissions', 'ballot']).optional(),
+          })
+          .strict(),
+      )
       .max(20),
+    timing: z
+      .object({
+        rounds: z.array(plannedWindow).length(3),
+        submissions: plannedWindow,
+        ballot: plannedWindow,
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 const funding = z
@@ -97,6 +120,7 @@ export const platformCommandSchema = z.discriminatedUnion('type', [
       commandId,
       expectedPhaseVersion: version,
       durationMinutes: z.number().int().min(1).max(1440),
+      closesAt: z.number().int().positive().max(253402300799999).optional(),
     })
     .strict(),
   z

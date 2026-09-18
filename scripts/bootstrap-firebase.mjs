@@ -213,22 +213,22 @@ export function verifyExistingEvent(event, member, market, uid) {
   );
 }
 
-/** New events use the same unconfigured rules as the app and migration. */
+/** New events use the same event plan and funding rules as the app. */
 export async function createInitialEvent(now = Date.now()) {
   const bundle = await build({
-    entryPoints: [join(ROOT, 'packages/core/src/platform.ts')],
+    entryPoints: [join(ROOT, 'packages/core/src/index.ts')],
     bundle: true,
     format: 'esm',
     platform: 'node',
     write: false,
   });
-  const { defaultPlatformConfig } = await import(
+  const { defaultPlatformConfig, DEFAULT_EVENT_VENUE } = await import(
     'data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64')
   );
   return {
     id: EVENT_ID,
     name: 'Emergent Hacks 2026',
-    venue: '',
+    venue: DEFAULT_EVENT_VENUE,
     phase: 'REGISTRATION',
     phaseVersion: 0,
     paused: false,

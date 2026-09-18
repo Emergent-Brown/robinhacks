@@ -6,7 +6,7 @@
 
 The participant-facing event is **Emergent Hacks**. Silicon Valley is the theme; `robinhacks` remains the repository, package and Firebase identifier. A public homepage explains the event and links into the account flow. Date, venue, schedule, registration link, contact and eligibility are editable facts, not generated marketing copy.
 
-Teams build projects, share checkpoint evidence, investigate other teams and allocate credits during three short funding windows. They enter an amount, not a share order. A completed investment remains attached to its original round. There is no resale or continuously changing price.
+Teams build projects, share checkpoint evidence, investigate other teams and allocate credits during three sealed funding windows. They enter an amount, not a share order. A completed investment remains attached to its original round. There is no resale or continuously changing price. The [September 26–27 schedule](12-september-schedule.md) supplies the current editable window defaults.
 
 The platform rewards discovery without requiring continuous trading. It cannot prevent all social coordination; verified attendance, independent judging and published conduct rules remain necessary.
 

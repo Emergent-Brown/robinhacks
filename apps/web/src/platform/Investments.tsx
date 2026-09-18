@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { EventSchedule } from '@robinhacks/core';
 import { useClock } from '../hooks/useApp';
 import { newCommandId } from '../app/gateway';
 import {
@@ -36,6 +37,7 @@ export function Investments({ data, actions }: PageProps) {
       <ol className="p-rounds">
         {settings.roundNames.map((name, index) => {
           const round = state.rounds.find((item) => item.number === index + 1);
+          const planned = config(data).details.timing?.rounds[index];
           return (
             <li key={name} className={round?.state === 'open' ? 'current' : ''}>
               <strong>
@@ -49,6 +51,16 @@ export function Investments({ data, actions }: PageProps) {
                     : round.state
                   : 'Upcoming'}
               </span>
+              {(round || planned) && (
+                <span>
+                  {round
+                    ? EventSchedule.label(
+                        { startsAt: round.openedAt, closesAt: round.closesAt },
+                        config(data).details.timeZone,
+                      )
+                    : `Planned: ${EventSchedule.label(planned!, config(data).details.timeZone)}`}
+                </span>
+              )}
             </li>
           );
         })}

@@ -4,7 +4,7 @@ A mobile-friendly hackathon platform for building projects, meeting other teams,
 
 The repository retains the technical name `robinhacks`. The participant-facing event is **Emergent Hacks**, with **Silicon Valley** as its theme. React and TypeScript provide the interface; Firebase Authentication, Firestore and callable Functions provide the deployed backend. The local demo runs the same application services and economic rules without a cloud account.
 
-**Deployed September 14, 2026:** the [live event](https://robinhacks-2026-ajs.web.app) uses the sealed-round platform. The [populated demo](https://robinhacks-2026-ajs--walkthrough-pyhnt4be.web.app/) supports captain, teammate, organizer and judge perspectives. The empty production event was upgraded with its existing organizer preserved. See the [deployment record](docs/FIREBASE-SETUP.md#deployment-record) for verification and remaining rehearsal checks.
+**Updated September 18, 2026:** the [live event](https://emergenthacks.com/) uses the sealed-round platform. The [populated demo](https://robinhacks-2026-ajs--walkthrough-pyhnt4be.web.app/) supports captain, teammate, organizer and judge perspectives. The empty production event was upgraded with its existing organizer preserved. See the [deployment record](docs/FIREBASE-SETUP.md#deployment-record) for verification and remaining rehearsal checks.
 
 ## Start locally
 

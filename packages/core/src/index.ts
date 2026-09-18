@@ -8,4 +8,5 @@ export * from './funding-allocator.js';
 export * from './result-scorer.js';
 export * from './event-policy.js';
 export * from './platform';
+export * from './event-schedule';
 export * from './sealed-funding';

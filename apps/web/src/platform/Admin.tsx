@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Dialog, Field } from '../ui/primitives';
 import { useClock } from '../hooks/useApp';
+import { WindowOpener } from './WindowOpener';
 import { AdminSettings } from './AdminSettings';
 import { AdminMembers } from './AdminMembers';
 import { AdminJudging } from './AdminJudging';
@@ -128,11 +129,8 @@ function Operations({ data, actions }: PageProps) {
   const settings = config(data);
   const active = state.rounds.find((round) => round.state === 'open');
   const now = useClock();
-  const [duration, setDuration] = useState(20);
   const [pauseReason, setPauseReason] = useState('');
   const [voidReason, setVoidReason] = useState('');
-  const [submissionMinutes, setSubmissionMinutes] = useState(60);
-  const [ballotMinutes, setBallotMinutes] = useState(20);
   const [announcement, setAnnouncement] = useState(event.announcement);
   const [winnerId, setWinnerId] = useState('');
   const [tiebreak, setTiebreak] = useState('');
@@ -230,39 +228,28 @@ function Operations({ data, actions }: PageProps) {
                 ? 'All three funding rounds have been opened.'
                 : `Next: ${settings.funding.roundNames[settings.currentRound]}. Publish project updates before opening.`}
             </p>
-            <form
-              className="p-inline-form"
-              onSubmit={(e) => {
-                e.preventDefault();
+            <WindowOpener
+              key={settings.currentRound}
+              plan={settings.details.timing?.rounds[settings.currentRound]}
+              zone={settings.details.timeZone}
+              now={now}
+              label="Open next round"
+              fallbackMinutes={30}
+              maxMinutes={1440}
+              disabled={
+                terminal ||
+                event.paused ||
+                settings.currentRound >= settings.funding.roundNames.length ||
+                cmd.pending
+              }
+              onOpen={(window) =>
                 review(
                   'Open funding round',
-                  `Open ${settings.funding.roundNames[settings.currentRound]} for ${duration} minutes? ${settings.currentRound === 0 ? 'This locks the roster, funding settings, and judging rubric.' : ''}`,
-                  { type: 'openFundingRound', durationMinutes: duration, ...phaseVersion },
-                );
-              }}
-            >
-              <Field label="Duration (minutes)">
-                <input
-                  type="number"
-                  min="1"
-                  max="1440"
-                  required
-                  value={duration}
-                  onChange={(e) => setDuration(Number(e.target.value))}
-                />
-              </Field>
-              <button
-                className="button primary"
-                disabled={
-                  terminal ||
-                  event.paused ||
-                  settings.currentRound >= settings.funding.roundNames.length ||
-                  cmd.pending
-                }
-              >
-                Open next round
-              </button>
-            </form>
+                  `Open ${settings.funding.roundNames[settings.currentRound]} until ${stamp(window.closesAt, settings.details.timeZone)}? ${settings.currentRound === 0 ? 'This locks the roster, funding settings, and judging rubric.' : ''}`,
+                  { type: 'openFundingRound', ...window, ...phaseVersion },
+                )
+              }
+            />
           </>
         )}
         {state.rounds.some((round) => round.state === 'closed') && (
@@ -316,43 +303,45 @@ function Operations({ data, actions }: PageProps) {
               : 'Closed'}{' '}
             · {state.submissions.length} submitted projects
           </p>
-          <Field label="Window length (minutes)">
-            <input
-              type="number"
-              min="1"
-              max="1440"
-              value={submissionMinutes}
-              onChange={(e) => setSubmissionMinutes(Number(e.target.value))}
-            />
-          </Field>
-          <button
-            className="button secondary"
-            disabled={
-              terminal ||
-              event.paused ||
-              cmd.pending ||
-              settings.currentRound >= 3 ||
-              event.phase === 'FROZEN'
-            }
-            onClick={() =>
-              review(
-                settings.submissionsOpen ? 'Close submissions' : 'Open submissions',
-                settings.submissionsOpen
-                  ? 'Close the final submission window for all teams?'
-                  : `Open final submissions for ${submissionMinutes} minutes?`,
-                {
+          {settings.submissionsOpen ? (
+            <button
+              className="button secondary"
+              disabled={terminal || event.paused || cmd.pending}
+              onClick={() =>
+                review('Close submissions', 'Close the final submission window for all teams?', {
                   type: 'setSubmissionWindow',
-                  open: !settings.submissionsOpen,
-                  closesAt: settings.submissionsOpen
-                    ? null
-                    : Date.now() + submissionMinutes * 60000,
+                  open: false,
+                  closesAt: null,
                   ...phaseVersion,
-                },
-              )
-            }
-          >
-            {settings.submissionsOpen ? 'Close submissions' : 'Open submissions'}
-          </button>
+                })
+              }
+            >
+              Close submissions
+            </button>
+          ) : (
+            <WindowOpener
+              plan={settings.details.timing?.submissions}
+              zone={settings.details.timeZone}
+              now={now}
+              label="Open submissions"
+              fallbackMinutes={60}
+              maxMinutes={1440}
+              disabled={
+                terminal ||
+                event.paused ||
+                cmd.pending ||
+                settings.currentRound >= 3 ||
+                event.phase === 'FROZEN'
+              }
+              onOpen={({ closesAt }) =>
+                review(
+                  'Open submissions',
+                  `Accept final submissions until ${stamp(closesAt, settings.details.timeZone)}?`,
+                  { type: 'setSubmissionWindow', open: true, closesAt, ...phaseVersion },
+                )
+              }
+            />
+          )}
         </Panel>
         <Panel title="Community ballot">
           <p>
@@ -361,35 +350,39 @@ function Operations({ data, actions }: PageProps) {
               : 'Closed'}
             . Ballot results stay private until awards.
           </p>
-          <Field label="Window length (minutes)">
-            <input
-              type="number"
-              min="1"
-              max="240"
-              value={ballotMinutes}
-              onChange={(e) => setBallotMinutes(Number(e.target.value))}
-            />
-          </Field>
-          <button
-            className="button secondary"
-            disabled={terminal || event.paused || cmd.pending || event.phase !== 'FROZEN'}
-            onClick={() =>
-              review(
-                settings.ballotOpen ? 'Close ballots' : 'Open ballots',
-                settings.ballotOpen
-                  ? 'Lock all community ballots?'
-                  : `Open private team ballots for ${ballotMinutes} minutes?`,
-                {
+          {settings.ballotOpen ? (
+            <button
+              className="button secondary"
+              disabled={terminal || event.paused || cmd.pending}
+              onClick={() =>
+                review('Close ballots', 'Lock all community ballots?', {
                   type: 'setBallotWindow',
-                  open: !settings.ballotOpen,
-                  closesAt: settings.ballotOpen ? null : Date.now() + ballotMinutes * 60000,
+                  open: false,
+                  closesAt: null,
                   ...phaseVersion,
-                },
-              )
-            }
-          >
-            {settings.ballotOpen ? 'Close ballots' : 'Open ballots'}
-          </button>
+                })
+              }
+            >
+              Close ballots
+            </button>
+          ) : (
+            <WindowOpener
+              plan={settings.details.timing?.ballot}
+              zone={settings.details.timeZone}
+              now={now}
+              label="Open ballots"
+              fallbackMinutes={20}
+              maxMinutes={240}
+              disabled={terminal || event.paused || cmd.pending || event.phase !== 'FROZEN'}
+              onOpen={({ closesAt }) =>
+                review(
+                  'Open ballots',
+                  `Accept private team ballots until ${stamp(closesAt, settings.details.timeZone)}?`,
+                  { type: 'setBallotWindow', open: true, closesAt, ...phaseVersion },
+                )
+              }
+            />
+          )}
         </Panel>
       </div>
       <Panel title="Judging and awards">

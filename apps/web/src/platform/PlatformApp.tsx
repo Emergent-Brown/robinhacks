@@ -18,7 +18,7 @@ import './platform.css';
 function readRoute() {
   const [page = '', id = ''] = location.hash.replace(/^#\/?/, '').split('/');
   return {
-    page: page.startsWith('platform') ? page.slice(8) : 'projects',
+    page: page === '' ? 'home' : page.startsWith('platform') ? page.slice(8) : 'projects',
     id: decodeURIComponent(id),
   };
 }
@@ -244,7 +244,7 @@ export function PlatformApp({
               <h1>Event rules</h1>
               <Rules data={data} />
             </>
-          ) : route.page === 'access' || !!user ? (
+          ) : route.page === 'access' || (!!user && route.page !== 'home') ? (
             <Access data={data} actions={actions} />
           ) : (
             <Homepage data={data} actions={actions} onJoin={() => navigate('access')} />
