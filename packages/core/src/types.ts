@@ -226,7 +226,7 @@ export type Command =
       commandId: string;
       staffRole?: 'judge' | 'organizer';
       displayName: string;
-      teamName: string;
+      teamName?: string;
       teamId?: string;
     }
   | {
@@ -235,6 +235,7 @@ export type Command =
       uid: string;
       role: 'captain' | 'member' | 'trader';
       teamId?: string;
+      teamName?: string;
     }
   | { type: 'setMemberRole'; commandId: string; uid: string; role: Role; status: Member['status'] }
   | {

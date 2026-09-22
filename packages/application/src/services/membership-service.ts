@@ -35,7 +35,7 @@ export class MembershipService {
       'Access requests are closed during settlement or after the event. Contact an organizer.',
     );
     requireState(
-      registrationOpen || !!command.teamId || !!command.staffRole,
+      registrationOpen || !!event.platform || !!command.teamId || !!command.staffRole,
       'REGISTRATION_CLOSED',
       'New teams can be created only before funding opens. Choose an existing team.',
     );
@@ -65,7 +65,7 @@ export class MembershipService {
     const request: AccessRequest = {
       uid: actor.uid,
       displayName: command.displayName,
-      teamName: team?.name ?? command.teamName,
+      teamName: team?.name ?? command.teamName ?? '',
       teamId: command.teamId ?? null,
       requestedAt: now,
       status: 'pending',
@@ -82,7 +82,7 @@ export class MembershipService {
       version: (member?.version ?? 0) + 1,
       ...(actor.email ? { email: actor.email, emailVerified: actor.emailVerified === true } : {}),
     });
-    return { message: 'Request sent. An organizer will verify your team and approve access.' };
+    return { message: 'Request sent. An organizer will review your name and verified email.' };
   }
 
   async approve(context: CommandContext, command: Extract<Command, { type: 'approveMembership' }>) {
@@ -118,17 +118,25 @@ export class MembershipService {
       'Organizer accounts cannot join a competing team.',
     );
     requireState(
+      !(command.teamId && command.teamName),
+      'INVALID_REQUEST',
+      'Choose an existing team or name a new team.',
+    );
+    requireState(
       members.filter(
         (candidate) => candidate.status === 'approved' && candidate.role !== 'organizer',
       ).length < 150,
       'MEMBER_LIMIT',
       'This event is limited to 150 approved participants.',
     );
-    const teamId = command.teamId ?? request.teamId ?? `team_${command.commandId.slice(0, 100)}`;
+    const teamId = command.teamName
+      ? `team_${command.commandId.slice(0, 100)}`
+      : (command.teamId ?? request.teamId ?? `team_${command.commandId.slice(0, 100)}`);
     const existing = teams.find((team) => team.id === teamId);
+    const selectedName = command.teamName ?? request.teamName;
     if (!existing) {
       requireState(
-        !command.teamId && !request.teamId,
+        !command.teamId && (!request.teamId || !!command.teamName),
         'NOT_FOUND',
         'The selected team does not exist.',
       );
@@ -136,6 +144,11 @@ export class MembershipService {
         ['DRAFT', 'REGISTRATION'].includes(event.phase),
         'ROSTER_LOCKED',
         'New teams can be created only before funding opens.',
+      );
+      requireState(
+        selectedName.trim().length >= 2,
+        'TEAM_NAME_REQUIRED',
+        'Enter a new team name before approving.',
       );
       requireState(
         teams.length < RULES.maxTeams,
@@ -148,15 +161,15 @@ export class MembershipService {
         'The first approved person on a new team must be its captain.',
       );
       requireState(
-        !teams.some((team) => team.name.toLowerCase() === request.teamName.toLowerCase()),
+        !teams.some((team) => team.name.toLowerCase() === selectedName.toLowerCase()),
         'TEAM_EXISTS',
         'A team with this name exists. Approve the request into that team.',
       );
       const team: Team = {
         id: teamId,
-        name: request.teamName,
+        name: selectedName,
         ticker: `${
-          request.teamName
+          selectedName
             .replace(/[^A-Za-z]/g, '')
             .slice(0, 4)
             .toUpperCase() || 'TEAM'
@@ -259,11 +272,16 @@ export class MembershipService {
     };
     tx.set(paths.member(command.uid), approved);
     tx.set(`${paths.team(teamId)}/members/${command.uid}`, approved);
-    tx.set(paths.doc('accessRequests', command.uid), { ...request, teamId, status: 'approved' });
+    tx.set(paths.doc('accessRequests', command.uid), {
+      ...request,
+      teamId,
+      teamName: existing?.name ?? selectedName,
+      status: 'approved',
+    });
     // Serialize all roster mutations against the common event document.
     tx.set(paths.root, { ...event, phaseVersion: event.phaseVersion + 1 });
     return {
-      message: `${request.displayName} approved${existing ? ` for ${existing.name}` : `. ${request.teamName} is ready`}.`,
+      message: `${request.displayName} approved${existing ? ` for ${existing.name}` : `. ${selectedName} is ready`}.`,
     };
   }
 

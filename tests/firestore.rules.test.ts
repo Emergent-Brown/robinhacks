@@ -8,6 +8,7 @@ import {
   PLATFORM_USERS,
 } from '../packages/application/src/platform-fixtures';
 import { FirestoreRepository } from '../apps/functions/src/firestore-repository';
+import { FirestorePosterStore } from '../apps/functions/src/firestore-poster-store';
 import {
   createDemoDocuments,
   DEMO_EVENT_ID,
@@ -85,6 +86,42 @@ const privatePaths = [
 
 // The standard unit run excludes this suite. It always requires an explicitly configured emulator.
 describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
+  it('increments poster visits atomically, paginates numerically, and denies all direct client access', async () => {
+    const app = initializeApp({ projectId: 'demo-robinhacks' }, 'poster-integration');
+    try {
+      const db = getFirestore(app);
+      const store = new FirestorePosterStore(db);
+      await Promise.all(Array.from({ length: 20 }, () => store.recordVisit(2)));
+      const counter = (await db.doc('posterVisits/2').get()).data()!;
+      expect(counter.visits).toBe(20);
+      expect(counter.lastVisitedAt.toMillis()).toBeGreaterThan(0);
+      const batch = db.batch();
+      for (let number = 3; number <= 103; number++) {
+        batch.set(db.doc(`posterVisits/${number}`), { ...counter, number, visits: 1 });
+      }
+      await batch.commit();
+      const first = await store.list(0);
+      expect(first.items).toHaveLength(100);
+      expect(first.items[0].number).toBe(2);
+      expect(first.nextCursor).toBe(101);
+      const last = await store.list(first.nextCursor!);
+      expect(last.items.map((item) => item.number)).toEqual([102, 103]);
+      expect(last.nextCursor).toBeNull();
+      for (const client of [
+        environment.unauthenticatedContext().firestore(),
+        ...Object.values(databases),
+      ]) {
+        const ref = doc(client, 'posterVisits/2');
+        await assertFails(getDoc(ref));
+        await assertFails(getDocs(collection(client, 'posterVisits')));
+        await assertFails(setDoc(doc(client, 'posterVisits/1'), { visits: 999 }));
+        await assertFails(updateDoc(ref, { visits: 999 }));
+        await assertFails(deleteDoc(ref));
+      }
+    } finally {
+      await deleteApp(app);
+    }
+  });
   beforeAll(async () => {
     const address = new URL(`http://${emulatorAddress}`);
     environment = await initializeTestEnvironment({

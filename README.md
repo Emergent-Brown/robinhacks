@@ -4,7 +4,7 @@ A mobile-friendly hackathon platform for building projects, meeting other teams,
 
 The repository retains the technical name `robinhacks`. The participant-facing event is **Emergent Hacks**, with **Silicon Valley** as its theme. React and TypeScript provide the interface; Firebase Authentication, Firestore and callable Functions provide the deployed backend. The local demo runs the same application services and economic rules without a cloud account.
 
-**Updated September 18, 2026:** the [live event](https://emergenthacks.com/) uses the sealed-round platform. The [populated demo](https://robinhacks-2026-ajs--walkthrough-pyhnt4be.web.app/) supports captain, teammate, organizer and judge perspectives. The empty production event was upgraded with its existing organizer preserved. See the [deployment record](docs/FIREBASE-SETUP.md#deployment-record) for verification and remaining rehearsal checks.
+**Updated September 22, 2026:** the [live event](https://emergenthacks.com/) uses the sealed-round platform. The [populated demo](https://robinhacks-2026-ajs--walkthrough-pyhnt4be.web.app/) supports captain, teammate, organizer and judge perspectives. The empty production event was upgraded with its existing organizer preserved. See the [deployment record](docs/FIREBASE-SETUP.md#deployment-record) for verification and remaining rehearsal checks.
 
 ## Start locally
 
@@ -38,6 +38,8 @@ The local project is `demo-robinhacks`; the seed script refuses remote emulator 
 ## What is included
 
 - A public event homepage with editable event details, schedule, registration link and contact.
+- Numbered NFC poster links that count visits in Firestore, redirect to the homepage, and show organizer-only totals under Admin → Posters. See [poster tracking](docs/13-poster-tracking.md).
+- Google-based participant requests with organizer assignment to an existing or new team. See [joining and approval](docs/14-joining-and-approval.md).
 - Verified email/Google sign-in, organizer approval, team and staff access requests, backup organizer controls and locked team rosters.
 - Project profiles, public team names, rotating discovery suggestions, archived checkpoints, and immutable final submissions with demo, repository and full Git commit.
 - Private team-to-team messages, shared inboxes, blocking and reports.

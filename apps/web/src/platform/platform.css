@@ -852,6 +852,50 @@
 .p-access form {
   margin-top: 18px;
 }
+.p-access input[readonly] {
+  background: #f3f7fa;
+  color: #506477;
+}
+.p-access-staff,
+.p-access-legacy {
+  margin: 16px 0;
+  border-top: 1px solid #d5e0ea;
+  padding-top: 14px;
+}
+.p-access-staff summary,
+.p-access-legacy summary {
+  color: #195486;
+  cursor: pointer;
+}
+.p-access-staff .field {
+  margin-top: 14px;
+}
+.p-access-legacy .p-link {
+  margin-top: 10px;
+}
+.p-access-status {
+  border-left: 3px solid #195486;
+  padding-left: 16px;
+}
+.p-access-status-label {
+  color: #31516f;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.p-access-status h3 {
+  font-size: 16px;
+  margin-top: 6px;
+}
+.p-access-checked {
+  display: block;
+  color: #60758a;
+  margin-top: 9px;
+}
+.p-access-contact {
+  margin-top: 18px !important;
+}
 .p-access .p-signout {
   margin-top: 22px;
 }

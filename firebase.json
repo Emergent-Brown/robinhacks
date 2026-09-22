@@ -18,6 +18,10 @@
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
       {
+        "regex": "^/[1-9][0-9]{0,4}/?$",
+        "function": { "functionId": "posterVisit", "region": "us-west1" }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

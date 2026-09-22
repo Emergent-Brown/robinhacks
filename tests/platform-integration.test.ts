@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Command, EventConfig, Member } from '@robinhacks/core';
+import type { AccessRequest, Command, EventConfig, Member } from '@robinhacks/core';
 import { GameService } from '../packages/application/src/game-service';
 import {
   createPlatformDemoDocuments,
@@ -254,6 +254,76 @@ describe('v2 integration isolation and privacy', () => {
 });
 
 describe('v2 verified identity and frozen rosters', () => {
+  it('accepts a name-only participant request and lets the organizer name the new team', async () => {
+    const h = fixture('seed');
+    await h.execute(newcomer, {
+      type: 'requestMembership',
+      displayName: newcomer.displayName,
+    });
+    const request = h.repository.dump()[`${root}/accessRequests/${newcomer.uid}`] as AccessRequest;
+    expect(request).toMatchObject({
+      displayName: newcomer.displayName,
+      email: newcomer.email,
+      teamName: '',
+      status: 'pending',
+    });
+    await expect(
+      h.execute(PLATFORM_USERS.organizer, {
+        type: 'approveMembership',
+        uid: newcomer.uid,
+        role: 'captain',
+      }),
+    ).rejects.toMatchObject({ code: 'TEAM_NAME_REQUIRED' });
+    await h.execute(PLATFORM_USERS.organizer, {
+      type: 'approveMembership',
+      uid: newcomer.uid,
+      role: 'captain',
+      teamName: 'Fieldnotes',
+    });
+    const approved = h.repository.dump()[`${root}/members/${newcomer.uid}`] as Member;
+    expect(approved).toMatchObject({ status: 'approved', role: 'captain' });
+    expect(h.repository.dump()[`${root}/teams/${approved.teamId}`]).toMatchObject({
+      name: 'Fieldnotes',
+    });
+  });
+
+  it('lets the organizer assign a name-only applicant to an existing team', async () => {
+    const h = fixture('seed');
+    await h.execute(newcomer, { type: 'requestMembership', displayName: newcomer.displayName });
+    await h.execute(PLATFORM_USERS.organizer, {
+      type: 'approveMembership',
+      uid: newcomer.uid,
+      role: 'member',
+      teamId: 'team-1',
+    });
+    expect(h.repository.dump()[`${root}/members/${newcomer.uid}`]).toMatchObject({
+      status: 'approved',
+      role: 'member',
+      teamId: 'team-1',
+    });
+  });
+
+  it('lets an organizer override a legacy requested team with a new team name', async () => {
+    const h = fixture('seed');
+    await h.execute(newcomer, {
+      type: 'requestMembership',
+      displayName: newcomer.displayName,
+      teamName: 'Mosaic',
+      teamId: 'team-1',
+    });
+    await h.execute(PLATFORM_USERS.organizer, {
+      type: 'approveMembership',
+      uid: newcomer.uid,
+      role: 'captain',
+      teamName: 'Fieldnotes',
+    });
+    const approved = h.repository.dump()[`${root}/members/${newcomer.uid}`] as Member;
+    expect(approved.teamId).not.toBe('team-1');
+    expect(h.repository.dump()[`${root}/teams/${approved.teamId}`]).toMatchObject({
+      name: 'Fieldnotes',
+    });
+  });
+
   it('requires verified claims for access requests and never trusts client-supplied identity fields', async () => {
     const h = fixture('seed');
     await expect(h.membership({ ...newcomer, emailVerified: false })).rejects.toMatchObject({

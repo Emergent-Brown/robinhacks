@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { EventSchedule } from '@robinhacks/core';
 import { Field, ExternalLink } from '../ui/primitives';
 import { config, navigate, Panel, useCommand, ErrorMessage, type PageProps } from './shared';
@@ -93,38 +93,73 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
 
 export function Access({ data, actions }: PageProps) {
   const user = actions.gateway.user;
-  const [mode, setMode] = useState<'signin' | 'register' | 'reset'>('signin');
+  const [name, setName] = useState(user?.displayName || '');
+  const [kind, setKind] = useState<'team' | 'judge' | 'organizer'>('team');
+  const [legacyMode, setLegacyMode] = useState<'signin' | 'reset'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState(user?.displayName || '');
-  const [teamId, setTeamId] = useState('');
-  const [teamName, setTeamName] = useState('');
-  const [kind, setKind] = useState<'team' | 'judge' | 'organizer'>('team');
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [pending, setPending] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [checkedAt, setCheckedAt] = useState<number | null>(null);
   const cmd = useCommand(actions);
-  const registration = ['DRAFT', 'REGISTRATION'].includes(data.event!.phase);
   const rosterLocked = !!config(data).rulesLockedAt;
   const requestsOpen = !['FINALIZING', 'FINALIZED', 'ARCHIVED', 'CANCELLED'].includes(
     data.event!.phase,
   );
-  async function auth(provider: 'google' | 'email') {
+  useEffect(() => {
+    setName(user?.displayName || '');
+  }, [user?.uid]);
+  async function signIn() {
     setError('');
     setInfo('');
     setPending(true);
     try {
-      if (mode === 'reset') {
-        await actions.gateway.resetPassword?.(email.trim());
-        setInfo('If an account uses this email, a reset link is on its way.');
-      } else {
-        await actions.gateway.signIn(provider, email.trim(), password, mode === 'register');
-        await actions.refresh();
-      }
+      await actions.gateway.signIn('google');
+      await actions.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Sign-in failed. Please try again.');
     } finally {
       setPending(false);
+    }
+  }
+  async function signInEmail() {
+    setError('');
+    setInfo('');
+    setPending(true);
+    try {
+      if (legacyMode === 'reset') {
+        await actions.gateway.resetPassword?.(email.trim());
+        setInfo('If this account exists, a reset link is on its way.');
+      } else {
+        await actions.gateway.signIn('email', email.trim(), password);
+        await actions.refresh();
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not sign in. Try again.');
+    } finally {
+      setPending(false);
+    }
+  }
+  async function checkStatus() {
+    setChecking(true);
+    setError('');
+    setInfo('');
+    try {
+      const latest = await actions.gateway.snapshot(true);
+      await actions.refresh();
+      setCheckedAt(Date.now());
+      if (latest.member?.status === 'approved') setInfo('Approved. Your event access is ready.');
+      else if (latest.member?.status === 'suspended')
+        setInfo('Your access is suspended. Contact an organizer.');
+      else if (latest.member?.status === 'pending')
+        setInfo('Still waiting for organizer approval.');
+      else setInfo('No access request was found for this account.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not check your status. Try again.');
+    } finally {
+      setChecking(false);
     }
   }
   async function identity(refresh = false) {
@@ -147,81 +182,60 @@ export function Access({ data, actions }: PageProps) {
   return (
     <div className="p-access">
       <Panel
-        title={
-          !user
-            ? mode === 'register'
-              ? 'Create account'
-              : mode === 'reset'
-                ? 'Reset password'
-                : 'Sign in'
-            : 'Event access'
-        }
+        title={!user ? 'Join Emergent Hacks' : 'Event access'}
       >
         {!user ? (
           <>
-            {mode !== 'reset' && (
-              <button
-                className="button secondary full"
-                disabled={pending}
-                onClick={() => void auth('google')}
-              >
-                Continue with Google
-              </button>
-            )}
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                void auth('email');
-              }}
-            >
-              <Field label="Email">
-                <input
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                />
-              </Field>
-              {mode !== 'reset' && (
-                <Field label="Password">
-                  <input
-                    type="password"
-                    autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-                    minLength={8}
-                    required
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                  />
-                </Field>
-              )}
-              <button className="button primary full" disabled={pending}>
-                {pending
-                  ? 'Please wait…'
-                  : mode === 'register'
-                    ? 'Create account'
-                    : mode === 'reset'
-                      ? 'Send reset link'
-                      : 'Sign in'}
-              </button>
-            </form>
-            <div className="p-actions">
-              <button
-                className="p-link"
-                onClick={() => {
-                  setMode(mode === 'signin' ? 'register' : 'signin');
-                  setError('');
-                  setInfo('');
+            <p>Sign in with Google, then send your name to the organizers for approval.</p>
+            <button className="button primary full" disabled={pending} onClick={() => void signIn()}>
+              {pending ? 'Connecting…' : 'Continue with Google'}
+            </button>
+            <details className="p-access-legacy">
+              <summary>Already have an email account?</summary>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void signInEmail();
                 }}
               >
-                {mode === 'signin' ? 'Create an account' : 'Back to sign in'}
-              </button>
-              {mode === 'signin' && actions.gateway.resetPassword && (
-                <button className="p-link" onClick={() => setMode('reset')}>
-                  Forgot password?
+                <Field label="Email">
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                  />
+                </Field>
+                {legacyMode === 'signin' && (
+                  <Field label="Password">
+                    <input
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                    />
+                  </Field>
+                )}
+                <button className="button secondary full" disabled={pending}>
+                  {legacyMode === 'reset' ? 'Send reset link' : 'Sign in with email'}
                 </button>
-              )}
-            </div>
+                {actions.gateway.resetPassword && (
+                  <button
+                    className="p-link"
+                    type="button"
+                    onClick={() => {
+                      setLegacyMode(legacyMode === 'signin' ? 'reset' : 'signin');
+                      setError('');
+                      setInfo('');
+                    }}
+                  >
+                    {legacyMode === 'signin' ? 'Forgot password?' : 'Back to sign in'}
+                  </button>
+                )}
+              </form>
+            </details>
           </>
         ) : !user.emailVerified ? (
           <>
@@ -244,13 +258,33 @@ export function Access({ data, actions }: PageProps) {
             </div>
           </>
         ) : data.member?.status === 'pending' ? (
-          <>
-            <h3>Waiting for approval</h3>
-            <p>Your request is with the organizer.</p>
-            <button className="button secondary" onClick={() => void actions.refresh()}>
-              Check approval status
+          <div className="p-access-status">
+            <span className="p-access-status-label">Request received</span>
+            <h3>Waiting for organizer approval</h3>
+            <p>
+              Your request is in the organizer's queue. We'll use <strong>{user.email}</strong> to
+              identify your account.
+            </p>
+            <p className="muted">Once approved, sign in with this account to enter the event.</p>
+            <button className="button secondary" disabled={checking} onClick={() => void checkStatus()}>
+              {checking ? 'Checking…' : 'Check status'}
             </button>
-          </>
+            {checkedAt && (
+              <small className="p-access-checked">
+                Checked at{' '}
+                {new Date(checkedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+              </small>
+            )}
+            {config(data).details.contactEmail && (
+              <p className="p-access-contact">
+                Need help?{' '}
+                <a href={`mailto:${config(data).details.contactEmail}`}>
+                  Email the organizer
+                </a>
+                .
+              </p>
+            )}
+          </div>
         ) : data.member?.status === 'suspended' ? (
           <>
             <h3>Access suspended</h3>
@@ -264,86 +298,52 @@ export function Access({ data, actions }: PageProps) {
               event.preventDefault();
               void cmd.run({
                 type: 'requestMembership',
-                displayName: name,
-                teamName:
-                  kind === 'team' ? teamName : `${kind === 'judge' ? 'Judge' : 'Organizer'} access`,
-                ...(kind === 'team' && teamId ? { teamId } : {}),
+                displayName: name.trim(),
                 ...(kind !== 'team' ? { staffRole: kind } : {}),
               });
             }}
           >
-            <p>Requests are approved by the organizer. Signing in does not grant staff access.</p>
+            <p>Tell the organizers what name to use. Your email is already verified.</p>
             <Field label="Your name">
               <input
                 value={name}
                 required
                 minLength={2}
                 maxLength={60}
+                autoComplete="name"
                 onChange={(event) => setName(event.target.value)}
               />
             </Field>
-            <Field label="Joining as">
-              <select value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}>
-                <option value="team" disabled={rosterLocked}>
-                  Team participant
-                </option>
-                <option value="judge">Judge</option>
-                <option value="organizer">Organizer</option>
-              </select>
+            <Field label="Email on account">
+              <input type="email" value={user.email} readOnly aria-readonly="true" />
             </Field>
-            {kind === 'team' && rosterLocked && (
+            <details className="p-access-staff">
+              <summary>{kind === 'team' ? 'Joining as a judge or organizer?' : 'Requesting staff access'}</summary>
+              <Field label="Access requested">
+                <select value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}>
+                  <option value="team">Participant</option>
+                  <option value="judge">Judge</option>
+                  <option value="organizer">Organizer</option>
+                </select>
+              </Field>
+              <p className="muted">Staff roles require separate organizer approval.</p>
+            </details>
+            {rosterLocked && kind === 'team' && (
               <p className="p-note">
-                Team rosters locked when the first funding round opened. New participant requests
-                are closed. Staff can still request judge or organizer access.
+                Participant requests have closed. Contact an organizer if you need to join a team.
               </p>
-            )}
-            {kind === 'team' && !rosterLocked && (
-              <>
-                <Field label="Team">
-                  <select
-                    value={teamId}
-                    required={!registration}
-                    onChange={(event) => {
-                      setTeamId(event.target.value);
-                      setTeamName(
-                        data.joinableTeams?.find((t) => t.id === event.target.value)?.name || '',
-                      );
-                    }}
-                  >
-                    <option value="" disabled={!registration}>
-                      {registration ? 'Request a new team' : 'Select your team'}
-                    </option>
-                    {data.joinableTeams?.map((team) => (
-                      <option key={team.id} value={team.id}>
-                        {team.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                {!teamId && registration && (
-                  <Field label="New team name">
-                    <input
-                      required
-                      minLength={2}
-                      maxLength={60}
-                      value={teamName}
-                      onChange={(event) => setTeamName(event.target.value)}
-                    />
-                  </Field>
-                )}
-              </>
             )}
             <button
               className="button primary full"
               disabled={cmd.pending || (kind === 'team' && rosterLocked)}
             >
-              Request access
+              {cmd.pending ? 'Sending…' : 'Send access request'}
             </button>
           </form>
         )}
         <ErrorMessage>{error || cmd.error}</ErrorMessage>
         {info && (
-          <p className="p-note" role="status">
+          <p className="p-note" role="status" aria-live="polite">
             {info}
           </p>
         )}

@@ -36,6 +36,7 @@ import type {
   MarketView,
   Pool,
   TeamConversation,
+  PosterStatsPage,
 } from '@robinhacks/core';
 import type { AppGateway, SessionUser } from '../app/gateway';
 import { MarketRefreshScheduler } from '../app/MarketRefreshScheduler';
@@ -294,6 +295,9 @@ export class FirebaseGateway implements AppGateway {
   }
   async exportEvent(): Promise<Record<string, unknown>> {
     return this.call('gameExport', {});
+  }
+  async posterStats(after = 0): Promise<PosterStatsPage> {
+    return this.call('posterStats', { after });
   }
   async conversation(otherTeamId: string): Promise<TeamConversation | null> {
     return this.call('gameConversation', { otherTeamId });

@@ -66,7 +66,7 @@ const legacyCommandSchema = z.discriminatedUnion('type', [
       commandId,
       staffRole: z.enum(['judge', 'organizer']).optional(),
       displayName: name,
-      teamName: name,
+      teamName: name.optional(),
       teamId: identifier.optional(),
     })
     .strict(),
@@ -77,6 +77,7 @@ const legacyCommandSchema = z.discriminatedUnion('type', [
       uid: identifier,
       role: z.enum(['captain', 'member', 'trader']),
       teamId: identifier.optional(),
+      teamName: name.optional(),
     })
     .strict(),
   z.object({ type: z.literal('setMemberRole'), commandId, uid: identifier, role, status }).strict(),

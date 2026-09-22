@@ -10,3 +10,4 @@ export * from './event-policy.js';
 export * from './platform';
 export * from './event-schedule';
 export * from './sealed-funding';
+export * from './posters';

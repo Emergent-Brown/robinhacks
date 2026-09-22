@@ -5,6 +5,7 @@ import { WindowOpener } from './WindowOpener';
 import { AdminSettings } from './AdminSettings';
 import { AdminMembers } from './AdminMembers';
 import { AdminJudging } from './AdminJudging';
+import { AdminPosters } from './AdminPosters';
 import {
   Blank,
   config,
@@ -19,7 +20,7 @@ import {
   type PageProps,
 } from './shared';
 
-type Tab = 'operations' | 'access' | 'judging' | 'settings' | 'reports';
+type Tab = 'operations' | 'access' | 'judging' | 'settings' | 'reports' | 'posters';
 export function Admin({ data, actions }: PageProps) {
   const [tab, setTab] = useState<Tab>('operations');
   const [exportError, setExportError] = useState('');
@@ -47,23 +48,27 @@ export function Admin({ data, actions }: PageProps) {
         </button>
       </div>
       <nav className="p-tabs" aria-label="Admin sections">
-        {(['operations', 'access', 'judging', 'settings', 'reports'] as const).map((item) => (
-          <button
-            key={item}
-            aria-current={tab === item ? 'page' : undefined}
-            onClick={() => setTab(item)}
-          >
-            {item === 'operations'
-              ? 'Event controls'
-              : item === 'access'
-                ? 'Access'
-                : item === 'judging'
-                  ? 'Judging'
-                  : item === 'settings'
-                    ? 'Settings'
-                    : 'Reports'}
-          </button>
-        ))}
+        {(['operations', 'access', 'judging', 'settings', 'reports', 'posters'] as const).map(
+          (item) => (
+            <button
+              key={item}
+              aria-current={tab === item ? 'page' : undefined}
+              onClick={() => setTab(item)}
+            >
+              {item === 'operations'
+                ? 'Event controls'
+                : item === 'access'
+                  ? 'Access'
+                  : item === 'judging'
+                    ? 'Judging'
+                    : item === 'settings'
+                      ? 'Settings'
+                      : item === 'posters'
+                        ? 'Posters'
+                        : 'Reports'}
+            </button>
+          ),
+        )}
       </nav>
       <ErrorMessage>{exportError}</ErrorMessage>
       {tab === 'operations' ? (
@@ -74,6 +79,8 @@ export function Admin({ data, actions }: PageProps) {
         <AdminJudging data={data} actions={actions} />
       ) : tab === 'settings' ? (
         <AdminSettings data={data} actions={actions} />
+      ) : tab === 'posters' ? (
+        <AdminPosters data={data} actions={actions} />
       ) : (
         <>
           <Panel title="Reported messages">

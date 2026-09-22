@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
-import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
+import { HttpsError, onCall, onRequest, type CallableRequest } from 'firebase-functions/v2/https';
 import { z } from 'zod';
 import {
   ApplicationError,
@@ -9,15 +9,23 @@ import {
   SystemClock,
   identifier,
   parseCommand,
+  PosterService,
 } from '@robinhacks/application';
 import { DomainError } from '@robinhacks/core';
 import { FirestoreRepository } from './firestore-repository';
 import { RequestLimiter } from './request-limiter';
+import { FirestorePosterStore } from './firestore-poster-store';
+import { PosterRedirect } from './poster-redirect';
 
 initializeApp();
 const repository = new FirestoreRepository(getFirestore());
 const clock = new SystemClock();
 const limiter = new RequestLimiter();
+const posters = new FirestorePosterStore(getFirestore());
+const posterEventId = process.env.POSTER_EVENT_ID || 'robinhacks-2026';
+const posterRedirect = new PosterRedirect(posters, limiter, () => {
+  logger.warn('Poster counter unavailable; visitor redirected without confirmation.');
+});
 const envelope = z.object({ eventId: identifier }).strict();
 const commandEnvelope = z.object({ eventId: identifier, command: z.unknown() }).strict();
 const poolEnvelope = z.object({ eventId: identifier, issuerId: identifier }).strict();
@@ -165,5 +173,33 @@ export const gameExport = onCall(options, (request) =>
     const identity = actor(request, 'export', 2);
     const data = envelope.parse(request.data);
     return new GameService(repository, data.eventId, clock).exportEvent(identity.uid);
+  }),
+);
+
+export const posterVisit = onRequest(
+  {
+    region: options.region,
+    minInstances: 0,
+    maxInstances: 2,
+    memory: '256MiB',
+    timeoutSeconds: 15,
+    invoker: 'public',
+  },
+  (req, res) => posterRedirect.handle(req, res),
+);
+
+export const posterStats = onCall(options, (request) =>
+  transport(async () => {
+    const identity = actor(request, 'poster-stats', 20);
+    const data = z
+      .object({
+        eventId: identifier,
+        after: z.number().int().min(0).max(99999).default(0),
+      })
+      .strict()
+      .parse(request.data);
+    if (data.eventId !== posterEventId)
+      throw new HttpsError('permission-denied', 'Poster counts belong to the main event.');
+    return new PosterService(repository, posters, posterEventId).stats(identity.uid, data.after);
   }),
 );
