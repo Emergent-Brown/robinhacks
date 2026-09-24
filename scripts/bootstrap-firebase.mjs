@@ -195,9 +195,7 @@ function verifyExistingUser(user, googleSubject) {
 
 export function verifyExistingEvent(event, member, market, uid) {
   assert(
-    event.id === EVENT_ID &&
-      ((event.rulesVersion === 1 && !event.platform) ||
-        (event.rulesVersion === 2 && event.platform?.version === 2)),
+    event.id === EVENT_ID && event.rulesVersion === 2 && event.platform?.version === 2,
     'An incompatible event already exists at this ID. This script never overwrites an existing event.',
   );
   assert(

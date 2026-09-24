@@ -10,6 +10,7 @@ import { Investments } from './Investments';
 import { Judging } from './Judging';
 import { Messages } from './Messages';
 import { MyTeam } from './MyTeam';
+import { TeamFormation } from './TeamFormation';
 import { ProjectDetail, Projects } from './Projects';
 import { Results } from './Results';
 import { QuickStart, Rules } from './Rules';
@@ -43,6 +44,8 @@ export function PlatformApp({
   const approved = !!user && data.member?.uid === user.uid && data.member.status === 'approved';
   const organizer = approved && data.member?.role === 'organizer';
   const judge = approved && data.member?.role === 'judge';
+  const needsTeam = approved && !organizer && !judge && !data.member?.teamId;
+  const workspaceReady = approved && !needsTeam;
   const state = platform(data);
   const event = data.event!;
   const showResults = !judge || event.phase === 'FINALIZED';
@@ -66,14 +69,22 @@ export function PlatformApp({
     };
   }, []);
   useEffect(() => {
-    if (approved && data.member?.teamId && !localStorage.getItem(onboardingKey))
-      setModal('onboarding');
-  }, [approved, onboardingKey]);
+    if (!approved || !data.member?.teamId) return;
+    try {
+      if (!localStorage.getItem(onboardingKey)) setModal('onboarding');
+    } catch {
+      // Team access still works when browser storage is unavailable.
+    }
+  }, [approved, onboardingKey, data.member?.teamId]);
   function finishOnboarding() {
-    localStorage.setItem(onboardingKey, 'seen');
+    try {
+      localStorage.setItem(onboardingKey, 'seen');
+    } catch {
+      /* Optional browser preference. */
+    }
     setModal(null);
   }
-  async function switchRole(role: 'captain' | 'member' | 'judge' | 'organizer') {
+  async function switchRole(role: 'captain' | 'member' | 'judge' | 'organizer' | 'attendee') {
     try {
       await actions.gateway.switchDemoRole?.(role);
       setModal(null);
@@ -82,7 +93,7 @@ export function PlatformApp({
       setLocalError(e instanceof Error ? e.message : 'Could not switch demo account.');
     }
   }
-  async function reset(phase: 'seed' | 'trading' | 'judging') {
+  async function reset(phase: 'registration' | 'funding' | 'judging') {
     try {
       await actions.gateway.resetDemo?.(phase);
       setModal(null);
@@ -115,7 +126,7 @@ export function PlatformApp({
   ]
     .filter((item) => item.time > now)
     .sort((a, b) => a.time - b.time)[0];
-  const reminder = approved && !event.paused && deadline && deadline.time - now <= 5 * 60000;
+  const reminder = workspaceReady && !event.paused && deadline && deadline.time - now <= 5 * 60000;
   return (
     <div className="platform-app">
       <a
@@ -133,7 +144,7 @@ export function PlatformApp({
           <button className="p-wordmark" onClick={() => navigate('home')}>
             emergent<span>hacks</span>
           </button>
-          {approved && (
+          {workspaceReady && (
             <nav className="p-desktop-nav" aria-label="Main navigation">
               {pages
                 .filter(([page]) => page !== 'more')
@@ -184,7 +195,7 @@ export function PlatformApp({
           </div>
         </div>
       </header>
-      {approved && (
+      {workspaceReady && (
         <div className="p-context">
           <strong>{event.name}</strong>
           <span>
@@ -250,6 +261,8 @@ export function PlatformApp({
           ) : (
             <Homepage data={data} actions={actions} onJoin={() => navigate('access')} />
           )
+        ) : needsTeam ? (
+          <TeamFormation data={data} actions={actions} />
         ) : route.page === 'home' ? (
           <Homepage data={data} actions={actions} onJoin={() => navigate('team')} />
         ) : route.page === 'projects' ? (
@@ -294,13 +307,13 @@ export function PlatformApp({
       </main>
       <footer className="p-footer">
         <span>{event.name} · Event credits have no cash value.</span>
-        {approved && (
+        {workspaceReady && (
           <button className="p-link" onClick={() => setModal('onboarding')}>
             How it works
           </button>
         )}
       </footer>
-      {approved && (
+      {workspaceReady && (
         <nav className="p-mobile-nav" aria-label="Mobile navigation">
           {pages.map(([page, label]) => (
             <button
@@ -356,25 +369,27 @@ export function PlatformApp({
           <p>Fictional teams and credits. Changes stay in this browser.</p>
           <h3>View as</h3>
           <div className="p-demo-options">
-            {(['captain', 'member', 'judge', 'organizer'] as const).map((role) => (
+            {(['attendee', 'captain', 'member', 'judge', 'organizer'] as const).map((role) => (
               <button className="button secondary" key={role} onClick={() => void switchRole(role)}>
-                {role === 'captain'
-                  ? 'Team captain'
-                  : role === 'member'
-                    ? 'Team member'
-                    : role === 'judge'
-                      ? 'Judge'
-                      : 'Organizer'}
+                {role === 'attendee'
+                  ? 'Attendee choosing a team'
+                  : role === 'captain'
+                    ? 'Team captain'
+                    : role === 'member'
+                      ? 'Team member'
+                      : role === 'judge'
+                        ? 'Judge'
+                        : 'Organizer'}
               </button>
             ))}
           </div>
           <h3>Reset sample event</h3>
           <p>Replaces local demo activity with the selected checkpoint.</p>
           <div className="p-demo-options">
-            <button className="button secondary" onClick={() => void reset('seed')}>
+            <button className="button secondary" onClick={() => void reset('registration')}>
               Before the first round
             </button>
-            <button className="button secondary" onClick={() => void reset('trading')}>
+            <button className="button secondary" onClick={() => void reset('funding')}>
               Prototype round
             </button>
             <button className="button secondary" onClick={() => void reset('judging')}>
@@ -383,7 +398,9 @@ export function PlatformApp({
           </div>
         </Dialog>
       )}
-      {modal === 'onboarding' && <QuickStart data={data} onClose={finishOnboarding} />}
+      {workspaceReady && modal === 'onboarding' && (
+        <QuickStart data={data} onClose={finishOnboarding} />
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 # Event-readiness audit
 
-Reviewed September 14, 2026, against the sealed-round implementation for 10–30 teams and up to 150 participants. [11 · Sealed rounds](11-sealed-rounds.md) is the current product and technical specification. Documents 01–09 describe the earlier trading system.
+Reviewed September 14, 2026, against the sealed-round implementation for 10–30 teams and up to 150 participants. [11 · Sealed rounds](11-sealed-rounds.md) is the current product and technical specification. See [architecture](architecture.md) for current implementation boundaries.
 
 **The requested application capabilities are implemented. Real event details, staffing, prize commitments and an end-to-end production rehearsal still need organizer confirmation.** The client, backend and rules were deployed and the empty production event was migrated on September 14; the deployment record contains the verification evidence. A full hosted pilot is still separate from these checks.
 
@@ -8,7 +8,7 @@ Reviewed September 14, 2026, against the sealed-round implementation for 10–30
 
 The three former priorities are now covered in the application: separate backup-organizer approval, verified participant email identity, and durable independent judging drafts. Team rosters lock at the first funding round; judges and organizers use separate team-less accounts. Staff approval does not give a team extra credits.
 
-The meeting changes are implemented across the homepage and event settings, Emergent Hacks naming, first-use onboarding, project discovery, public team rosters, archived updates, private team conversations, formal immutable submissions, an independent judge portal and a private community ballot. Category fields and old buy/sell interactions are absent from the current experience.
+The meeting changes are implemented across the homepage and event settings, Emergent Hacks naming, first-use onboarding, project discovery, public team rosters, archived updates, private team conversations, formal immutable submissions, an independent judge portal and a private community ballot. Projects support sectors, teammate search and optional bios. The application uses sealed funding rounds.
 
 The investing model is now three sealed, amount-based allocation rounds with expiring budgets, a concentration limit, separate fixed round entitlements and the minimum funding denominator. Current allocations are private, including from organizers. Judges cannot inspect funding totals while judging. Builder prizes, the grand-prize investor pool and the community award remain separate. Awards require complete eligible judging coverage, a reviewed preview and an explicit publication step.
 
@@ -28,7 +28,7 @@ The named staff roles and approval controls exist. No additional real judge or b
 ## Rehearsal acceptance checklist
 
 - Open the public homepage signed out; confirm every published event fact and prize statement.
-- Sign in through Google and through a verified email account. Exercise explicit verification-email sending, refreshed verification status, access requests and organizer approval.
+- Sign in through Google, send an identity-only request, and approve it independently of team assignment. Open team selection, create and join teams with distinct roles, and confirm unassigned participants cannot enter the workspace. Exercise organizer email invitations and protected access removal.
 - Confirm a teammate shares the same allocation sheet; a judge or organizer receives no competing wallet. Verify the backup organizer can operate the event.
 - Have at least two teams publish initial checkpoints. Open a round, edit allocations from two tabs, confirm conflict handling and the private view from every role.
 - Pause and resume an active deadline; confirm the same remaining time is restored for everyone. Close at the deadline and inspect immutable entitlements.

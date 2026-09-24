@@ -1,48 +1,35 @@
-import { RULES } from '@robinhacks/core';
-import type { AccessRequest, Command, Issuer, Member, Pool, Team, Wallet } from '@robinhacks/core';
+import type { AccessRequest, Command, Member, Team } from '@robinhacks/core';
 import { requireState } from '../errors';
 import { Permissions } from './permissions';
-import { receipt, type CommandContext } from './context';
+import type { CommandContext } from './context';
+import { organizerInvitePath } from './organizer-access-service';
 
-const colors = ['#5b55e7', '#167d8d', '#d8713e', '#bf5898', '#3c8c67', '#6b72b8'];
-
+/** Signup collects identity; team choice is a separate organizer-controlled stage. */
 export class MembershipService {
   async request(context: CommandContext, command: Extract<Command, { type: 'requestMembership' }>) {
     const { tx, paths, event, actor, now } = context;
-    if (event.platform) {
-      requireState(
-        actor.emailVerified === true && !!actor.email,
-        'EMAIL_VERIFICATION_REQUIRED',
-        'Verify your email before requesting event access.',
-      );
-      requireState(
-        !command.staffRole || !command.teamId,
-        'INVALID_REQUEST',
-        'Staff accounts cannot also request a competing team.',
-      );
-      requireState(
-        !event.platform.rulesLockedAt || !!command.staffRole,
-        'ROSTER_LOCKED',
-        'Team rosters are locked after the first funding round opens. Contact an organizer.',
-      );
-    }
-    const registrationOpen = ['DRAFT', 'REGISTRATION'].includes(event.phase);
+    requireState(
+      actor.emailVerified === true && !!actor.email,
+      'EMAIL_VERIFICATION_REQUIRED',
+      'Sign in with a verified Google account before requesting access.',
+    );
+    requireState(event.platform, 'PLATFORM_REQUIRED', 'This event needs funding-round settings.');
     requireState(
       !event.activeOperationId &&
-        (registrationOpen ||
-          ['SEED_OPEN', 'INTERMISSION', 'TRADING_OPEN', 'FROZEN'].includes(event.phase)),
+        (['DRAFT', 'REGISTRATION'].includes(event.phase) ||
+          (!!command.staffRole && ['SEED_OPEN', 'INTERMISSION', 'FROZEN'].includes(event.phase))),
       'REGISTRATION_CLOSED',
-      'Access requests are closed during settlement or after the event. Contact an organizer.',
+      'Participant signup is closed. Contact an organizer.',
     );
     requireState(
-      registrationOpen || !!event.platform || !!command.teamId || !!command.staffRole,
-      'REGISTRATION_CLOSED',
-      'New teams can be created only before funding opens. Choose an existing team.',
+      !event.platform.rulesLockedAt || !!command.staffRole,
+      'ROSTER_LOCKED',
+      'Participant signup is closed after funding starts.',
     );
-    const [member, prior, team] = await Promise.all([
+    const [member, prior, members] = await Promise.all([
       tx.get<Member>(paths.member(actor.uid)),
       tx.get<AccessRequest>(paths.doc('accessRequests', actor.uid)),
-      command.teamId ? tx.get<Team>(paths.team(command.teamId)) : Promise.resolve(null),
+      tx.list<Member>(paths.collection('members'), 501),
     ]);
     requireState(
       !member || member.status === 'pending',
@@ -50,27 +37,23 @@ export class MembershipService {
       'Your account already belongs to this event.',
     );
     requireState(
+      member || members.length < 500,
+      'MEMBER_LIMIT',
+      'This event has reached its access-request limit.',
+    );
+    requireState(
       !prior || now - prior.requestedAt >= 30_000,
       'RATE_LIMITED',
       'Wait 30 seconds before changing your access request.',
     );
-    if (command.teamId) {
-      requireState(team, 'NOT_FOUND', 'The requested team does not exist.');
-      requireState(
-        team.eligibility === 'active',
-        'TEAM_INACTIVE',
-        'The requested team is inactive.',
-      );
-    }
     const request: AccessRequest = {
       uid: actor.uid,
       displayName: command.displayName,
-      teamName: team?.name ?? command.teamName ?? '',
-      teamId: command.teamId ?? null,
       requestedAt: now,
       status: 'pending',
       ...(command.staffRole ? { requestedRole: command.staffRole } : {}),
-      ...(actor.email ? { email: actor.email, emailVerified: actor.emailVerified === true } : {}),
+      email: actor.email,
+      emailVerified: true,
     };
     tx.set(paths.doc('accessRequests', actor.uid), request);
     tx.set<Member>(paths.member(actor.uid), {
@@ -80,25 +63,26 @@ export class MembershipService {
       role: 'member',
       status: 'pending',
       version: (member?.version ?? 0) + 1,
-      ...(actor.email ? { email: actor.email, emailVerified: actor.emailVerified === true } : {}),
+      email: actor.email,
+      emailVerified: true,
     });
+    tx.set(paths.root, { ...event, phaseVersion: event.phaseVersion + 1 });
     return { message: 'Request sent. An organizer will review your name and verified email.' };
   }
 
   async approve(context: CommandContext, command: Extract<Command, { type: 'approveMembership' }>) {
-    const { tx, paths, event, member, now } = context;
+    const { tx, paths, event, member } = context;
     Permissions.organizer(member);
-    Permissions.rosterEditable(event);
-    if (event.platform)
-      requireState(
+    requireState(
+      event.platform &&
+        ['DRAFT', 'REGISTRATION'].includes(event.phase) &&
         !event.platform.rulesLockedAt,
-        'ROSTER_LOCKED',
-        'Competing rosters are locked once funding begins.',
-      );
-    const [request, currentMember, teams, members] = await Promise.all([
+      'ROSTER_LOCKED',
+      'Approve participants before funding begins.',
+    );
+    const [request, currentMember, members] = await Promise.all([
       tx.get<AccessRequest>(paths.doc('accessRequests', command.uid)),
       tx.get<Member>(paths.member(command.uid)),
-      tx.list<Team>(paths.collection('teams'), 31),
       tx.list<Member>(paths.collection('members'), 501),
     ]);
     requireState(
@@ -106,193 +90,44 @@ export class MembershipService {
       'REQUEST_NOT_PENDING',
       'This access request is no longer pending.',
     );
-    if (event.platform)
-      requireState(
-        currentMember.emailVerified === true && !request.requestedRole,
-        'EMAIL_VERIFICATION_REQUIRED',
-        'Verify this attendee identity and use staff approval for staff requests.',
-      );
     requireState(
-      command.uid !== member.uid,
-      'ORGANIZER_CANNOT_COMPETE',
-      'Organizer accounts cannot join a competing team.',
+      currentMember.emailVerified === true && !!currentMember.email && !request.requestedRole,
+      'EMAIL_VERIFICATION_REQUIRED',
+      'Verify this attendee identity and use staff approval for judge requests.',
     );
     requireState(
-      !(command.teamId && command.teamName),
-      'INVALID_REQUEST',
-      'Choose an existing team or name a new team.',
+      currentMember.teamId === null && currentMember.role === 'member',
+      'STAFF_CANNOT_COMPETE',
+      'This account is already assigned to a team or staff role.',
     );
     requireState(
       members.filter(
-        (candidate) => candidate.status === 'approved' && candidate.role !== 'organizer',
+        (entry) => entry.status === 'approved' && !['organizer', 'judge'].includes(entry.role),
       ).length < 150,
       'MEMBER_LIMIT',
       'This event is limited to 150 approved participants.',
     );
-    const teamId = command.teamName
-      ? `team_${command.commandId.slice(0, 100)}`
-      : (command.teamId ?? request.teamId ?? `team_${command.commandId.slice(0, 100)}`);
-    const existing = teams.find((team) => team.id === teamId);
-    const selectedName = command.teamName ?? request.teamName;
-    if (!existing) {
-      requireState(
-        !command.teamId && (!request.teamId || !!command.teamName),
-        'NOT_FOUND',
-        'The selected team does not exist.',
-      );
-      requireState(
-        ['DRAFT', 'REGISTRATION'].includes(event.phase),
-        'ROSTER_LOCKED',
-        'New teams can be created only before funding opens.',
-      );
-      requireState(
-        selectedName.trim().length >= 2,
-        'TEAM_NAME_REQUIRED',
-        'Enter a new team name before approving.',
-      );
-      requireState(
-        teams.length < RULES.maxTeams,
-        'TEAM_LIMIT',
-        'This event is limited to 30 teams.',
-      );
-      requireState(
-        command.role === 'captain',
-        'CAPTAIN_REQUIRED',
-        'The first approved person on a new team must be its captain.',
-      );
-      requireState(
-        !teams.some((team) => team.name.toLowerCase() === selectedName.toLowerCase()),
-        'TEAM_EXISTS',
-        'A team with this name exists. Approve the request into that team.',
-      );
-      const team: Team = {
-        id: teamId,
-        name: selectedName,
-        ticker: `${
-          selectedName
-            .replace(/[^A-Za-z]/g, '')
-            .slice(0, 4)
-            .toUpperCase() || 'TEAM'
-        }${teams.length + 1}`,
-        pitch: '',
-        category: 'Other',
-        color: colors[teams.length % colors.length]!,
-        problem: '',
-        building: '',
-        demoUrl: '',
-        repoUrl: '',
-        update: '',
-        updatedAt: now,
-        eligibility: 'active',
-        captainUid: command.uid,
-        version: 0,
-      };
-      const wallet: Wallet = {
-        teamId,
-        cashMinor: RULES.initialWalletMinor,
-        reservedSeedMinor: 0,
-        version: 0,
-        lastTradeAt: 0,
-        tradeWindowId: 0,
-        successfulTradesInWindow: 0,
-      };
-      const pool: Pool = {
-        issuerId: teamId,
-        shareReserve: RULES.openingPoolShares,
-        creditReserveMinor: RULES.openingPoolCashMinor,
-        version: 0,
-        halted: false,
-      };
-      const issuer: Issuer = {
-        issuerId: teamId,
-        issuedShares: RULES.issuedShares,
-        primarySharesRemaining: RULES.primaryShares,
-        fundingVaultMinor: 0,
-        seedBackers: 0,
-        version: 0,
-      };
-      tx.set(paths.team(teamId), team);
-      if (!event.platform) {
-        tx.set(paths.wallet(teamId), wallet);
-        tx.set(paths.pool(teamId), pool);
-        tx.set(paths.issuer(teamId), issuer);
-        tx.set(
-          paths.receipt(teamId, `genesis_${teamId}`),
-          receipt(context, command, 'Initial virtual credits and project shares issued.', {
-            id: `genesis_${teamId}`,
-            kind: 'genesis',
-            teamId,
-            entries: [
-              { account: `wallet:${teamId}`, asset: 'credits', delta: RULES.initialWalletMinor },
-              { account: `pool:${teamId}`, asset: 'credits', delta: RULES.openingPoolCashMinor },
-              {
-                account: 'system:genesis',
-                asset: 'credits',
-                delta: -(RULES.initialWalletMinor + RULES.openingPoolCashMinor),
-              },
-              {
-                account: `primary:${teamId}`,
-                asset: `shares:${teamId}`,
-                delta: RULES.primaryShares,
-              },
-              {
-                account: `pool:${teamId}`,
-                asset: `shares:${teamId}`,
-                delta: RULES.openingPoolShares,
-              },
-              { account: 'system:genesis', asset: `shares:${teamId}`, delta: -RULES.issuedShares },
-            ],
-          }),
-        );
-      }
-    } else {
-      requireState(
-        existing.eligibility === 'active',
-        'TEAM_INACTIVE',
-        'The selected team is inactive.',
-      );
-      this.assertRoleAvailable(members, teamId, command.uid, command.role);
-      if (command.role === 'captain')
-        tx.set(paths.team(teamId), {
-          ...existing,
-          captainUid: command.uid,
-          version: existing.version + 1,
-        });
-    }
-    const approved: Member = {
-      uid: command.uid,
-      displayName: request.displayName,
-      teamId,
-      role: command.role,
+    tx.set(paths.member(command.uid), {
+      ...currentMember,
       status: 'approved',
       version: currentMember.version + 1,
-      ...(currentMember.email
-        ? { email: currentMember.email, emailVerified: currentMember.emailVerified === true }
-        : {}),
-    };
-    tx.set(paths.member(command.uid), approved);
-    tx.set(`${paths.team(teamId)}/members/${command.uid}`, approved);
-    tx.set(paths.doc('accessRequests', command.uid), {
-      ...request,
-      teamId,
-      teamName: existing?.name ?? selectedName,
-      status: 'approved',
     });
-    // Serialize all roster mutations against the common event document.
+    tx.set(paths.doc('accessRequests', command.uid), { ...request, status: 'approved' });
     tx.set(paths.root, { ...event, phaseVersion: event.phaseVersion + 1 });
     return {
-      message: `${request.displayName} approved${existing ? ` for ${existing.name}` : `. ${selectedName} is ready`}.`,
+      message: `${request.displayName} approved. They can choose a team when team formation opens.`,
     };
   }
 
   async role(context: CommandContext, command: Extract<Command, { type: 'setMemberRole' }>) {
     const { tx, paths, event, member } = context;
-    Permissions.rosterEditable(event);
     const [target, members] = await Promise.all([
       tx.get<Member>(paths.member(command.uid)),
       tx.list<Member>(paths.collection('members'), 501),
     ]);
     requireState(target, 'NOT_FOUND', 'This member does not exist.');
+    const recoveringRole = this.canRecoverRole(context, target, members, command);
+    if (!recoveringRole) Permissions.rosterEditable(event);
     if (event.platform) {
       if (command.status === 'approved')
         requireState(
@@ -301,12 +136,18 @@ export class MembershipService {
           'This account must verify its email before approval.',
         );
       requireState(
-        !event.platform.rulesLockedAt || target.teamId === null || command.status === 'suspended',
+        !event.platform.rulesLockedAt ||
+          target.teamId === null ||
+          command.status === 'suspended' ||
+          recoveringRole,
         'ROSTER_LOCKED',
         'Competing team assignments and roles are locked after funding starts.',
       );
       requireState(
-        !event.platform.rulesLockedAt || !target.teamId || command.role === target.role,
+        !event.platform.rulesLockedAt ||
+          !target.teamId ||
+          command.role === target.role ||
+          recoveringRole,
         'ROSTER_LOCKED',
         'A suspension cannot change a frozen team role.',
       );
@@ -324,6 +165,16 @@ export class MembershipService {
         'Only the captain can designate a teammate before funding; later changes require an organizer.',
       );
     } else Permissions.organizer(member);
+    requireState(
+      command.role !== 'organizer' || target.role === 'organizer',
+      'ORGANIZER_INVITE_REQUIRED',
+      'Add organizer access using their verified email address.',
+    );
+    if (
+      target.uid === member.uid &&
+      (command.status !== 'approved' || command.role !== target.role)
+    )
+      requireState(false, 'SELF_REMOVAL', 'Another organizer must change your access.');
     if (command.role === 'organizer' || command.role === 'judge')
       requireState(
         target.teamId === null && member.role === 'organizer',
@@ -346,11 +197,24 @@ export class MembershipService {
       );
     requireState(
       ['organizer', 'judge'].includes(command.role) ||
+        (command.role === 'member' && target.role === 'member' && target.status !== 'pending') ||
         target.teamId !== null ||
         command.status !== 'approved',
       'TEAM_REQUIRED',
-      'Approve a pending person into a team using their request.',
+      'Approve a pending participant using their access request.',
     );
+    if (
+      command.status === 'approved' &&
+      target.status !== 'approved' &&
+      !['organizer', 'judge'].includes(command.role)
+    )
+      requireState(
+        members.filter(
+          (entry) => entry.status === 'approved' && !['organizer', 'judge'].includes(entry.role),
+        ).length < 150,
+        'MEMBER_LIMIT',
+        'This event is limited to 150 approved participants.',
+      );
     if (target.teamId && command.status === 'approved')
       this.assertRoleAvailable(members, target.teamId, target.uid, command.role);
     if (target.teamId && (target.role === 'captain' || command.role === 'captain')) {
@@ -373,6 +237,12 @@ export class MembershipService {
       status: command.status,
       version: target.version + 1,
     };
+    if (
+      target.role === 'organizer' &&
+      target.email &&
+      (command.role !== 'organizer' || command.status !== 'approved')
+    )
+      tx.delete(organizerInvitePath(paths, target.email));
     tx.set(paths.member(target.uid), updated);
     if (target.teamId) tx.set(`${paths.team(target.teamId)}/members/${target.uid}`, updated);
     const request = await tx.get<AccessRequest>(paths.doc('accessRequests', target.uid));
@@ -428,6 +298,36 @@ export class MembershipService {
       updatedAt: now,
     });
     return { message: 'Team profile updated.' };
+  }
+
+  /** Recover an existing team's vacant role without reopening its frozen roster. */
+  private canRecoverRole(
+    { event, member }: CommandContext,
+    target: Member,
+    members: Member[],
+    command: Extract<Command, { type: 'setMemberRole' }>,
+  ): boolean {
+    const promotion =
+      (command.role === 'captain' && ['member', 'trader'].includes(target.role)) ||
+      (command.role === 'trader' && target.role === 'member');
+    return (
+      !!event.platform?.rulesLockedAt &&
+      event.paused &&
+      !event.activeOperationId &&
+      ['SEED_OPEN', 'INTERMISSION', 'FROZEN', 'FINALIZING'].includes(event.phase) &&
+      member.role === 'organizer' &&
+      member.teamId === null &&
+      target.status === 'approved' &&
+      target.teamId !== null &&
+      command.status === 'approved' &&
+      promotion &&
+      !members.some(
+        (entry) =>
+          entry.teamId === target.teamId &&
+          entry.role === command.role &&
+          entry.status === 'approved',
+      )
+    );
   }
 
   private assertRoleAvailable(

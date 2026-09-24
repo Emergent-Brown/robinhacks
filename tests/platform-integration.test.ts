@@ -16,7 +16,7 @@ const newcomer = {
   email: 'morgan@example.test',
   emailVerified: true,
 };
-function fixture(preset: 'seed' | 'trading' = 'trading') {
+function fixture(preset: 'registration' | 'funding' = 'funding') {
   const repository = new MemoryRepository(createPlatformDemoDocuments(preset, start));
   let now = start;
   let number = 0;
@@ -51,7 +51,6 @@ function fixture(preset: 'seed' | 'trading' = 'trading') {
     execute(actor, {
       type: 'requestMembership',
       displayName: actor.displayName,
-      teamName: 'Switchboard',
     });
   return {
     repository,
@@ -91,18 +90,7 @@ describe('v2 integration isolation and privacy', () => {
     { type: 'continueOperation' },
   ])('rejects legacy $type commands even for the organizer', async (command) => {
     const h = fixture();
-    await expect(h.execute(PLATFORM_USERS.organizer, command)).rejects.toMatchObject({
-      code: 'SEALED_ROUNDS_ONLY',
-    });
-  });
-
-  it('does not expose a tradable pool through the legacy endpoint', async () => {
-    const h = fixture();
-    for (const actor of [PLATFORM_USERS.captain, PLATFORM_USERS.organizer, PLATFORM_USERS.judge]) {
-      await expect(h.service.pool(actor.uid, 'team-2')).rejects.toMatchObject({
-        code: 'SEALED_ROUNDS_ONLY',
-      });
-    }
+    await expect(h.execute(PLATFORM_USERS.organizer, command)).rejects.toThrow();
   });
 
   it('returns only public event configuration without any participant or funding record', async () => {
@@ -116,9 +104,7 @@ describe('v2 integration isolation and privacy', () => {
     });
     expect(snapshot.member).toBeNull();
     expect(snapshot.market.entries).toEqual([]);
-    expect(snapshot.wallet).toBeNull();
-    for (const key of ['members', 'requests', 'positions', 'notes', 'receipts', 'audit'] as const)
-      expect(snapshot[key]).toEqual([]);
+    for (const key of ['members', 'requests', 'audit'] as const) expect(snapshot[key]).toEqual([]);
     expect(snapshot.platform).toMatchObject({
       rounds: [],
       allocation: null,
@@ -163,9 +149,7 @@ describe('v2 integration isolation and privacy', () => {
         ballot: null,
         awards: null,
       });
-      expect(snapshot.wallet).toBeNull();
       expect(snapshot.members).toEqual([]);
-      expect(snapshot.notes).toEqual([]);
       expect(snapshot.audit).toEqual([]);
     }
   });
@@ -254,32 +238,30 @@ describe('v2 integration isolation and privacy', () => {
 });
 
 describe('v2 verified identity and frozen rosters', () => {
-  it('accepts a name-only participant request and lets the organizer name the new team', async () => {
-    const h = fixture('seed');
-    await h.execute(newcomer, {
-      type: 'requestMembership',
-      displayName: newcomer.displayName,
-    });
+  it('approves identity first, then lets the participant create a team when formation opens', async () => {
+    const h = fixture('registration');
+    await h.membership();
     const request = h.repository.dump()[`${root}/accessRequests/${newcomer.uid}`] as AccessRequest;
     expect(request).toMatchObject({
       displayName: newcomer.displayName,
       email: newcomer.email,
-      teamName: '',
       status: 'pending',
     });
-    await expect(
-      h.execute(PLATFORM_USERS.organizer, {
-        type: 'approveMembership',
-        uid: newcomer.uid,
-        role: 'captain',
-      }),
-    ).rejects.toMatchObject({ code: 'TEAM_NAME_REQUIRED' });
-    await h.execute(PLATFORM_USERS.organizer, {
-      type: 'approveMembership',
-      uid: newcomer.uid,
-      role: 'captain',
-      teamName: 'Fieldnotes',
+    expect(request).not.toHaveProperty('teamName');
+    await h.execute(PLATFORM_USERS.organizer, { type: 'approveMembership', uid: newcomer.uid });
+    expect(h.repository.dump()[`${root}/members/${newcomer.uid}`]).toMatchObject({
+      status: 'approved',
+      role: 'member',
+      teamId: null,
     });
+    const create = { type: 'createFormationTeam', name: 'Fieldnotes', role: 'captain' };
+    await expect(h.execute(newcomer, create)).rejects.toMatchObject({ code: 'FORMATION_CLOSED' });
+    await h.execute(PLATFORM_USERS.organizer, {
+      type: 'setTeamFormation',
+      open: true,
+      expectedPhaseVersion: h.event().phaseVersion,
+    });
+    await h.execute(newcomer, create);
     const approved = h.repository.dump()[`${root}/members/${newcomer.uid}`] as Member;
     expect(approved).toMatchObject({ status: 'approved', role: 'captain' });
     expect(h.repository.dump()[`${root}/teams/${approved.teamId}`]).toMatchObject({
@@ -287,15 +269,16 @@ describe('v2 verified identity and frozen rosters', () => {
     });
   });
 
-  it('lets the organizer assign a name-only applicant to an existing team', async () => {
-    const h = fixture('seed');
-    await h.execute(newcomer, { type: 'requestMembership', displayName: newcomer.displayName });
+  it('lets an approved participant choose an existing team during formation', async () => {
+    const h = fixture('registration');
+    await h.membership();
+    await h.execute(PLATFORM_USERS.organizer, { type: 'approveMembership', uid: newcomer.uid });
     await h.execute(PLATFORM_USERS.organizer, {
-      type: 'approveMembership',
-      uid: newcomer.uid,
-      role: 'member',
-      teamId: 'team-1',
+      type: 'setTeamFormation',
+      open: true,
+      expectedPhaseVersion: h.event().phaseVersion,
     });
+    await h.execute(newcomer, { type: 'joinFormationTeam', teamId: 'team-1', role: 'member' });
     expect(h.repository.dump()[`${root}/members/${newcomer.uid}`]).toMatchObject({
       status: 'approved',
       role: 'member',
@@ -303,29 +286,33 @@ describe('v2 verified identity and frozen rosters', () => {
     });
   });
 
-  it('lets an organizer override a legacy requested team with a new team name', async () => {
-    const h = fixture('seed');
-    await h.execute(newcomer, {
-      type: 'requestMembership',
-      displayName: newcomer.displayName,
-      teamName: 'Mosaic',
-      teamId: 'team-1',
-    });
-    await h.execute(PLATFORM_USERS.organizer, {
-      type: 'approveMembership',
-      uid: newcomer.uid,
-      role: 'captain',
-      teamName: 'Fieldnotes',
-    });
-    const approved = h.repository.dump()[`${root}/members/${newcomer.uid}`] as Member;
-    expect(approved.teamId).not.toBe('team-1');
-    expect(h.repository.dump()[`${root}/teams/${approved.teamId}`]).toMatchObject({
-      name: 'Fieldnotes',
+  it('rejects retired team fields during identity signup and organizer approval', async () => {
+    const h = fixture('registration');
+    await expect(
+      h.execute(newcomer, {
+        type: 'requestMembership',
+        displayName: newcomer.displayName,
+        teamName: 'Mosaic',
+        teamId: 'team-1',
+      }),
+    ).rejects.toThrow();
+    await h.membership();
+    await expect(
+      h.execute(PLATFORM_USERS.organizer, {
+        type: 'approveMembership',
+        uid: newcomer.uid,
+        role: 'captain',
+        teamName: 'Fieldnotes',
+      }),
+    ).rejects.toThrow();
+    expect(h.repository.dump()[`${root}/members/${newcomer.uid}`]).toMatchObject({
+      status: 'pending',
+      teamId: null,
     });
   });
 
   it('requires verified claims for access requests and never trusts client-supplied identity fields', async () => {
-    const h = fixture('seed');
+    const h = fixture('registration');
     await expect(h.membership({ ...newcomer, emailVerified: false })).rejects.toMatchObject({
       code: 'EMAIL_VERIFICATION_REQUIRED',
     });
@@ -345,30 +332,33 @@ describe('v2 verified identity and frozen rosters', () => {
     ).rejects.toThrow();
   });
 
-  it('blocks approval when verified identity is absent and creates no legacy financial documents for a new team', async () => {
-    const h = fixture('seed');
+  it('blocks approval when verified identity is absent and creates no financial documents during identity approval', async () => {
+    const h = fixture('registration');
     await h.membership();
     await h.patch(`${root}/members/${newcomer.uid}`, { emailVerified: false });
-    const approval = { type: 'approveMembership', uid: newcomer.uid, role: 'captain' };
+    const approval = { type: 'approveMembership', uid: newcomer.uid };
     await expect(h.execute(PLATFORM_USERS.organizer, approval)).rejects.toMatchObject({
       code: 'EMAIL_VERIFICATION_REQUIRED',
     });
     await h.patch(`${root}/members/${newcomer.uid}`, { emailVerified: true });
     await h.execute(PLATFORM_USERS.organizer, approval);
     const member = h.repository.dump()[`${root}/members/${newcomer.uid}`] as Member;
-    expect(member).toMatchObject({ status: 'approved', role: 'captain', emailVerified: true });
-    expect(h.repository.dump()[`${root}/teams/${member.teamId}`]).toBeDefined();
+    expect(member).toMatchObject({
+      status: 'approved',
+      role: 'member',
+      emailVerified: true,
+      teamId: null,
+    });
     expect(
       Object.keys(h.repository.dump()).some((path) => /\/(wallets|pools|issuers)\//.test(path)),
     ).toBe(false);
   });
 
   it('approves staff on separate accounts and resolves the pending request', async () => {
-    const h = fixture('seed');
+    const h = fixture('registration');
     await h.execute(newcomer, {
       type: 'requestMembership',
       displayName: newcomer.displayName,
-      teamName: 'Judge',
       staffRole: 'judge',
     });
     await h.execute(PLATFORM_USERS.organizer, {
@@ -393,15 +383,13 @@ describe('v2 verified identity and frozen rosters', () => {
       h.execute(newcomer, {
         type: 'requestMembership',
         displayName: newcomer.displayName,
-        teamName: 'Mosaic',
-        teamId: 'team-1',
       }),
-    ).rejects.toMatchObject({ code: 'ROSTER_LOCKED' });
+    ).rejects.toMatchObject({ code: 'REGISTRATION_CLOSED' });
     await h.pause(true);
     await expect(
       h.execute(PLATFORM_USERS.organizer, {
         type: 'setMemberRole',
-        uid: PLATFORM_USERS.member.uid,
+        uid: PLATFORM_USERS.captain.uid,
         role: 'trader',
         status: 'approved',
       }),
@@ -410,8 +398,6 @@ describe('v2 verified identity and frozen rosters', () => {
       h.execute(PLATFORM_USERS.organizer, {
         type: 'approveMembership',
         uid: newcomer.uid,
-        role: 'member',
-        teamId: 'team-1',
       }),
     ).rejects.toMatchObject({ code: 'ROSTER_LOCKED' });
   });

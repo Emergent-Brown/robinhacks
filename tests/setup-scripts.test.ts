@@ -36,7 +36,7 @@ function localFunction(input: unknown) {
   return JSON.parse(result.stdout);
 }
 
-describe('safe bootstrap and migration entry points', () => {
+describe('safe bootstrap and reset entry points', () => {
   it('creates the event schedule and unfunded prize defaults without any cloud identity or credential lookup', () => {
     const event = localFunction({ mode: 'create' });
     expect(event).toMatchObject({
@@ -61,7 +61,7 @@ describe('safe bootstrap and migration entry points', () => {
     expect(event.platform.details.dateLabel).toBe('September 26–27, 2026');
   });
 
-  it('recognizes existing v1 and v2 events without modifying either or accepting contradictory versions', () => {
+  it('accepts only current events without modifying them', () => {
     const results = localFunction({
       mode: 'verify',
       member: { uid: 'organizer', role: 'organizer', teamId: null, status: 'approved' },
@@ -80,7 +80,7 @@ describe('safe bootstrap and migration entry points', () => {
       ],
     });
     expect(results.map((result: { accepted: boolean }) => result.accepted)).toEqual([
-      true,
+      false,
       true,
       false,
       false,
@@ -107,7 +107,7 @@ describe('safe bootstrap and migration entry points', () => {
   });
 
   it('rejects a mismatched cloud project before attempting any CLI login or network operation', () => {
-    for (const file of ['bootstrap-firebase.mjs', 'upgrade-sealed-funding.mjs']) {
+    for (const file of ['bootstrap-firebase.mjs', 'reset-event.mjs']) {
       const result = spawnSync(
         process.execPath,
         [`scripts/${file}`, '--project', 'unrelated-project-123'],
@@ -119,7 +119,7 @@ describe('safe bootstrap and migration entry points', () => {
     }
   });
 
-  it('requires a real configured organizer identity and explicit migration arguments before credential lookup', () => {
+  it('requires a configured organizer identity before credential lookup', () => {
     const bootstrap = spawnSync(
       process.execPath,
       ['scripts/bootstrap-firebase.mjs', '--project', 'robinhacks-2026-ajs'],
@@ -131,12 +131,5 @@ describe('safe bootstrap and migration entry points', () => {
     );
     expect(bootstrap.status).toBe(1);
     expect(bootstrap.stderr).toContain('Set ROBINHACKS_ORGANIZER_EMAIL');
-    const migration = spawnSync(process.execPath, ['scripts/upgrade-sealed-funding.mjs'], {
-      encoding: 'utf8',
-      env: safeEnvironment,
-      timeout: 10_000,
-    });
-    expect(migration.status).toBe(1);
-    expect(migration.stderr).toContain('Usage:');
   });
 });

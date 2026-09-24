@@ -42,7 +42,7 @@ export class Permissions {
       ['DRAFT', 'REGISTRATION'].includes(event.phase) ||
         (event.paused &&
           !event.activeOperationId &&
-          ['SEED_OPEN', 'INTERMISSION', 'TRADING_OPEN', 'FROZEN'].includes(event.phase)),
+          ['SEED_OPEN', 'INTERMISSION', 'FROZEN'].includes(event.phase)),
       'ROSTER_LOCKED',
       'Pause the event before correcting its frozen roster.',
     );

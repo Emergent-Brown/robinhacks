@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 import { logger } from 'firebase-functions';
 import { HttpsError, onCall, onRequest, type CallableRequest } from 'firebase-functions/v2/https';
 import { z } from 'zod';
@@ -28,7 +29,6 @@ const posterRedirect = new PosterRedirect(posters, limiter, () => {
 });
 const envelope = z.object({ eventId: identifier }).strict();
 const commandEnvelope = z.object({ eventId: identifier, command: z.unknown() }).strict();
-const poolEnvelope = z.object({ eventId: identifier, issuerId: identifier }).strict();
 const conversationEnvelope = z.object({ eventId: identifier, otherTeamId: identifier }).strict();
 const configuredOrigins = process.env.ALLOWED_ORIGINS?.split(',')
   .map((value) => value.trim())
@@ -50,12 +50,32 @@ const options = {
       ],
 };
 
-function actor(request: CallableRequest, action: string, rate = 60) {
+async function actor(request: CallableRequest, action: string, rate = 60) {
   if (!request.auth)
     throw new HttpsError('unauthenticated', 'Sign in before opening this event.', {
       code: 'SIGN_IN_REQUIRED',
     });
+  if (
+    request.auth.token.firebase?.sign_in_provider !== 'google.com' ||
+    request.auth.token.email_verified !== true
+  )
+    throw new HttpsError('permission-denied', 'Use a verified Google account to sign in.', {
+      code: 'GOOGLE_SIGN_IN_REQUIRED',
+    });
   limiter.check(request.auth.uid, action, rate);
+  // Callable signature verification alone does not revoke deleted or disabled
+  // accounts. Check the current Auth record before granting any event access.
+  const bearer = request.rawRequest.headers.authorization?.match(/^Bearer (.+)$/i)?.[1];
+  try {
+    if (!bearer) throw new Error('Missing token');
+    await getAuth().verifyIdToken(bearer, true);
+  } catch {
+    throw new HttpsError(
+      'unauthenticated',
+      'Your sign-in has expired. Sign in with Google again.',
+      { code: 'SIGN_IN_REQUIRED' },
+    );
+  }
   return {
     uid: request.auth.uid,
     displayName: typeof request.auth.token.name === 'string' ? request.auth.token.name : undefined,
@@ -122,7 +142,7 @@ async function transport<T>(work: () => Promise<T>): Promise<T> {
 
 export const gameCommand = onCall(options, (request) =>
   transport(async () => {
-    const identity = actor(request, 'command', 90);
+    const identity = await actor(request, 'command', 90);
     requireSmallPayload(request.data);
     const data = commandEnvelope.parse(request.data);
     return new GameService(repository, data.eventId, clock).execute(
@@ -134,7 +154,7 @@ export const gameCommand = onCall(options, (request) =>
 
 export const gameSnapshot = onCall(options, (request) =>
   transport(async () => {
-    const identity = actor(request, 'snapshot', 60);
+    const identity = await actor(request, 'snapshot', 60);
     const data = envelope.parse(request.data);
     return new GameService(repository, data.eventId, clock).snapshot(identity.uid, identity);
   }),
@@ -151,7 +171,7 @@ export const gamePublic = onCall({ ...options, enforceAppCheck: false }, (reques
 
 export const gameConversation = onCall(options, (request) =>
   transport(async () => {
-    const identity = actor(request, 'conversation', 30);
+    const identity = await actor(request, 'conversation', 30);
     const data = conversationEnvelope.parse(request.data);
     return new GameService(repository, data.eventId, clock).conversation(
       identity.uid,
@@ -160,17 +180,9 @@ export const gameConversation = onCall(options, (request) =>
   }),
 );
 
-export const gamePool = onCall(options, (request) =>
-  transport(async () => {
-    const identity = actor(request, 'pool', 90);
-    const data = poolEnvelope.parse(request.data);
-    return new GameService(repository, data.eventId, clock).pool(identity.uid, data.issuerId);
-  }),
-);
-
 export const gameExport = onCall(options, (request) =>
   transport(async () => {
-    const identity = actor(request, 'export', 2);
+    const identity = await actor(request, 'export', 2);
     const data = envelope.parse(request.data);
     return new GameService(repository, data.eventId, clock).exportEvent(identity.uid);
   }),
@@ -190,7 +202,7 @@ export const posterVisit = onRequest(
 
 export const posterStats = onCall(options, (request) =>
   transport(async () => {
-    const identity = actor(request, 'poster-stats', 20);
+    const identity = await actor(request, 'poster-stats', 20);
     const data = z
       .object({
         eventId: identifier,

@@ -3,10 +3,6 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
-  sendEmailVerification,
   reload,
   signOut,
   onAuthStateChanged,
@@ -33,28 +29,10 @@ import type {
   Command,
   CommandResult,
   EventConfig,
-  MarketView,
-  Pool,
   TeamConversation,
   PosterStatsPage,
 } from '@robinhacks/core';
 import type { AppGateway, SessionUser } from '../app/gateway';
-import { MarketRefreshScheduler } from '../app/MarketRefreshScheduler';
-const signedOutSnapshot = (): AppSnapshot => ({
-  event: null,
-  member: null,
-  market: { entries: [], asOf: 0, phaseVersion: 0 },
-  wallet: null,
-  positions: [],
-  commitments: null,
-  notes: [],
-  receipts: [],
-  members: [],
-  requests: [],
-  operation: null,
-  results: null,
-  audit: [],
-});
 /** Firebase transport and public read cache. Contains no economic authority. */
 export class FirebaseGateway implements AppGateway {
   readonly mode: 'firebase' | 'emulator';
@@ -134,10 +112,6 @@ export class FirebaseGateway implements AppGateway {
         this.emit();
       }
     });
-    new MarketRefreshScheduler(
-      () => this.cache,
-      () => this.command({ type: 'refreshMarket', commandId: crypto.randomUUID() }),
-    );
   }
   private invalidate() {
     this.cache = null;
@@ -169,15 +143,14 @@ export class FirebaseGateway implements AppGateway {
         },
         () => undefined,
       ),
-      ...(this.cache?.member?.role === 'judge'
+      ...(!this.cache.member.teamId && this.cache.member.role !== 'organizer'
         ? []
         : [
             onSnapshot(
               doc(this.db, `events/${this.eventId}/views/market`),
               (snapshot) => {
                 if (snapshot.exists() && this.cache) {
-                  if (this.cache.event?.platform) this.invalidate();
-                  else this.cache = { ...this.cache, market: snapshot.data() as MarketView };
+                  this.invalidate();
                   this.emit();
                 }
               },
@@ -185,7 +158,7 @@ export class FirebaseGateway implements AppGateway {
             ),
           ]),
     ];
-    if (this.cache?.event?.platform && this.cache.member?.teamId) {
+    if (this.cache?.member?.teamId) {
       const teamId = this.cache.member.teamId;
       let initial = true;
       this.marketStops.push(
@@ -213,26 +186,23 @@ export class FirebaseGateway implements AppGateway {
       this.listeners.delete(listener);
     };
   }
-  async signIn(provider: 'google' | 'email', email?: string, password?: string, register = false) {
-    if (provider === 'google') await signInWithPopup(this.auth, new GoogleAuthProvider());
-    else if (register) await createUserWithEmailAndPassword(this.auth, email || '', password || '');
-    else await signInWithEmailAndPassword(this.auth, email || '', password || '');
+  async signIn() {
+    try {
+      await signInWithPopup(this.auth, new GoogleAuthProvider());
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return;
+      const message =
+        code === 'auth/popup-blocked'
+          ? 'Allow pop-ups for this site, then try signing in again.'
+          : code === 'auth/network-request-failed'
+            ? 'Couldn’t reach Google. Check your connection, or open emergenthacks.com in your usual browser and try again.'
+            : 'Couldn’t sign in with Google. Please try again.';
+      throw Object.assign(new Error(message), { code });
+    }
   }
   async signOut() {
     await signOut(this.auth);
-  }
-  async resetPassword(email: string) {
-    try {
-      await sendPasswordResetEmail(this.auth, email.trim());
-    } catch (error) {
-      // Preserve the same response for unknown accounts on older Auth configurations.
-      if ((error as { code?: string }).code !== 'auth/user-not-found') throw error;
-    }
-  }
-  async verifyEmail() {
-    const user = this.auth.currentUser;
-    if (!user) throw new Error('Sign in first.');
-    await sendEmailVerification(user);
   }
   async refreshIdentity() {
     const user = this.auth.currentUser;
@@ -249,6 +219,7 @@ export class FirebaseGateway implements AppGateway {
     this.emit();
   }
   private async call<T>(name: string, data: Record<string, unknown>): Promise<T> {
+    const owner = this.auth.currentUser?.uid;
     try {
       const result = await httpsCallable<Record<string, unknown>, T>(
         this.functions,
@@ -257,6 +228,18 @@ export class FirebaseGateway implements AppGateway {
       return result.data;
     } catch (error) {
       const e = error as { message?: string; code?: string; details?: { code?: string } };
+      const expired =
+        ['SIGN_IN_REQUIRED', 'GOOGLE_SIGN_IN_REQUIRED'].includes(e.details?.code ?? '') ||
+        [
+          'functions/unauthenticated',
+          'auth/user-token-expired',
+          'auth/user-disabled',
+          'auth/user-not-found',
+          'auth/invalid-user-token',
+        ].includes(e.code ?? '');
+      // The auth observer clears private caches and reloads the public homepage.
+      // Ignore a late failure from an old identity if another account signed in meanwhile.
+      if (expired && owner && this.auth.currentUser?.uid === owner) await signOut(this.auth);
       const result = new Error(
         e.message || 'Unable to reach the event server. Your request has not been confirmed.',
       );
@@ -289,9 +272,6 @@ export class FirebaseGateway implements AppGateway {
       this.invalidate();
       this.emit();
     }
-  }
-  async pool(issuerId: string): Promise<Pool> {
-    return this.call('gamePool', { issuerId });
   }
   async exportEvent(): Promise<Record<string, unknown>> {
     return this.call('gameExport', {});

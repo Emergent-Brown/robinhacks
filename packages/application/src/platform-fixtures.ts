@@ -8,46 +8,123 @@ import type {
   ProjectSubmission,
   Team,
 } from '@robinhacks/core';
-import { createDemoDocuments, DEMO_EVENT_ID, DEMO_USERS } from './fixtures';
+import { demoProjects } from './demo-projects';
 import type { DocumentMap } from './memory-repository';
-export { DEMO_EVENT_ID };
+export const DEMO_EVENT_ID = 'robinhacks-2026';
 export const PLATFORM_USERS = {
-  ...(Object.fromEntries(
-    Object.entries(DEMO_USERS).map(([role, user]) => [role, { ...user, emailVerified: true }]),
-  ) as {
-    [K in keyof typeof DEMO_USERS]: (typeof DEMO_USERS)[K] & { emailVerified: boolean };
-  }),
+  captain: {
+    uid: 'demo-captain',
+    displayName: 'Alex Chen',
+    email: 'alex@example.test',
+    emailVerified: true,
+  },
+  organizer: {
+    uid: 'demo-organizer',
+    displayName: 'Jamie Park',
+    email: 'organizer@example.test',
+    emailVerified: true,
+  },
+  member: {
+    uid: 'demo-member',
+    displayName: 'Sam Rivera',
+    email: 'sam@example.test',
+    emailVerified: true,
+  },
   judge: {
     uid: 'demo-judge',
     displayName: 'Taylor Brooks',
     email: 'judge@example.test',
     emailVerified: true,
   },
+  attendee: {
+    uid: 'demo-attendee',
+    displayName: 'Casey Morgan',
+    email: 'casey@example.test',
+    emailVerified: true,
+  },
 };
+export type DemoPreset = 'registration' | 'funding' | 'judging';
 /** A clearly fictional v2 fixture. No legacy wallets, pools or positions are carried over. */
 export function createPlatformDemoDocuments(
-  preset: 'seed' | 'trading' | 'judging' = 'trading',
+  preset: DemoPreset = 'funding',
   now = Date.now(),
 ): DocumentMap {
-  const source = createDemoDocuments('seed', now);
   const root = `events/${DEMO_EVENT_ID}`;
   const docs: DocumentMap = {};
-  for (const [path, value] of Object.entries(source))
-    if (path.includes('/teams/') || path.includes('/members/')) docs[path] = structuredClone(value);
-  const teams = Object.entries(docs)
-    .filter(([path]) => new RegExp(`^${root}/teams/[^/]+$`).test(path))
-    .map(([, team]) => team as Team);
-  for (const [path, value] of Object.entries(docs))
-    if (path.includes('/members/')) {
-      const member = value as Member;
-      docs[path] = { ...member, email: `${member.uid}@example.test`, emailVerified: true };
-    }
+  const teams: Team[] = demoProjects.map((project, index) => ({
+    id: `team-${index + 1}`,
+    name: project.name,
+    ticker: project.ticker,
+    category: project.category,
+    pitch: project.pitch,
+    color: project.color,
+    problem: project.problem,
+    building: project.building,
+    demoUrl: '',
+    repoUrl: '',
+    update: project.update,
+    updatedAt: now - (index + 1) * 180_000,
+    eligibility: 'active',
+    captainUid: index === 0 ? PLATFORM_USERS.captain.uid : `demo-captain-${index + 1}`,
+    version: 0,
+  }));
+  function addMember(member: Member) {
+    docs[`${root}/members/${member.uid}`] = member;
+    if (member.teamId) docs[`${root}/teams/${member.teamId}/members/${member.uid}`] = member;
+  }
+  teams.forEach((team, index) => {
+    docs[`${root}/teams/${team.id}`] = team;
+    addMember({
+      uid: team.captainUid,
+      displayName: demoProjects[index]!.captainName,
+      email: index === 0 ? PLATFORM_USERS.captain.email : `${team.captainUid}@example.test`,
+      emailVerified: true,
+      teamId: team.id,
+      role: 'captain',
+      status: 'approved',
+      version: 0,
+    });
+    demoProjects[index]!.teammates.forEach((displayName, teammateIndex) => {
+      const uid =
+        index === 0 && teammateIndex === 0
+          ? PLATFORM_USERS.member.uid
+          : `demo-member-${index + 1}-${teammateIndex + 1}`;
+      addMember({
+        uid,
+        displayName,
+        email:
+          uid === PLATFORM_USERS.member.uid ? PLATFORM_USERS.member.email : `${uid}@example.test`,
+        emailVerified: true,
+        teamId: team.id,
+        role: 'member',
+        status: 'approved',
+        version: 0,
+      });
+    });
+  });
+  for (const role of ['organizer', 'judge', 'attendee'] as const) {
+    const user = PLATFORM_USERS[role];
+    addMember({
+      ...user,
+      teamId: null,
+      role: role === 'attendee' ? 'member' : role,
+      status: 'approved',
+      version: 0,
+    });
+  }
   const config = defaultPlatformConfig();
   config.details.about =
     'A sample event with 12 fictional teams. Build, share progress, and allocate credits across three sealed rounds.';
-  const open = preset !== 'seed';
+  const open = preset !== 'registration';
   const event: EventConfig = {
-    ...(source[root] as EventConfig),
+    id: DEMO_EVENT_ID,
+    paused: false,
+    pauseReason: '',
+    createdAt: now - 7_200_000,
+    activeOperationId: null,
+    publishedResultId: null,
+    announcement: '',
+    tieSeed: 'emergent-hacks-demo-2026',
     name: 'Emergent Hacks 2026',
     venue: DEFAULT_EVENT_VENUE,
     rulesVersion: 2,
@@ -224,24 +301,7 @@ export function createPlatformDemoDocuments(
     event.platform!.currentRound = 3;
   }
   docs[`${root}/views/market`] = {
-    entries: teams.map((team) => ({
-      team,
-      pool: {
-        issuerId: team.id,
-        shareReserve: 0,
-        creditReserveMinor: 0,
-        version: 0,
-        halted: false,
-      },
-      issuer: {
-        issuerId: team.id,
-        issuedShares: 0,
-        primarySharesRemaining: 0,
-        fundingVaultMinor: 0,
-        seedBackers: 0,
-        version: 0,
-      },
-    })),
+    entries: teams.map((team) => ({ team })),
     asOf: now,
     phaseVersion: event.phaseVersion,
   };

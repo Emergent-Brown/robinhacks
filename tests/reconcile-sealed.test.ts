@@ -11,7 +11,6 @@ import {
   PLATFORM_USERS,
 } from '../packages/application/src/platform-fixtures';
 import { MemoryRepository } from '../packages/application/src/memory-repository';
-import { createDemoDocuments } from '../packages/application/src/fixtures';
 
 // Run the actual standalone Node module: it must not depend on TS aliases or application math.
 const runner = `import {reconcileSealedExport} from './scripts/reconcile-sealed-export.mjs'; let input=''; for await(const part of process.stdin) input+=part; process.stdout.write(JSON.stringify(reconcileSealedExport(JSON.parse(input))));`;
@@ -36,7 +35,7 @@ beforeAll(async () => {
   const start = 10_000_000;
   let now = start;
   let sequence = 0;
-  const documents = createPlatformDemoDocuments('seed', start);
+  const documents = createPlatformDemoDocuments('registration', start);
   const root = `events/${DEMO_EVENT_ID}`;
   const sourceEvent = documents[root] as EventConfig;
   sourceEvent.platform!.funding.investorPoolMinor = 10_001;
@@ -187,6 +186,60 @@ describe('independent exported sealed-ledger reconciliation', () => {
     });
     expect(published.awardResults[0].winnerId).toBe('team-2');
     expect(published.awardResults[0].communityWinnerId).toBe('team-3');
+  });
+
+  it('keeps a removed investor’s recorded allocations verifiable without restoring event access', () => {
+    const removed = structuredClone(published);
+    const actor = removed.members.find(
+      (member: any) => member.uid === removed.roundAllocations[0].actorUid,
+    );
+    removed.members = removed.members.filter((member: any) => member.uid !== actor.uid);
+    removed.removedMembers = [{ ...actor, removedAt: removed.exportedAt }];
+    expect(reconcile(removed).valid).toBe(true);
+    // A later staff identity under the same Google UID does not rewrite old team authorship.
+    removed.members.push({ ...actor, role: 'organizer', teamId: null });
+    expect(reconcile(removed).valid).toBe(true);
+    removed.removedMembers[0].removedAt = 0;
+    expect(reconcile(removed).valid).toBe(false);
+  });
+
+  it('matches the original team identity after a captain becomes an organizer and is removed again', () => {
+    const removed = structuredClone(published);
+    const actor = removed.members.find(
+      (member: any) => member.uid === removed.roundAllocations[0].actorUid,
+    );
+    removed.members = removed.members.filter((member: any) => member.uid !== actor.uid);
+    removed.removedMembers = [
+      { ...actor, role: 'organizer', teamId: null, removedAt: removed.exportedAt + 1 },
+      { ...actor, removedAt: removed.exportedAt },
+    ];
+    expect(reconcile(removed).valid).toBe(true);
+    removed.removedMembers.pop();
+    expect(reconcile(removed)).toMatchObject({
+      valid: false,
+      errors: ['ALLOCATION_ACTOR_MISMATCH'],
+    });
+  });
+
+  it('refuses to export incomplete removed-member history above the supported limit', async () => {
+    const root = `events/${DEMO_EVENT_ID}`;
+    const documents: Record<string, unknown> = {
+      [root]: published.event,
+      [`${root}/members/${PLATFORM_USERS.organizer.uid}`]: published.members.find(
+        (member: any) => member.uid === PLATFORM_USERS.organizer.uid,
+      ),
+    };
+    for (let index = 0; index < 1001; index++)
+      documents[`${root}/removedMembers/archive-${index}`] = {
+        uid: `former-${index}`,
+        removedAt: published.exportedAt,
+      };
+    const service = new GameService(new MemoryRepository(documents), DEMO_EVENT_ID, {
+      now: () => published.exportedAt,
+    });
+    await expect(service.exportEvent(PLATFORM_USERS.organizer.uid)).rejects.toMatchObject({
+      code: 'EXPORT_HISTORY_LIMIT',
+    });
   });
 
   it('accepts a formally cancelled, unrevealed round without creating payout claims', () => {
@@ -425,12 +478,12 @@ describe('independent exported sealed-ledger reconciliation', () => {
       expect(malformed.status).toBe(1);
       expect(malformed.stderr).toContain('Unable to read a valid JSON export');
       expect(malformed.stdout + malformed.stderr).not.toContain(canary);
-      writeFileSync(file, JSON.stringify(createDemoDocuments('seed', 10_000_000)));
+      writeFileSync(file, JSON.stringify({ schemaVersion: 1, event: { rulesVersion: 1 } }));
       const legacy = spawnSync(process.execPath, ['scripts/reconcile-export.mjs', file], {
         encoding: 'utf8',
       });
-      expect(legacy.status).toBe(0);
-      expect(JSON.parse(legacy.stdout).valid).toBe(true);
+      expect(legacy.status).toBe(1);
+      expect(legacy.stderr).toContain('requires a current sealed-funding event export');
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

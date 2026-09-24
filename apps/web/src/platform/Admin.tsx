@@ -235,6 +235,11 @@ function Operations({ data, actions }: PageProps) {
                 ? 'All three funding rounds have been opened.'
                 : `Next: ${settings.funding.roundNames[settings.currentRound]}. Publish project updates before opening.`}
             </p>
+            {settings.teamFormationOpen && (
+              <p className="p-note">
+                Team selection is open. Close it in Admin → Access before opening funding.
+              </p>
+            )}
             <WindowOpener
               key={settings.currentRound}
               plan={settings.details.timing?.rounds[settings.currentRound]}
@@ -246,6 +251,7 @@ function Operations({ data, actions }: PageProps) {
               disabled={
                 terminal ||
                 event.paused ||
+                !!settings.teamFormationOpen ||
                 settings.currentRound >= settings.funding.roundNames.length ||
                 cmd.pending
               }

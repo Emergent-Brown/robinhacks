@@ -10,11 +10,7 @@ for (const key of ['FIRESTORE_EMULATOR_HOST', 'FIREBASE_AUTH_EMULATOR_HOST']) {
   process.env[key] ||= expected;
 }
 const bundled = await build({
-  entryPoints: [
-    process.argv.includes('--legacy')
-      ? 'packages/application/src/fixtures.ts'
-      : 'packages/application/src/platform-fixtures.ts',
-  ],
+  entryPoints: ['packages/application/src/platform-fixtures.ts'],
   bundle: true,
   platform: 'node',
   format: 'esm',
@@ -24,25 +20,35 @@ const fixture = await import(
   'data:text/javascript;base64,' + Buffer.from(bundled.outputFiles[0].text).toString('base64')
 );
 const { DEMO_EVENT_ID } = fixture;
-const createDemoDocuments = fixture.createPlatformDemoDocuments || fixture.createDemoDocuments;
-const DEMO_USERS = fixture.PLATFORM_USERS || fixture.DEMO_USERS;
+const createDemoDocuments = fixture.createPlatformDemoDocuments;
+const DEMO_USERS = fixture.PLATFORM_USERS;
 const app = initializeApp({ projectId: 'demo-robinhacks' });
 const db = getFirestore(app),
   auth = getAuth(app);
 const documents = createDemoDocuments(
   process.argv.includes('--judging')
     ? 'judging'
-    : process.argv.includes('--seed')
-      ? 'seed'
-      : 'trading',
+    : process.argv.includes('--registration')
+      ? 'registration'
+      : 'funding',
 );
 for (const user of Object.values(DEMO_USERS)) {
   try {
-    await auth.createUser({ ...user, password: 'hackathon-demo-2026', emailVerified: true });
+    await auth.createUser({ ...user, emailVerified: true });
   } catch (error) {
     if (error.code !== 'auth/uid-already-exists' && error.code !== 'auth/email-already-exists')
       throw error;
   }
+  const current = await auth.getUser(user.uid);
+  if (!current.providerData.some((provider) => provider.providerId === 'google.com'))
+    await auth.updateUser(user.uid, {
+      providerToLink: {
+        providerId: 'google.com',
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+      },
+    });
 }
 await db.recursiveDelete(db.doc(`events/${DEMO_EVENT_ID}`));
 const entries = Object.entries(documents);
@@ -52,5 +58,5 @@ for (let start = 0; start < entries.length; start += 400) {
   await batch.commit();
 }
 console.log(
-  `Seeded ${entries.length} documents in LOCAL demo-robinhacks.\nCaptain: alex@example.test\nOrganizer: organizer@example.test\nMember: sam@example.test\nJudge: judge@example.test (sealed-round fixture)\nPassword for these emulator-only users: hackathon-demo-2026`,
+  `Seeded ${entries.length} documents in LOCAL demo-robinhacks. Auth fixtures use mock Google identities; run npm run test:smoke to exercise sign-in.`,
 );

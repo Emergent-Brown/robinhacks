@@ -2,7 +2,6 @@ import type {
   AppSnapshot,
   Command,
   CommandResult,
-  Pool,
   TeamConversation,
   PosterStatsPage,
 } from '@robinhacks/core';
@@ -16,23 +15,15 @@ export interface AppGateway {
   readonly mode: 'demo' | 'firebase' | 'emulator';
   readonly user: SessionUser | null;
   subscribe(listener: () => void): () => void;
-  signIn(
-    provider: 'google' | 'email',
-    email?: string,
-    password?: string,
-    register?: boolean,
-  ): Promise<void>;
-  resetPassword?(email: string): Promise<void>;
-  verifyEmail?(): Promise<void>;
+  signIn(): Promise<void>;
   refreshIdentity?(): Promise<void>;
   conversation?(otherTeamId: string): Promise<TeamConversation | null>;
   signOut(): Promise<void>;
   snapshot(force?: boolean): Promise<AppSnapshot>;
   command(command: Command): Promise<CommandResult>;
-  pool(issuerId: string): Promise<Pool>;
   exportEvent(): Promise<Record<string, unknown>>;
   posterStats?(after?: number): Promise<PosterStatsPage>;
-  switchDemoRole?(role: 'captain' | 'organizer' | 'judge' | 'member'): Promise<void>;
-  resetDemo?(phase?: 'seed' | 'trading' | 'judging'): Promise<void>;
+  switchDemoRole?(role: 'captain' | 'organizer' | 'judge' | 'member' | 'attendee'): Promise<void>;
+  resetDemo?(phase?: 'registration' | 'funding' | 'judging'): Promise<void>;
 }
 export const newCommandId = () => crypto.randomUUID();

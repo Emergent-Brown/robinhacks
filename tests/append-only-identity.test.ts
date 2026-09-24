@@ -10,7 +10,7 @@ import { MemoryRepository } from '../packages/application/src/memory-repository'
 
 const root = `events/${DEMO_EVENT_ID}`;
 function fixture() {
-  const repository = new MemoryRepository(createPlatformDemoDocuments('seed', 10_000_000));
+  const repository = new MemoryRepository(createPlatformDemoDocuments('registration', 10_000_000));
   const service = new GameService(repository, DEMO_EVENT_ID, { now: () => 10_000_000 });
   const second = {
     uid: 'demo-captain-2',

@@ -24,7 +24,6 @@ export function receipt(
     actorUid: context.actor.uid,
     acceptedAt: context.now,
     detail,
-    entries: [],
     payloadKey: context.payloadKey,
     rulesVersion: context.event.rulesVersion,
     phaseVersion: context.event.phaseVersion,

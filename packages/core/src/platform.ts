@@ -47,6 +47,7 @@ export interface FundingSettings {
   rubric: Array<{ id: string; label: string; weight: number }>;
 }
 export interface PlatformConfig {
+  teamFormationOpen?: boolean;
   version: 2;
   details: EventDetails;
   funding: FundingSettings;
@@ -292,6 +293,7 @@ export type CommunityCommand = WithId<
 export type PlatformCommand = FundingCommand | CommunityCommand;
 export const defaultPlatformConfig = (): PlatformConfig => ({
   version: 2,
+  teamFormationOpen: false,
   details: defaultEventDetails(),
   funding: {
     budget: 100,

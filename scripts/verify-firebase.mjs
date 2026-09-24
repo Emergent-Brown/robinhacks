@@ -5,11 +5,10 @@
  * Does not sign in to the web app, create users, or call any authenticated game endpoint.
  * Credentials stay in memory; Firebase CLI may refresh its own managed login cache.
  */
-import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { homedir } from 'node:os';
-import { access, readFile, readdir, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
+import { cliCredential } from './bootstrap-firebase.mjs';
 import { initializeApp, deleteApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { Firestore } from 'firebase-admin/firestore';
@@ -20,7 +19,6 @@ const EVENT = 'robinhacks-2026';
 const OWNER = process.env.ROBINHACKS_ORGANIZER_EMAIL?.trim().toLowerCase() || '';
 const REGION = 'us-west1';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(import.meta.url);
 class VerificationError extends Error {}
 function assert(condition, message) {
   if (!condition) throw new VerificationError(message);
@@ -30,96 +28,6 @@ let verificationStage = 'configuration';
 function pass(name) {
   checks.push(name);
   console.log(`PASS ${name}`);
-}
-
-async function isCli(path) {
-  try {
-    await access(join(path, 'lib/auth.js'));
-    return JSON.parse(await readFile(join(path, 'package.json'), 'utf8')).name === 'firebase-tools';
-  } catch {
-    return false;
-  }
-}
-async function locateCli() {
-  if (process.env.FIREBASE_TOOLS_DIR) {
-    const explicit = resolve(process.env.FIREBASE_TOOLS_DIR);
-    assert(
-      await isCli(explicit),
-      'FIREBASE_TOOLS_DIR must identify the firebase-tools package directory.',
-    );
-    return explicit;
-  }
-  try {
-    const local = dirname(require.resolve('firebase-tools/package.json'));
-    if (await isCli(local)) return local;
-  } catch {}
-  const cache = join(homedir(), '.npm/_npx');
-  const candidates = [];
-  for (const entry of await readdir(cache, { withFileTypes: true }).catch(() => [])) {
-    if (!entry.isDirectory()) continue;
-    const path = join(cache, entry.name, 'node_modules/firebase-tools');
-    if (await isCli(path)) candidates.push({ path, modified: (await stat(path)).mtimeMs });
-  }
-  candidates.sort((a, b) => b.modified - a.modified);
-  assert(
-    candidates.length > 0,
-    'Install the CLI with npx -y firebase-tools@latest --version, then sign in with firebase login.',
-  );
-  return candidates[0].path;
-}
-
-async function verifiedCredential() {
-  const cli = await locateCli();
-  const { logger } = require(join(cli, 'lib/logger.js'));
-  logger.silent = true;
-  const auth = require(join(cli, 'lib/auth.js'));
-  const account = auth.getGlobalDefaultAccount();
-  assert(
-    account?.user?.email?.toLowerCase() === OWNER,
-    `Select the existing owner login with npx -y firebase-tools@latest login:use ${OWNER}.`,
-  );
-  assert(
-    account.tokens?.refresh_token,
-    'Reauthenticate the owner with npx -y firebase-tools@latest login --reauth.',
-  );
-  const scopes = [
-    'email',
-    'openid',
-    'https://www.googleapis.com/auth/userinfo.email',
-    'https://www.googleapis.com/auth/cloudplatformprojects.readonly',
-    'https://www.googleapis.com/auth/firebase',
-    'https://www.googleapis.com/auth/cloud-platform',
-  ];
-  const token = await auth.getAccessToken(account.tokens.refresh_token, scopes);
-  assert(
-    typeof token.access_token === 'string' && token.access_token.length > 0,
-    'The CLI could not refresh the owner login. Run firebase login --reauth.',
-  );
-  const response = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
-    headers: { Authorization: `Bearer ${token.access_token}` },
-    signal: AbortSignal.timeout(20_000),
-  });
-  assert(
-    response.ok,
-    'Google could not verify the current CLI identity. Reauthenticate the owner login.',
-  );
-  const identity = await response.json();
-  assert(
-    identity.email?.toLowerCase() === OWNER &&
-      identity.email_verified === true &&
-      typeof identity.sub === 'string',
-    'The verified Google identity does not match the configured owner.',
-  );
-  const credential = {
-    getAccessToken: async () => ({
-      access_token: token.access_token,
-      expires_in: Math.max(
-        1,
-        Math.floor(((token.expires_at || Date.now() + 3_600_000) - Date.now()) / 1000),
-      ),
-    }),
-  };
-  return { credential, subject: identity.sub };
 }
 
 async function main() {
@@ -191,7 +99,8 @@ async function main() {
   );
   pass('Production gameCommand rejects unauthenticated requests');
   verificationStage = 'verified CLI identity';
-  const { credential, subject } = await verifiedCredential();
+  const { credential, identity } = await cliCredential();
+  const subject = identity.sub;
   verificationStage = 'runtime service account IAM';
   const runtimeServiceAccount = '594324444355-compute@developer.gserviceaccount.com';
   const iamToken = await credential.getAccessToken();
@@ -260,10 +169,22 @@ async function main() {
       eventRef.collection('members').doc(owner.uid),
       eventRef.collection('views').doc('market'),
     );
-    const [teams, wallets] = await Promise.all([
+    const [teams, rounds, submissions, members, requests, accounts] = await Promise.all([
       eventRef.collection('teams').limit(1).get(),
-      eventRef.collection('wallets').limit(1).get(),
+      eventRef.collection('fundingRounds').limit(1).get(),
+      eventRef.collection('submissions').limit(1).get(),
+      eventRef.collection('members').get(),
+      eventRef.collection('accessRequests').limit(1).get(),
+      getAuth(app).listUsers(1000),
     ]);
+    assert(
+      accounts.users.length === 1 && !accounts.pageToken && accounts.users[0].uid === owner.uid,
+      'Unexpected Auth accounts remain in the initial project.',
+    );
+    assert(
+      members.size === 1 && requests.empty,
+      'Expected only the owner membership and no pending access requests.',
+    );
     const event = eventDocument.data();
     const member = memberDocument.data();
     const market = marketDocument.data();
@@ -273,7 +194,9 @@ async function main() {
         event.phase === 'REGISTRATION' &&
         event.rulesVersion === 2 &&
         event.platform?.version === 2 &&
-        event.platform.currentRound === 0,
+        event.platform.currentRound === 0 &&
+        event.platform.teamFormationOpen === false &&
+        event.maintenance !== true,
       'The production event is not in its initial supported REGISTRATION phase. This initial-state verifier did not change it.',
     );
     assert(
@@ -289,11 +212,12 @@ async function main() {
         Array.isArray(market?.entries) &&
         market.entries.length === 0 &&
         teams.empty &&
-        wallets.empty,
-      'The production event has teams or wallets, or its market projection is missing. This initial-state verifier did not change it.',
+        rounds.empty &&
+        submissions.empty,
+      'The production event has teams, rounds, or submissions, or its project projection is missing. This initial-state verifier did not change it.',
     );
     pass(
-      'Firestore contains sealed-round REGISTRATION, approved organizer, and zero teams or wallets',
+      'Firestore contains sealed-round REGISTRATION, approved organizer, and only the owner and zero teams, rounds, or submissions',
     );
     const publicResponse = await fetch(
       `https://${REGION}-${PROJECT}.cloudfunctions.net/gamePublic`,

@@ -141,6 +141,11 @@ export class FundingService {
       'INVALID_PHASE',
       'Open funding after registration or the previous completed round.',
     );
+    requireState(
+      !platform.teamFormationOpen,
+      'FORMATION_OPEN',
+      'Close team formation before opening a funding round.',
+    );
     const number = platform.currentRound + 1;
     requireState(number <= 3, 'ROUND_LIMIT', 'All three funding rounds have already run.');
     requireState(

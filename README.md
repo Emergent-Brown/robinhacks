@@ -4,7 +4,7 @@ A mobile-friendly hackathon platform for building projects, meeting other teams,
 
 The repository retains the technical name `robinhacks`. The participant-facing event is **Emergent Hacks**, with **Silicon Valley** as its theme. React and TypeScript provide the interface; Firebase Authentication, Firestore and callable Functions provide the deployed backend. The local demo runs the same application services and economic rules without a cloud account.
 
-**Updated September 24, 2026:** the [live event](https://emergenthacks.com/) uses the sealed-round platform. The [populated demo](https://robinhacks-2026-ajs--walkthrough-pyhnt4be.web.app/) supports captain, teammate, organizer and judge perspectives. The empty production event was upgraded with its existing organizer preserved. See the [deployment record](docs/FIREBASE-SETUP.md#deployment-record) for verification and remaining rehearsal checks.
+**Updated September 24, 2026:** the [live event](https://emergenthacks.com/) uses the sealed-round platform. The [populated demo](https://robinhacks-2026-ajs--walkthrough-pyhnt4be.web.app/) supports attendee, captain, teammate, organizer and judge perspectives. See the [deployment record](docs/FIREBASE-SETUP.md#deployment-record) for verification and remaining rehearsal checks.
 
 ## Start locally
 
@@ -17,15 +17,15 @@ npm run dev
 
 Open [localhost:5173](http://localhost:5173). Demo mode contains 12 fictional projects and uses browser-local storage. It does not create production participants or send email.
 
-The **Demo** controls switch between captain, teammate, organizer and judge. The preset identifiers are retained for compatibility:
+The **Demo** controls switch between attendee, captain, teammate, organizer and judge. Available presets:
 
 | Preset    | Current experience                                                  |
 | --------- | ------------------------------------------------------------------- |
-| `seed`    | Registration, before any funding opens                              |
-| `trading` | Second sealed funding round open, first-round entitlements visible  |
+| `registration` | Approved attendee waiting for organizer-controlled team selection |
+| `funding` | Second sealed funding round open, first-round entitlements visible |
 | `judging` | Three completed rounds, final submissions, independent judging open |
 
-These presets exercise the sealed-round application. They do not enable the original buy/sell game.
+Reset the registration preset to rehearse approval and team selection before funding.
 
 For real local Firebase Auth, Firestore and Functions, install **Java 21+** and run:
 
@@ -33,14 +33,14 @@ For real local Firebase Auth, Firestore and Functions, install **Java 21+** and 
 npm run dev:firebase
 ```
 
-The local project is `demo-robinhacks`; the seed script refuses remote emulator hosts. The Emulator UI is at [localhost:4000](http://localhost:4000). Use `WEB_PORT=5174 npm run dev:firebase` if only the web port conflicts. The documented localhost test password, `hackathon-demo-2026`, belongs only to fictional emulator accounts, never production identities. See the emulator startup output for available accounts.
+The local project is `demo-robinhacks`; the seed script refuses remote emulator hosts. The Emulator UI is at [localhost:4000](http://localhost:4000). Use `WEB_PORT=5174 npm run dev:firebase` if only the web port conflicts. Emulator fixtures use mock Google identities. See the emulator startup output and smoke runner for available accounts.
 
 ## What is included
 
 - A public event homepage with editable event details, logistics, schedule, registration link, organizer information, contact and judging rubric.
 - Numbered NFC poster links that count visits in Firestore, redirect to the homepage, and show organizer-only totals under Admin → Posters. See [poster tracking](docs/13-poster-tracking.md).
-- Google-based participant requests with organizer assignment to an existing or new team. See [joining and approval](docs/14-joining-and-approval.md).
-- Verified email/Google sign-in, organizer approval, team and staff access requests, backup organizer controls and locked team rosters.
+- Google-only signup, independent organizer approval, and participant team/role selection opened by organizers. See [joining and approval](docs/14-joining-and-approval.md).
+- Verified Google identity, organizer email invitations, protected access removal, and locked team rosters.
 - Project profiles with sectors and optional teammate bios, search by project or person, unopened-project discovery, archived checkpoints, and immutable final submissions with demo, repository and full Git commit.
 - Private team-to-team messages, shared inboxes, blocking and reports.
 - Autosaved team allocations, read-only round history, deadline enforcement, simultaneous closing, per-round entitlements, audit records and exact payout calculations.
@@ -70,9 +70,9 @@ Read [11 · Sealed rounds](docs/11-sealed-rounds.md) for the complete current ru
 
 ## Run an event
 
-1. Complete [Firebase setup and migration](docs/FIREBASE-SETUP.md). Rehearse sign-in with the primary organizer, a backup and a judge.
+1. Complete [Firebase setup](docs/FIREBASE-SETUP.md). Rehearse sign-in with the primary organizer, a backup and a judge.
 2. Fill **Admin → Settings** with confirmed event details, prize amounts, reserve policy and judging rubric. Approve actual attendees and separate staff accounts in **Admin → Access**.
-3. Collect an initial checkpoint from every active team. Open round one; this locks the funding/judging rules and competing rosters.
+3. In **Admin → Access**, start team selection. Approved attendees create or join teams and choose an available role. Check every team has a captain, close team selection, then collect an initial checkpoint from every active team. Open round one; this locks the funding/judging rules and competing rosters.
 4. At the deadline, close the round to reveal totals and freeze entitlements. Teams build, publish the next checkpoint and allocate a fresh budget in round two.
 5. Open final submissions before round three. Every active project must submit final evidence and its final checkpoint before the last funding window opens.
 6. Finish funding, open judging, assign projects, and collect complete independent score sheets. Run the separate community ballot.
@@ -86,17 +86,17 @@ Pause preserves everyone's remaining time equally. A revealed round cannot reope
 apps/web/src/platform/                 Current event features and shared presentation helpers
 apps/web/src/adapters/                 Demo and Firebase gateways
 apps/functions/src/                   Callable transport, limits and Firestore adapter
-packages/core/src/platform.ts          Version-two types and default configuration
+packages/core/src/platform.ts          Event types and default configuration
 packages/core/src/sealed-funding.ts    Pure allocation, entitlement and payout rules
 packages/application/src/              GameService, schemas, repositories and fixtures
 packages/application/src/services/     Funding, projects, messaging, judging, ballots and permissions
 firebase/                             Deny-by-default client rules and indexes
-scripts/                              Bootstrap, migration, emulators, smoke and export checks
+scripts/                              Bootstrap, publication, reset, emulators and export checks
 ```
 
 Small domain classes own economic invariants. Application services own permissions and transactions. Repository and gateway interfaces separate infrastructure from rules and UI. React uses functional components; domain and application responsibilities stay outside those components.
 
-Version-one pricing, trading and settlement code remains isolated for historical events and compatibility tests. Version-two events reject those legacy financial commands. New work should target the platform contracts and services rather than add conditions to the old trading screens.
+The application implements sealed funding rounds only. See [Architecture](docs/architecture.md) for service boundaries, data access, and the participant lifecycle.
 
 ## Verification
 
@@ -108,7 +108,7 @@ npm run test:emulator
 `check` runs TypeScript, domain/application tests and production builds. The emulator suite checks real Firestore transaction behavior and client privacy. With `npm run dev:firebase` running, reset the disposable local event to Registration before exercising the authenticated transport:
 
 ```sh
-npm run seed -- --seed
+npm run seed -- --registration
 npm run test:smoke
 ```
 
@@ -122,15 +122,17 @@ Tests and local rehearsal do not establish production Google sign-in, a complete
 
 ## Hosting and repository hygiene
 
-Classic Firebase Hosting serves the client. Firebase Auth, Firestore Standard and six callable Functions use the existing `robinhacks-2026-ajs` project, with Functions in `us-west1`. Bounded data and zero minimum instances aim to keep a small event within no-cost allowances. Blaze can still incur charges; budget alerts are not spending caps. See [Firebase setup](docs/FIREBASE-SETUP.md).
+Classic Firebase Hosting serves the client. Firebase Auth, Firestore Standard and six callable Functions and the poster redirect use the existing `robinhacks-2026-ajs` project, with Functions in `us-west1`. Bounded data and zero minimum instances aim to keep a small event within no-cost allowances. Blaze can still incur charges; budget alerts are not spending caps. See [Firebase setup](docs/FIREBASE-SETUP.md).
 
 Environment files, local Auth configuration, production exports, credentials, dependencies, builds, emulator state, logs and recordings are excluded from Git. Tracked examples contain placeholders. Keep administrator credentials out of frontend `VITE_` variables. Public Firebase project/app identifiers do not grant administrator access.
 
-## Documentation and historical recordings
+## Documentation
 
 - [11 · Sealed rounds](docs/11-sealed-rounds.md): authoritative current product and engineering guide.
 - [15 · September website feedback](docs/15-september-feedback.md): homepage logistics, registration, project discovery, bios, round history and judging updates; organizer controls and guarded publication steps.
 - [10 · Readiness audit](docs/10-product-audit.md): event facts, staffing, deployment and rehearsal still to confirm.
-- [Firebase setup](docs/FIREBASE-SETUP.md): infrastructure, safe migration and release steps.
-- Documents **01–09**: historical September 8–10 trading proposal and implementation notes, superseded by document 11.
-- [Historical walkthrough](docs/WALKTHROUGH.md): the September 9 video demonstrates the retired trading model. Its recording scripts have not been adapted for the sealed-round product; old preview links are not a current product walkthrough.
+- [Firebase setup](docs/FIREBASE-SETUP.md): infrastructure and release steps.
+- [Joining and approval](docs/14-joining-and-approval.md): Google signup, team selection, organizer invitations and access removal.
+- [Architecture](docs/architecture.md): current service boundaries, authorization and data flow.
+
+Owner-only maintenance: [fresh event reset](docs/16-fresh-event-reset.md).

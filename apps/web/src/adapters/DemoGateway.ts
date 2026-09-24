@@ -11,14 +11,12 @@ import {
 } from '../../../../packages/application/src/platform-fixtures';
 import type { AppSnapshot, Command } from '@robinhacks/core';
 import type { AppGateway, SessionUser } from '../app/gateway';
-import { MarketRefreshScheduler } from '../app/MarketRefreshScheduler';
-// The 0–5 judging release starts fresh; old demo score sheets used a 0–10 scale.
-const STORE = 'emergent-hacks-demo-v3';
+// A fresh namespace keeps the current signup/team flow separate from earlier demos.
+const STORE = 'emergent-hacks-demo-v4';
 export class DemoGateway implements AppGateway {
   readonly mode = 'demo' as const;
   user: SessionUser | null = PLATFORM_USERS.captain;
   private listeners = new Set<() => void>();
-  private latestSnapshot: AppSnapshot | null = null;
   private repository = new MemoryRepository(createPlatformDemoDocuments(), {
     load: () => {
       try {
@@ -34,10 +32,6 @@ export class DemoGateway implements AppGateway {
     window.addEventListener('storage', (e) => {
       if (e.key === STORE) this.emit();
     });
-    new MarketRefreshScheduler(
-      () => (this.user ? this.latestSnapshot : null),
-      () => this.command({ type: 'refreshMarket', commandId: crypto.randomUUID() }),
-    );
   }
   private emit() {
     this.listeners.forEach((listener) => listener());
@@ -58,8 +52,7 @@ export class DemoGateway implements AppGateway {
   }
   async snapshot(): Promise<AppSnapshot> {
     if (!this.user) return this.service.publicSnapshot();
-    this.latestSnapshot = await this.service.snapshot(this.user.uid, this.user);
-    return this.latestSnapshot;
+    return this.service.snapshot(this.user.uid, this.user);
   }
   async command(command: Command) {
     if (!this.user) throw new Error('Sign in to continue.');
@@ -67,17 +60,11 @@ export class DemoGateway implements AppGateway {
     this.emit();
     return result;
   }
-  async verifyEmail() {
-    /* Every fictional demo identity is already verified. */
-  }
   async refreshIdentity() {
     this.emit();
   }
   async conversation(otherTeamId: string) {
     return this.service.conversation(this.user?.uid ?? '', otherTeamId);
-  }
-  async pool(issuerId: string) {
-    return this.service.pool(this.user?.uid ?? '', issuerId);
   }
   async exportEvent() {
     return this.service.exportEvent(this.user?.uid ?? '');
@@ -86,9 +73,9 @@ export class DemoGateway implements AppGateway {
     this.user = PLATFORM_USERS[role];
     this.emit();
   }
-  async resetDemo(phase: 'seed' | 'trading' | 'judging' = 'trading') {
+  async resetDemo(phase: 'registration' | 'funding' | 'judging' = 'funding') {
     this.repository.replace(createPlatformDemoDocuments(phase));
-    this.user = PLATFORM_USERS.captain;
+    this.user = phase === 'registration' ? PLATFORM_USERS.attendee : PLATFORM_USERS.captain;
     this.emit();
   }
 }

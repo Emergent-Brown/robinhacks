@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RULES, type AccessRequest, type Member } from '@robinhacks/core';
+import type { AccessRequest, Member } from '@robinhacks/core';
 import { Dialog, Field } from '../ui/primitives';
 import {
   Blank,
@@ -12,11 +12,13 @@ import {
   type CommandInput,
   type PageProps,
 } from './shared';
+import './team-formation.css';
+
+const isStaff = (role: Member['role']) => role === 'organizer' || role === 'judge';
+const roleLabel = (role: string) => (role === 'trader' ? 'Designated investor' : role);
 
 export function AdminMembers({ data, actions }: PageProps) {
-  const [review, setReview] = useState<AccessRequest | null>(null);
-  const [assignment, setAssignment] = useState('');
-  const [newTeamName, setNewTeamName] = useState('');
+  const [email, setEmail] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [checkedAt, setCheckedAt] = useState<number | null>(null);
   const [refreshError, setRefreshError] = useState('');
@@ -24,49 +26,35 @@ export function AdminMembers({ data, actions }: PageProps) {
     title: string;
     description: string;
     command: CommandInput;
+    label?: string;
   } | null>(null);
   const cmd = useCommand(actions);
+  const settings = config(data);
   const pending = data.requests
     .filter((request) => request.status === 'pending')
     .sort((a, b) => a.requestedAt - b.requestedAt);
   const members = data.members
     .filter((member) => member.status !== 'pending')
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
-  const activeTeams = data.market.entries
-    .map(({ team }) => team)
-    .filter((team) => team.eligibility === 'active')
-    .sort((a, b) => a.name.localeCompare(b.name));
-  const rosterEditable =
-    ['DRAFT', 'REGISTRATION'].includes(data.event!.phase) ||
-    (data.event!.paused &&
-      !data.event!.activeOperationId &&
-      ['SEED_OPEN', 'INTERMISSION', 'TRADING_OPEN', 'FROZEN'].includes(data.event!.phase));
-  const canApproveParticipants = rosterEditable && !config(data).rulesLockedAt;
-  const canCreateTeam =
-    canApproveParticipants &&
-    ['DRAFT', 'REGISTRATION'].includes(data.event!.phase) &&
-    data.market.entries.length < RULES.maxTeams;
-  const duplicateTeamName = activeTeams.some(
-    (team) => team.name.toLowerCase() === newTeamName.trim().toLowerCase(),
+  const unassigned = members.filter(
+    (member) => member.status === 'approved' && !isStaff(member.role) && !member.teamId,
   );
+  const registration = ['DRAFT', 'REGISTRATION'].includes(data.event!.phase);
+  const rosterEditable = registration || (data.event!.paused && !data.event!.activeOperationId);
+  const canApprove = registration && !settings.rulesLockedAt;
+  const formationOpen = !!settings.teamFormationOpen;
+  const approvedOrganizers = members.filter(
+    (member) => member.role === 'organizer' && member.status === 'approved',
+  ).length;
 
-  function openReview(request: AccessRequest) {
+  function confirm(title: string, description: string, command: CommandInput, label?: string) {
     cmd.clearError();
-    setReview(request);
-    const proposed = activeTeams.find(
-      (team) =>
-        team.id === request.teamId ||
-        (!!request.teamName && team.name.toLowerCase() === request.teamName.toLowerCase()),
-    );
-    setAssignment(proposed ? proposed.id : request.teamName && canCreateTeam ? 'new' : '');
-    setNewTeamName(request.teamId ? '' : request.teamName || '');
+    setConfirmation({ title, description, command, label });
   }
-
   async function checkRequests() {
     setRefreshing(true);
     setRefreshError('');
     try {
-      // The app refresh handles errors internally, so check the network result first.
       await actions.gateway.snapshot(true);
       await actions.refresh();
       setCheckedAt(Date.now());
@@ -78,37 +66,27 @@ export function AdminMembers({ data, actions }: PageProps) {
       setRefreshing(false);
     }
   }
-
-  function approveRequest(request: AccessRequest) {
-    if (!request.emailVerified || !request.email) return;
-    if (request.requestedRole && rosterEditable) {
-      void cmd.run(
-        {
-          type: 'setMemberRole',
-          uid: request.uid,
-          role: request.requestedRole,
-          status: 'approved',
-        },
-        () => setReview(null),
+  function approve(request: AccessRequest) {
+    if (request.requestedRole === 'judge') {
+      confirm(
+        'Approve judge access',
+        `Give ${request.displayName} (${request.email}) permission to judge assigned projects?`,
+        { type: 'setMemberRole', uid: request.uid, role: 'judge', status: 'approved' },
+        'Approve judge',
       );
-    } else if (canApproveParticipants && assignment === 'new' && canCreateTeam) {
-      if (newTeamName.trim().length < 2 || duplicateTeamName) return;
-      void cmd.run(
-        {
-          type: 'approveMembership',
-          uid: request.uid,
-          role: 'captain',
-          teamName: newTeamName.trim(),
-        },
-        () => setReview(null),
-      );
-    } else if (canApproveParticipants && activeTeams.some((team) => team.id === assignment)) {
-      void cmd.run(
-        { type: 'approveMembership', uid: request.uid, role: 'member', teamId: assignment },
-        () => setReview(null),
-      );
+    } else {
+      void cmd.run({ type: 'approveMembership', uid: request.uid });
     }
   }
+  function remove(uid: string, name: string, address?: string) {
+    confirm(
+      'Remove event access',
+      `Remove ${name} (${address || uid}) from this event? Their access request and team membership will be removed. Their project, investments, and submitted records will stay.`,
+      { type: 'removeMember', uid },
+      'Remove access',
+    );
+  }
+
   return (
     <>
       <Panel
@@ -124,8 +102,8 @@ export function AdminMembers({ data, actions }: PageProps) {
         }
       >
         <p className="muted">
-          People sign in with Google and enter their name. Check their email, assign a team, then
-          approve them here. Only organizers can grant access.
+          Check the attendee’s name and verified email, then approve access. They’ll choose their
+          own team when you open team selection.
         </p>
         {checkedAt && (
           <p className="muted" role="status">
@@ -142,46 +120,94 @@ export function AdminMembers({ data, actions }: PageProps) {
                 <strong>{request.displayName}</strong>
                 <p>
                   {request.email || 'Email unavailable'} ·{' '}
-                  {request.emailVerified ? 'Verified email' : 'Email not verified'} ·{' '}
-                  {stamp(request.requestedAt, config(data).details.timeZone)}
+                  {request.emailVerified ? 'Verified email' : 'Email not verified'}
                 </p>
                 <p>
-                  {request.requestedRole
-                    ? `Staff request: ${request.requestedRole}`
-                    : request.teamId
-                      ? `Requested ${request.teamName || teamName(data, request.teamId)}`
-                      : request.teamName
-                        ? `Suggested team: ${request.teamName}`
-                        : 'Needs a team assignment'}
+                  {request.requestedRole === 'judge' ? 'Judge request · ' : ''}
+                  {stamp(request.requestedAt, settings.details.timeZone)}
                 </p>
               </div>
-              <button
-                className="button primary"
-                disabled={
-                  !request.emailVerified ||
-                  !request.email ||
-                  cmd.pending ||
-                  (request.requestedRole ? !rosterEditable : !canApproveParticipants)
-                }
-                onClick={() => openReview(request)}
-              >
-                Review and approve
-              </button>
+              <div className="p-actions">
+                <button
+                  className="button primary"
+                  disabled={
+                    !request.emailVerified ||
+                    !request.email ||
+                    cmd.pending ||
+                    (request.requestedRole === 'judge' ? !rosterEditable : !canApprove)
+                  }
+                  onClick={() => approve(request)}
+                >
+                  Approve{request.requestedRole === 'judge' ? ' judge' : ''}
+                </button>
+                <button
+                  className="p-link p-member-danger"
+                  disabled={cmd.pending || !rosterEditable}
+                  onClick={() => remove(request.uid, request.displayName, request.email)}
+                >
+                  Remove
+                </button>
+              </div>
             </li>
           ))}
         </ul>
-        {!canApproveParticipants && pending.some((request) => !request.requestedRole) && (
-          <p className="muted">Team approval is closed after the first funding round.</p>
+        {!canApprove && (
+          <p className="muted">Participant approvals close when the first funding round opens.</p>
         )}
-        {!rosterEditable && pending.some((request) => request.requestedRole) && (
-          <p className="muted">Pause the event before approving staff access.</p>
-        )}
+      </Panel>
+      <Panel
+        title="Team selection"
+        aside={<span className="p-status">{formationOpen ? 'Open' : 'Closed'}</span>}
+      >
+        <p>
+          <strong>{unassigned.length}</strong> approved{' '}
+          {unassigned.length === 1 ? 'participant is' : 'participants are'} waiting to choose a
+          team.
+        </p>
+        <p className="muted">
+          When open, approved participants create or join a team and choose an available role.
+          Everyone needs a team before using the event workspace. Close team selection before
+          opening the first funding round.
+        </p>
+        <button
+          className="button primary"
+          disabled={
+            cmd.pending ||
+            data.event!.phase !== 'REGISTRATION' ||
+            !!settings.rulesLockedAt ||
+            data.event!.paused
+          }
+          onClick={() =>
+            confirm(
+              formationOpen ? 'Close team selection' : 'Start team selection',
+              formationOpen
+                ? `Close team selection now? ${unassigned.length} approved participants still need a team and will remain on the waiting screen until selection reopens.`
+                : 'Let approved participants create or join a team and choose their role now?',
+              {
+                type: 'setTeamFormation',
+                open: !formationOpen,
+                expectedPhaseVersion: data.event!.phaseVersion,
+              },
+              formationOpen ? 'Close team selection' : 'Start team selection',
+            )
+          }
+        >
+          {formationOpen ? 'Close team selection' : 'Start team selection'}
+        </button>
+        {settings.rulesLockedAt && <p className="muted">Team rosters locked when funding began.</p>}
+        {data.event!.paused && <p className="muted">Resume the event to change team selection.</p>}
       </Panel>
       <Panel title="Members and staff">
         <p className="muted">
-          Rosters lock when the first funding round opens. To suspend event access after that point,
-          pause the event first. Existing team members cannot become judges or organizers.
+          Each team has one captain and up to one designated investor. Other teammates join as
+          members. Pause the event before removing access after registration.
         </p>
+        {settings.rulesLockedAt && data.event!.paused && (
+          <p className="p-note">
+            If a captain or designated investor is missing, use an approved teammate’s role menu to
+            fill the vacant role. Existing filled roles stay locked.
+          </p>
+        )}
         {!members.length ? (
           <Blank>No approved members yet.</Blank>
         ) : (
@@ -195,147 +221,150 @@ export function AdminMembers({ data, actions }: PageProps) {
                 </tr>
               </thead>
               <tbody>
-                {members.map((member) => (
-                  <tr key={member.uid}>
-                    <td>
-                      <strong>{member.displayName}</strong>
-                      <small className="p-cell-note p-break">
-                        {member.email || 'Email unavailable'} ·{' '}
-                        {member.emailVerified ? 'Verified' : 'Unverified'}
-                      </small>
-                    </td>
-                    <td>
-                      {member.teamId ? teamName(data, member.teamId) : 'Staff'}
-                      <small className="p-cell-note">
-                        {member.role === 'trader' ? 'Designated investor' : member.role}
-                      </small>
-                    </td>
-                    <td>
-                      <MemberActions
-                        member={member}
-                        disabled={cmd.pending}
-                        onChange={(command) =>
-                          setConfirmation({
-                            title: 'Change event access',
-                            description: `Apply this access change for ${member.displayName} (${member.email || member.uid})? New role: ${command.role}. Status: ${command.status}.`,
-                            command,
-                          })
-                        }
-                      />
-                    </td>
-                  </tr>
-                ))}
+                {members.map((member) => {
+                  const protectedMember =
+                    member.uid === data.member?.uid ||
+                    (member.role === 'organizer' &&
+                      member.status === 'approved' &&
+                      approvedOrganizers <= 1);
+                  return (
+                    <tr key={member.uid}>
+                      <td>
+                        <strong>{member.displayName}</strong>
+                        <small className="p-cell-note p-break">
+                          {member.email || 'Email unavailable'}
+                        </small>
+                      </td>
+                      <td>
+                        {member.teamId
+                          ? teamName(data, member.teamId)
+                          : isStaff(member.role)
+                            ? 'Staff'
+                            : 'Waiting for a team'}
+                        <small className="p-cell-note">{roleLabel(member.role)}</small>
+                      </td>
+                      <td>
+                        <MemberActions
+                          member={member}
+                          roles={memberRoleOptions(member, data)}
+                          disabled={cmd.pending || !rosterEditable || protectedMember}
+                          onChange={(command) =>
+                            confirm(
+                              'Change event access',
+                              `Change ${member.displayName} (${member.email || member.uid}) to ${roleLabel(command.role)}, with ${command.status} access?`,
+                              command,
+                            )
+                          }
+                          onRemove={() => remove(member.uid, member.displayName, member.email)}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </Panel>
-      <ErrorMessage>{cmd.error}</ErrorMessage>
-      {review && (
-        <Dialog
-          title={review.requestedRole ? `Approve ${review.requestedRole}` : 'Approve participant'}
-          onClose={() => setReview(null)}
+      <Panel title="Organizer emails">
+        <p>
+          Add a Google account email to grant organizer access. That person will receive access when
+          they next sign in or refresh the site.
+        </p>
+        <form
+          className="p-inline-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const address = email.trim().toLowerCase();
+            confirm(
+              'Grant organizer access',
+              `Give ${address} organizer access? They will be able to approve attendees, manage the event, change settings, and publish results.`,
+              { type: 'addOrganizerEmail', email: address },
+              'Add organizer email',
+            );
+          }}
         >
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              approveRequest(review);
-            }}
+          <Field label="Google account email">
+            <input
+              type="email"
+              autoComplete="off"
+              required
+              maxLength={254}
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="name@example.com"
+            />
+          </Field>
+          <button
+            className="button secondary"
+            disabled={cmd.pending || !email.trim() || !rosterEditable}
           >
-            <p>
-              <strong>{review.displayName}</strong>
-              <br />
-              {review.email} · Verified email
-            </p>
-            {review.requestedRole ? (
-              <p>
-                This gives {review.displayName} {review.requestedRole} permissions. Verify that they
-                are staff before approving.
-              </p>
-            ) : (
-              <>
-                <Field label="Assign to team">
-                  <select
-                    required
-                    value={assignment}
-                    onChange={(event) => setAssignment(event.target.value)}
-                  >
-                    <option value="" disabled>
-                      Choose a team
-                    </option>
-                    {activeTeams.map((team) => (
-                      <option key={team.id} value={team.id}>
-                        {team.name}
-                      </option>
-                    ))}
-                    {canCreateTeam && <option value="new">Create a new team</option>}
-                  </select>
-                </Field>
-                {assignment === 'new' && (
-                  <Field label="New team name">
-                    <input
-                      required
-                      minLength={2}
-                      maxLength={60}
-                      value={newTeamName}
-                      onChange={(event) => setNewTeamName(event.target.value)}
-                      placeholder="Enter the team's name"
-                    />
-                  </Field>
-                )}
-                {assignment === 'new' && duplicateTeamName && (
-                  <p className="p-error">That team already exists. Choose it from the list.</p>
-                )}
-                <p className="muted">
-                  {assignment === 'new'
-                    ? `${review.displayName} will become the new team's captain.`
-                    : assignment
-                      ? `${review.displayName} will join as a team member.`
-                      : 'Choose the team this person belongs to.'}
-                </p>
-                {!canApproveParticipants && (
-                  <p className="p-error">Team approvals are closed for this event.</p>
-                )}
-              </>
-            )}
-            <ErrorMessage>{cmd.error}</ErrorMessage>
-            <div className="p-actions">
-              <button
-                className="button primary"
-                disabled={
-                  cmd.pending ||
-                  !review.emailVerified ||
-                  !review.email ||
-                  (review.requestedRole && !rosterEditable) ||
-                  (!review.requestedRole &&
-                    (!canApproveParticipants ||
-                      !assignment ||
-                      (assignment === 'new' &&
-                        (!canCreateTeam || newTeamName.trim().length < 2 || duplicateTeamName))))
-                }
-              >
-                {cmd.pending ? 'Approving…' : 'Approve access'}
-              </button>
-              <button className="button secondary" type="button" onClick={() => setReview(null)}>
-                Cancel
-              </button>
-            </div>
-          </form>
-        </Dialog>
-      )}
+            Add organizer
+          </button>
+        </form>
+        {!!data.organizerInvites?.length && (
+          <ul className="p-admin-invites">
+            {data.organizerInvites.map((invite) => (
+              <li key={invite.email}>
+                <div>
+                  <strong>{invite.email}</strong>
+                  <small className="p-cell-note">
+                    Added {stamp(invite.createdAt, settings.details.timeZone)}
+                  </small>
+                </div>
+                <button
+                  className="p-link p-member-danger"
+                  disabled={
+                    cmd.pending ||
+                    !rosterEditable ||
+                    data.members.some(
+                      (member) =>
+                        member.email?.toLowerCase() === invite.email.toLowerCase() &&
+                        (member.uid === data.member?.uid ||
+                          (member.role === 'organizer' &&
+                            member.status === 'approved' &&
+                            approvedOrganizers <= 1)),
+                    )
+                  }
+                  onClick={() =>
+                    confirm(
+                      'Remove organizer email',
+                      `Remove organizer access for ${invite.email}? This removes their email invitation and any existing organizer membership for this account. Submitted event records stay.`,
+                      { type: 'removeOrganizerEmail', email: invite.email },
+                      'Remove organizer access',
+                    )
+                  }
+                >
+                  Remove access
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+      <ErrorMessage>{cmd.error}</ErrorMessage>
       {confirmation && (
-        <Dialog title={confirmation.title} onClose={() => setConfirmation(null)}>
+        <Dialog title={confirmation.title} onClose={() => !cmd.pending && setConfirmation(null)}>
           <p>{confirmation.description}</p>
           <ErrorMessage>{cmd.error}</ErrorMessage>
           <div className="p-actions">
             <button
               className="button primary"
               disabled={cmd.pending}
-              onClick={() => void cmd.run(confirmation.command, () => setConfirmation(null))}
+              onClick={() =>
+                void cmd.run(confirmation.command, () => {
+                  if (confirmation.command.type === 'addOrganizerEmail') setEmail('');
+                  setConfirmation(null);
+                })
+              }
             >
-              Confirm change
+              {cmd.pending ? 'Saving…' : confirmation.label || 'Confirm change'}
             </button>
-            <button className="button secondary" onClick={() => setConfirmation(null)}>
+            <button
+              className="button secondary"
+              disabled={cmd.pending}
+              onClick={() => setConfirmation(null)}
+            >
               Cancel
             </button>
           </div>
@@ -344,22 +373,27 @@ export function AdminMembers({ data, actions }: PageProps) {
     </>
   );
 }
+
 function MemberActions({
   member,
+  roles,
   disabled,
   onChange,
+  onRemove,
 }: {
   member: Member;
+  roles: Member['role'][];
   disabled: boolean;
   onChange: (command: Extract<CommandInput, { type: 'setMemberRole' }>) => void;
+  onRemove: () => void;
 }) {
   return (
-    <div className="p-actions">
+    <div className="p-member-controls">
       <span>{member.status}</span>
       <select
         aria-label={`Change role for ${member.displayName}`}
         value={member.role}
-        disabled={disabled}
+        disabled={disabled || roles.length < 2}
         onChange={(event) =>
           onChange({
             type: 'setMemberRole',
@@ -369,9 +403,9 @@ function MemberActions({
           })
         }
       >
-        {(member.teamId ? ['captain', 'trader', 'member'] : ['judge', 'organizer']).map((role) => (
+        {roles.map((role) => (
           <option key={role} value={role}>
-            {role === 'trader' ? 'Designated investor' : role}
+            {roleLabel(role)}
           </option>
         ))}
       </select>
@@ -389,6 +423,41 @@ function MemberActions({
       >
         {member.status === 'suspended' ? 'Restore' : 'Suspend'}
       </button>
+      <button className="p-link p-member-danger" disabled={disabled} onClick={onRemove}>
+        Remove
+      </button>
     </div>
   );
+}
+
+/** Show only role changes the server permits, including a vacant-role recovery while paused. */
+function memberRoleOptions(member: Member, data: PageProps['data']): Member['role'][] {
+  if (!member.teamId)
+    return member.role === 'organizer'
+      ? ['organizer', 'judge']
+      : member.role === 'judge'
+        ? ['judge']
+        : ['member', 'judge'];
+  const others = data.members.filter(
+    (candidate) =>
+      candidate.teamId === member.teamId &&
+      candidate.uid !== member.uid &&
+      candidate.status === 'approved',
+  );
+  const available = (role: Member['role']) =>
+    role === 'member' || !others.some((candidate) => candidate.role === role);
+  if (!config(data).rulesLockedAt)
+    return (['captain', 'trader', 'member'] as const).filter(
+      (role) => role === member.role || available(role),
+    );
+  const result: Member['role'][] = [member.role];
+  if (
+    member.status !== 'approved' ||
+    !data.event!.paused ||
+    ['FINALIZED', 'CANCELLED', 'ARCHIVED'].includes(data.event!.phase)
+  )
+    return result;
+  if (member.role !== 'captain' && available('captain')) result.push('captain');
+  if (member.role === 'member' && available('trader')) result.push('trader');
+  return result;
 }

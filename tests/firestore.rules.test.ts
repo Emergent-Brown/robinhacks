@@ -5,15 +5,11 @@ import { GameService } from '@robinhacks/application';
 import type { EventConfig } from '@robinhacks/core';
 import {
   createPlatformDemoDocuments,
+  DEMO_EVENT_ID,
   PLATFORM_USERS,
 } from '../packages/application/src/platform-fixtures';
 import { FirestoreRepository } from '../apps/functions/src/firestore-repository';
 import { FirestorePosterStore } from '../apps/functions/src/firestore-poster-store';
-import {
-  createDemoDocuments,
-  DEMO_EVENT_ID,
-  DEMO_USERS,
-} from '../packages/application/src/fixtures';
 import { beforeAll, afterAll, describe, expect, it } from 'vitest';
 import {
   initializeTestEnvironment,
@@ -46,7 +42,14 @@ const member = (
   teamId: string | null = 'team-a',
 ) => ({ uid, displayName: uid, teamId, role, status, version: 1 });
 
+const googleClaims = {
+  email_verified: true,
+  firebase: { sign_in_provider: 'google.com' as const },
+};
+
 const privatePaths = [
+  'organizerInvites/invited@example.test',
+  'removedMembers/previous-captain',
   'members/captain',
   'members/teammate',
   'members/pending',
@@ -139,7 +142,7 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
       batch.set(doc(db, eventRoot), {
         id: 'rules-test-event',
         name: 'Rules test',
-        phase: 'SEED_OPEN',
+        phase: 'REGISTRATION',
         phaseVersion: 1,
       });
       batch.set(doc(db, `${eventRoot}/views/market`), { entries: [], phaseVersion: 1 });
@@ -156,6 +159,10 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
         member('organizer', 'organizer', 'approved', null),
       );
       batch.set(doc(db, `${eventRoot}/members/judge`), member('judge', 'judge', 'approved', null));
+      batch.set(
+        doc(db, `${eventRoot}/members/unassigned`),
+        member('unassigned', 'member', 'approved', null),
+      );
       batch.set(doc(db, `${eventRoot}/teamInboxes/team-a`), { conversations: [] });
       batch.set(
         doc(db, `${eventRoot}/members/pending`),
@@ -183,12 +190,27 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
       'suspended',
       'outsider',
       'foreign-member',
+      'unassigned',
     ]) {
-      databases[uid] = environment.authenticatedContext(uid).firestore();
+      databases[uid] = environment.authenticatedContext(uid, googleClaims).firestore();
     }
+    databases.password = environment
+      .authenticatedContext('captain', {
+        ...googleClaims,
+        firebase: { sign_in_provider: 'password' },
+      })
+      .firestore();
+    databases.unverified = environment
+      .authenticatedContext('captain', { ...googleClaims, email_verified: false })
+      .firestore();
     databases.anonymous = environment.unauthenticatedContext().firestore();
     databases['forged-claims'] = environment
-      .authenticatedContext('outsider', { role: 'organizer', admin: true, teamId: 'team-a' })
+      .authenticatedContext('outsider', {
+        ...googleClaims,
+        role: 'organizer',
+        admin: true,
+        teamId: 'team-a',
+      })
       .firestore();
   }, 30_000);
 
@@ -239,14 +261,20 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
     },
   );
 
-  it.each(['anonymous', 'outsider', 'pending', 'suspended', 'foreign-member', 'forged-claims'])(
-    'denies %s event and market access',
-    async (uid) => {
-      const db = databases[uid]!;
-      await assertFails(getDoc(doc(db, eventRoot)));
-      await assertFails(getDoc(doc(db, `${eventRoot}/views/market`)));
-    },
-  );
+  it.each([
+    'anonymous',
+    'outsider',
+    'pending',
+    'suspended',
+    'foreign-member',
+    'forged-claims',
+    'password',
+    'unverified',
+  ])('denies %s event and market access', async (uid) => {
+    const db = databases[uid]!;
+    await assertFails(getDoc(doc(db, eventRoot)));
+    await assertFails(getDoc(doc(db, `${eventRoot}/views/market`)));
+  });
 
   it('does not carry membership across event boundaries', async () => {
     await assertFails(getDoc(doc(databases.captain!, otherEventRoot)));
@@ -346,83 +374,89 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
     );
   });
 
-  it('uses real buffered Firestore transactions for team approval and resumable funding', async () => {
-    const adminApp = initializeApp({ projectId: 'demo-robinhacks' }, 'rules-adapter-integration');
+  it('isolates unassigned participants, reserves formation roles atomically, and revokes removed users', async () => {
+    await assertSucceeds(getDoc(doc(databases.unassigned!, eventRoot)));
+    await assertFails(getDoc(doc(databases.unassigned!, `${eventRoot}/views/market`)));
+    await assertFails(getDoc(doc(databases.unassigned!, `${eventRoot}/teamInboxes/team-a`)));
+    const adminApp = initializeApp({ projectId: 'demo-robinhacks' }, 'formation-adapter');
     try {
       const admin = getFirestore(adminApp);
-      const id = 'adapter-integration';
-      const adapterRoot = `events/${id}`;
+      const id = 'formation-adapter';
+      const root = `events/${id}`;
+      const now = Date.now();
+      const fixtures = createPlatformDemoDocuments('registration', now);
       const originalRoot = `events/${DEMO_EVENT_ID}`;
-      const now = 10_000_000;
-      const fixtures = createDemoDocuments('seed', now);
       const event = fixtures[originalRoot] as EventConfig;
       event.id = id;
-      event.phase = 'REGISTRATION';
-      const seed = admin.batch();
+      const batch = admin.batch();
       for (const [path, value] of Object.entries(fixtures))
-        seed.set(
-          admin.doc(path.replace(originalRoot, adapterRoot)),
-          value as Record<string, unknown>,
-        );
-      await seed.commit();
+        batch.set(admin.doc(path.replace(originalRoot, root)), value as Record<string, unknown>);
+      await batch.commit();
       const service = new GameService(new FirestoreRepository(admin), id, { now: () => now });
-      const newcomer = { uid: 'adapter-new-captain', displayName: 'Emulator captain' };
-      await service.execute(newcomer, {
-        type: 'requestMembership',
-        commandId: 'adapter-request-0001',
-        displayName: newcomer.displayName,
-        teamName: 'Emulator Works',
+      const newcomers = ['one', 'two', 'three'].map((name) => ({
+        uid: `formation-${name}`,
+        displayName: `Attendee ${name}`,
+        email: `${name}@example.test`,
+        emailVerified: true,
+      }));
+      for (const newcomer of newcomers) {
+        await service.execute(newcomer, {
+          type: 'requestMembership',
+          commandId: `request-${newcomer.uid}`,
+          displayName: newcomer.displayName,
+        });
+        await service.execute(PLATFORM_USERS.organizer, {
+          type: 'approveMembership',
+          commandId: `approve-${newcomer.uid}`,
+          uid: newcomer.uid,
+        });
+      }
+      const before = await service.snapshot(newcomers[0]!.uid);
+      expect(before.member?.teamId).toBeNull();
+      expect(before.market.entries).toEqual([]);
+      await service.execute(PLATFORM_USERS.organizer, {
+        type: 'setTeamFormation',
+        commandId: 'formation-open-0001',
+        open: true,
+        expectedPhaseVersion: before.event!.phaseVersion,
       });
-      await service.execute(DEMO_USERS.organizer, {
-        type: 'approveMembership',
-        commandId: 'adapter-approve-0001',
-        uid: newcomer.uid,
+      await service.execute(newcomers[0]!, {
+        type: 'createFormationTeam',
+        commandId: 'formation-create-0001',
+        name: 'Emulator Works',
         role: 'captain',
       });
-      const approved = await service.snapshot(newcomer.uid);
-      expect(approved.wallet?.cashMinor).toBe(1_000_000);
-      expect(approved.market.entries).toHaveLength(13);
-      expect(approved.market.entries.some((entry) => entry.team.name === 'Emulator Works')).toBe(
-        true,
+      const created = await service.snapshot(newcomers[0]!.uid);
+      const teamId = created.member!.teamId!;
+      const claims = await Promise.allSettled(
+        newcomers.slice(1).map((actor) =>
+          service.execute(actor, {
+            type: 'joinFormationTeam',
+            commandId: `join-${actor.uid}`,
+            teamId,
+            role: 'trader',
+          }),
+        ),
       );
-      expect(approved.members.some((member) => member.uid === newcomer.uid)).toBe(true);
-      await service.execute(DEMO_USERS.organizer, {
-        type: 'transitionEvent',
-        commandId: 'adapter-open-seed-0001',
-        target: 'SEED_OPEN',
-        expectedPhaseVersion: approved.event!.phaseVersion,
+      expect(claims.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      const roster = await admin.collection(`${root}/members`).where('teamId', '==', teamId).get();
+      expect(roster.docs.filter((doc) => doc.data().role === 'trader')).toHaveLength(1);
+      const client = environment.authenticatedContext(newcomers[0]!.uid, googleClaims).firestore();
+      await assertSucceeds(getDoc(doc(client, root)));
+      await service.execute(PLATFORM_USERS.organizer, {
+        type: 'removeMember',
+        commandId: 'formation-remove-0001',
+        uid: newcomers[0]!.uid,
       });
-      await service.execute(newcomer, {
-        type: 'setSeedCommitments',
-        commandId: 'adapter-commit-seed-0001',
-        shares: { 'team-2': 12 },
-        expectedWalletVersion: 0,
-        expectedCommitmentVersion: 0,
-      });
-      const opened = await service.snapshot(DEMO_USERS.organizer.uid);
-      await service.execute(DEMO_USERS.organizer, {
-        type: 'transitionEvent',
-        commandId: 'adapter-close-seed-0001',
-        target: 'SEED_SETTLING',
-        expectedPhaseVersion: opened.event!.phaseVersion,
-      });
-      for (let i = 0; i < 14; i++) {
-        const command = {
-          type: 'continueOperation' as const,
-          commandId: `adapter-continue-${String(i).padStart(4, '0')}`,
-        };
-        const first = await service.execute(DEMO_USERS.organizer, command);
-        if (i === 0) expect(await service.execute(DEMO_USERS.organizer, command)).toEqual(first);
-      }
-      const settled = await service.snapshot(newcomer.uid);
-      expect(settled.event?.phase).toBe('INTERMISSION');
-      expect(settled.wallet?.cashMinor).toBe(880_000);
-      expect(settled.wallet?.reservedSeedMinor).toBe(0);
-      expect(settled.positions.find((position) => position.issuerId === 'team-2')?.shares).toBe(12);
-      expect(
-        settled.market.entries.find((entry) => entry.team.id === 'team-2')?.issuer
-          .fundingVaultMinor,
-      ).toBe(120_000);
+      await assertFails(getDoc(doc(client, root)));
+      await assertFails(getDoc(doc(client, `${root}/views/market`)));
+      expect((await service.snapshot(newcomers[0]!.uid)).member).toBeNull();
+      await admin.doc(root).update({ maintenance: true });
+      const organizerClient = environment
+        .authenticatedContext(PLATFORM_USERS.organizer.uid, googleClaims)
+        .firestore();
+      await assertFails(getDoc(doc(organizerClient, root)));
+      await expect(service.snapshot(PLATFORM_USERS.organizer.uid)).rejects.toThrow();
     } finally {
       await deleteApp(adminApp);
     }
@@ -435,7 +469,9 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
     const db = getFirestore(adminApp);
     try {
       const batch = db.batch();
-      for (const [path, value] of Object.entries(createPlatformDemoDocuments('seed', now))) {
+      for (const [path, value] of Object.entries(
+        createPlatformDemoDocuments('registration', now),
+      )) {
         const target = path.replace(`events/${DEMO_EVENT_ID}`, `events/${id}`);
         batch.set(
           db.doc(target),

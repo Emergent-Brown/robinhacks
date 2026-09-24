@@ -2,7 +2,7 @@
 
 This repository uses the existing `robinhacks-2026-ajs` Firebase project. Its participant-facing name is **Emergent Hacks**. Renaming the product does not rename the project, event ID or Hosting domains.
 
-**September 14 release status:** the sealed-round source is implemented. Production deployment and the version-two event migration are pending verification. The existing live site may still run the earlier trading release. Do not open funding until the deployed version and event configuration have been confirmed.
+The source implements sealed funding rounds with Google-only signup, independent approval and organizer-controlled team selection. The deployment record below distinguishes published releases from current source changes.
 
 ## Configured resources
 
@@ -15,12 +15,12 @@ This repository uses the existing `robinhacks-2026-ajs` Firebase project. Its pa
 | Event ID | `robinhacks-2026` |
 | Database | `(default)`, Firestore Standard, `us-west1` |
 | Web app | App ID `1:594324444355:web:beae64a96445b8e3707e76` |
-| Sign-in | Google and email/password |
+| Sign-in | Google only |
 | Initial organizer | Configured verified Google identity, separate from competing teams |
 | Billing | Blaze, linked to an owner-managed billing account |
-| Current server source | Six second-generation callables in `us-west1`: `gameCommand`, `gameSnapshot`, `gamePublic`, `gameConversation`, `gameExport`, retained legacy `gamePool` |
+| Current server source | Six second-generation callables in `us-west1`: `gameCommand`, `gameSnapshot`, `gamePublic`, `gameConversation`, `gameExport`, `posterStats`; HTTP redirect `posterVisit` |
 
-The original resources and organizer/event were provisioned September 8, 2026. Sample teams belong to local browser/emulator fixtures, not production. `gamePublic` and `gameConversation` are additions in the sealed-round release; their presence in source does not establish deployment.
+Sample teams belong to local browser/emulator fixtures, not production. Current source does not establish which release is deployed; verify the live client and Functions after publication.
 
 ## Local configuration
 
@@ -55,7 +55,7 @@ Copy the operations example only if the local file does not already exist, then 
 cp .env.operations.example .env.operations
 ```
 
-That ignored file is operational configuration, not a place for tokens or passwords. Bootstrap and migration verify the identity against the existing Firebase CLI login. Keep the populated original workstation file instead of replacing it with placeholders.
+That ignored file is operational configuration, not a place for tokens or passwords. Bootstrap and maintenance scripts verify the identity against the existing Firebase CLI login. Keep the populated original workstation file instead of replacing it with placeholders.
 
 ## Initial bootstrap
 
@@ -71,27 +71,7 @@ After reviewing an empty-project preflight:
 node --env-file=.env.operations scripts/bootstrap-firebase.mjs --project robinhacks-2026-ajs --apply
 ```
 
-Fresh bootstrap links the exact verified Google identity and creates a version-two sealed-round Registration event with the September 26–27 schedule at the Nelson Center for Entrepreneurship, zero prize amounts and separate organizer membership. It loads the same default configuration as the application. It recognizes an existing compatible version-one or version-two event without modifying its metadata or permissions. It uses the CLI session rather than creating a service-account key or exposing a public bootstrap endpoint. The adapter uses Firebase CLI internals; rerun preflight after a CLI upgrade. `FIREBASE_TOOLS_DIR` can select a compatible installed package if automatic discovery selects an older cached copy.
-
-## Migrate an unused legacy event to sealed rounds
-
-Fresh version-two bootstraps do not need migration. This upgrade is for an existing, unused version-one event. It is explicit, bounded and idempotent. Run the preflight first:
-
-```sh
-node --env-file=.env.operations scripts/upgrade-sealed-funding.mjs --project robinhacks-2026-ajs
-```
-
-The script requires the selected project to match `.firebaserc`, the verified CLI identity to already be an approved separate organizer, and the event to be in untouched Draft/Registration. It rejects prior financial activity, including used wallets, non-genesis receipts, holdings, commitments or funded project vaults. A started historical event must be preserved as its own version; do not erase or convert its trades to new allocations.
-
-If preflight confirms there is no historical financial activity, apply the same reviewed upgrade:
-
-```sh
-node --env-file=.env.operations scripts/upgrade-sealed-funding.mjs --project robinhacks-2026-ajs --apply
-```
-
-The transaction archives the previous event metadata in `migrations/sealed-v2`, retains existing identities/project records, initializes `platform.version = 2`, resets only unused event phase metadata, and records the actor in the audit. It clears the old placeholder venues “Hackathon” and “Silicon Valley,” preserves other existing venue values, and does not insert example teams or announce invented event facts. Repeating it for an already-upgraded event reports zero writes.
-
-The new configuration defaults to three 100-credit rounds, 40/35/25 reward weights and a 200-credit denominator. **All actual prize amounts remain zero.** Configure confirmed event facts, prize commitments, reserve destination and rubric in Admin before opening round one. First opening locks the financial and judging rules plus competing rosters.
+Fresh bootstrap links the exact verified Google identity and creates a version-two sealed-round Registration event with the September 26–27 schedule at the Nelson Center for Entrepreneurship, zero prize amounts and separate organizer membership. It loads the same default configuration as the application. An existing event is inspected rather than reset by bootstrap. It uses the CLI session rather than creating a service-account key or exposing a public bootstrap endpoint. The adapter uses Firebase CLI internals; rerun preflight after a CLI upgrade. `FIREBASE_TOOLS_DIR` can select a compatible installed package if automatic discovery selects an older cached copy.
 
 ## Deploy the release
 
@@ -101,7 +81,7 @@ npm run test:emulator
 npm run deploy
 ```
 
-`deploy` builds the client and Functions, then deploys classic Hosting, Firestore rules/indexes and the six Functions in the selected project. The legacy `gamePool` remains available only for version-one events; version-two events have no tradable pools. `gamePublic` serves limited signed-out event information, and `gameConversation` authorizes a specific team conversation.
+`deploy` builds the client and Functions, then deploys classic Hosting, Firestore rules/indexes and the current Functions in the selected project. `gamePublic` serves limited signed-out event information, and `gameConversation` authorizes a specific team conversation.
 
 Auth configuration is separate from routine deployment, in ignored `firebase.auth.local.json`. To configure Auth on a new workstation, copy the example, replace the Google support email with the approved support address, and review the authorized domains:
 
@@ -112,24 +92,24 @@ npx -y firebase-tools@latest deploy --config firebase.auth.local.json --only aut
 
 Do not overwrite an existing populated local Auth file. The root lockfile pins the workspace install. `apps/functions/package-lock.json` separately pins the Cloud Build server install; regenerate it with `npm install --package-lock-only --workspaces=false` from that directory when server dependencies change.
 
-After deployment and either fresh bootstrap or legacy migration, verify all six callable names, the new public homepage, the version-two event configuration and the current UI. Before real teams register, run the read-only initial-state verifier:
+After deployment, verify the six callables, the poster redirect, public homepage, event configuration and current UI. Before real teams register, run the read-only initial-state verifier:
 
 ```sh
 node --env-file=.env.operations scripts/verify-firebase.mjs
 ```
 
-It checks version-two Registration, the existing organizer, an empty project roster, unauthenticated command denial and the limited public metadata endpoint. After registration starts, its intentionally strict empty-event assertions no longer apply. A successful Hosting upload alone does not confirm backend rules or event migration.
+It checks version-two Registration, the existing organizer, an empty project roster, unauthenticated command denial and the limited public metadata endpoint. After registration starts, its intentionally strict empty-event assertions no longer apply. A successful Hosting upload alone does not confirm backend rules or event configuration.
 
-## Sign-in, verified identity and staff approval
+## Sign-in, approval and team selection
 
-1. Open the hosted app and sign in with the existing organizer Google account. Verify that **Admin → Access** is available.
-2. A participant can use Google or create an email/password account. An unverified email account cannot request event membership.
-3. In the verification screen, explicitly choose **Send verification email**. The same action can resend it if needed. Follow the email link, return to the app and choose **Check verification** to reload the identity and refresh the token.
-4. Submit a team, judge or organizer access request. The existing organizer sees the verified account email and checks the actual attendee/staff identity before approval.
-5. Approve a first captain to create a team, or an existing-team participant before the first funding round. Version-two approval creates no legacy exchange or tradable credits. Approve a named backup organizer and independent judges through the staff controls.
-6. Before opening funding, confirm the roster and the designated investor role. Competing memberships and roles lock once round one opens. Judges/organizers remain separate team-less identities; privileged staff do not receive an investing account.
+1. Sign in with the organizer Google account. Confirm **Admin → Access** is available.
+2. A participant signs in with Google, confirms their name and verified email, and submits a request.
+3. Approve the attendee in Admin → Access. They remain unassigned and cannot enter the workspace yet.
+4. Select **Start team selection**. The attendee creates or joins a team and chooses Captain, Designated investor or Member. Staff accounts skip this step.
+5. Add backup organizers through **Organizer emails**. Their matching verified Google account receives organizer access on sign-in or refresh. Assign judges from approved unassigned accounts.
+6. Confirm every participating team has a captain and required checkpoint before opening funding. The first round locks competing memberships and rules.
 
-Verification is not automatically sent by a database transaction. The explicit client action uses Firebase Authentication. Password recovery remains available with a neutral response that does not disclose account existence. Automated form tests and emulator verification do not replace a real hosted Google/email rehearsal.
+Access removal requires a concrete confirmation and preserves project and submitted records. After registration, pause the event first. Self-removal and removal of the last organizer are blocked. See [joining and approval](14-joining-and-approval.md) for the complete workflow.
 
 ## Local transport and export verification
 
@@ -142,11 +122,11 @@ npm run dev:firebase
 In another terminal, reset the disposable local event to Registration, which is the smoke runner’s required starting state:
 
 ```sh
-npm run seed -- --seed
+npm run seed -- --registration
 npm run test:smoke
 ```
 
-The current smoke runner targets localhost `demo-robinhacks` and verifies sealed-round authenticated transport. Historical version-one smoke/capture tools are retained separately; do not use their trade workflow as evidence of the current event.
+The smoke runner targets localhost `demo-robinhacks` and verifies authenticated transport with mock Google identities.
 
 After final publication or cancellation, an organizer can export the complete event record. Live allocations and ballots cannot be exposed by exporting a paused event. Ordinary private conversations are excluded from the event export. Store exports outside the repository because they include participant identity and private historical allocation/judging data.
 
@@ -154,7 +134,7 @@ After final publication or cancellation, an organizer can export the complete ev
 npm run reconcile -- /absolute/path/to/event-export.json
 ```
 
-The version-two reconciliation path independently checks round allocations, totals, exact entitlement facts, award payouts and unallocated reserve. Retained version-one exports use their historical reconciliation logic. Check the reconciler's result before handling prize distribution. This application records amounts but does not send cash or initiate payments.
+Reconciliation independently checks round allocations, totals, exact entitlement facts, award payouts and unallocated reserve. Check the reconciler's result before handling prize distribution. This application records amounts but does not send cash or initiate payments.
 
 ## If a step fails
 
@@ -162,11 +142,9 @@ The version-two reconciliation path independently checks round allocations, tota
 | --- | --- |
 | Project must use Blaze | Verify the owner-selected billing account in [Usage and billing](https://console.firebase.google.com/project/robinhacks-2026-ajs/usage/details), then rerun deployment. |
 | CLI login expired or identity mismatch | Run `npx -y firebase-tools@latest login --reauth`, select the Google identity configured in `.env.operations`, and rerun read-only preflight. |
-| Migration reports historical activity | Preserve the existing event. Do not remove the guard or delete data; use a separately versioned event after reviewing the records. |
 | Public homepage callable not found | Deploy the current Functions including `gamePublic`; confirm the client project/region and deployed release. |
 | Google sign-in unauthorized domain | Add the actual domain in [Authentication settings](https://console.firebase.google.com/project/robinhacks-2026-ajs/authentication/settings). |
 | Google popup blocked | Allow the popup and retry in a normal browser tab. |
-| Email still appears unverified | Follow the verification link, then choose **Check verification** so the refreshed ID token carries the updated status. Resend explicitly if needed. |
 | Funding will not open | Check active-team count, approved captains and required checkpoint updates; round three also requires every active final submission. |
 | Closing rejects before deadline | Wait until the server deadline. Pause/resume preserves equal remaining time; closing is not an early-cutoff control. |
 | Awards cannot prepare | Close all funding/ballots, cover every eligible final submission with a non-conflicted judge, and submit all required sheets. Resolve a top-score tie explicitly. |
@@ -177,7 +155,7 @@ The version-two reconciliation path independently checks round allocations, tota
 
 The six callable definitions use zero minimum instances, at most two instances, 256 MiB memory and a 60-second timeout. The existing project has a one-day Artifact Registry cleanup policy for generated deployment images. Team/record limits, bounded conversations, cached scoped snapshots and hidden-tab listener cleanup constrain ordinary pilot usage.
 
-Blaze remains capable of charging for usage outside free allowances. Configure a project-scoped budget and alerts in [Cloud Billing](https://console.cloud.google.com/billing/budgets?project=robinhacks-2026-ajs) and inspect actual rehearsal usage. Alerts and per-instance request limits are not hard spending caps. The historical cost model in document 06 was an estimate for the old market, not a measured bill for this release.
+Blaze remains capable of charging for usage outside free allowances. Configure a project-scoped budget and alerts in [Cloud Billing](https://console.cloud.google.com/billing/budgets?project=robinhacks-2026-ajs) and inspect actual rehearsal usage. Alerts and per-instance request limits are not hard spending caps. Use measured rehearsal traffic to estimate event usage.
 
 Client writes are denied; authenticated commands enforce identity, roles, deadlines and versions. App Check is optional until configured and tested. Register a reCAPTCHA Enterprise site key in [Firebase App Check](https://console.firebase.google.com/project/robinhacks-2026-ajs/appcheck), set `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`, rebuild and verify normal clients. Then set `ENFORCE_APP_CHECK=true` in the ignored Functions environment and redeploy if enforcing protected endpoints. `gamePublic` deliberately remains an anonymous, bounded metadata endpoint with its own request limit.
 
@@ -213,8 +191,24 @@ Release verification:
 - Read-only production verification: five checks passed for anonymous command denial, runtime data access, existing owner identity, migrated event state and the public metadata endpoint. This verifier made no application writes.
 - Browser checks at 1440, 390 and 320 pixels covered allocation autosave/reload and limits, messaging/blocking, immutable final submission, judge draft persistence/submission, community voting and award-review locking. The deployed public homepage and populated demo were also inspected.
 
-The [populated demo](https://robinhacks-2026-ajs--walkthrough-pyhnt4be.web.app/) uses browser-local fictional data; its preview expires October 24, 2026. The September 9 video remains at `/walkthrough/`, with a prominent notice that it demonstrates the retired model. It is not a current walkthrough.
+The [populated demo](https://robinhacks-2026-ajs--walkthrough-pyhnt4be.web.app/) uses browser-local fictional data; its preview expires October 24, 2026.
 
 The organizer confirmed investor rewards apply only to the judges’ grand-prize winner. Prize amounts are not yet set, so all configured amounts remain zero/unannounced. Real event facts, the official logo asset and identified staff still need organizer input. Production Google/email sign-in and an entire hosted multi-person rehearsal were not performed; local Auth transport and browser demo checks do not replace them.
 
 The updated `verify-firebase.mjs` validates the initial version-two state and `gamePublic`; it cannot stand in for browser Google sign-in. Some initial empty-registration assertions naturally stop applying after attendees register. Keep infrastructure verification, actual account-flow rehearsal and full event acceptance as separate checks.
+
+### Google-only provider enforcement
+
+Firebase CLI's Auth deployment enables configured providers but currently ignores a `false` value when disabling one. After deploying Google configuration, run the narrowly scoped script to disable email/password, anonymous, and phone sign-in and verify that Google is the only enabled federated provider:
+
+```sh
+node --env-file=.env.operations scripts/configure-google-auth.mjs --project robinhacks-2026-ajs --apply
+```
+
+Without `--apply`, it only reads the current settings. The script uses Google's [project configuration API](https://docs.cloud.google.com/identity-platform/docs/reference/rest/v2/projects/updateConfig) with a field mask, preserving authorized domains and unrelated settings. The callable server also checks verified Google tokens against current Auth account state, so deleted or disabled accounts cannot keep using an old token.
+
+See [the fresh event reset runbook](16-fresh-event-reset.md) for the separate, destructive reset procedure.
+
+**September 24, 2026 — fresh registration and team selection:** Production Hosting, Firestore rules, and all seven current Functions were deployed; retired `gamePool` was deleted. Google was verified as the only enabled provider; email/password, phone, and anonymous sign-in were disabled through the configuration API. After a private local backup, the authorized reset removed three other Auth accounts and the previous event data. Read-only verification confirmed one Auth account, the owner's approved organizer membership, no teams/rounds/submissions/pending requests, and closed team selection in Registration. Public event configuration and poster counters were preserved.
+
+Validation: 219 application tests, 114 Firestore emulator checks, and 15 real Auth/Functions transport checks passed. Browser checks exercised waiting, organizer opening, role availability, creation, joining, dashboard gating, and a 390-pixel phone layout. The live homepage and Google-only sign-in screen were inspected. Interactive Google popup sign-in could not be completed in the embedded browser (`auth/network-request-failed`); live Auth configuration, authorized domains, and the hosted handler responded successfully. The UI now gives a readable connection/retry message. Owner permissions were verified directly in Auth/Firestore; no new live participant was created for testing. The browser-local demo was republished and expires October 24, 2026.

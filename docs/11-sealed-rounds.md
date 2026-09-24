@@ -1,6 +1,6 @@
 # Sealed funding rounds: current product and architecture
 
-**Version 2 · September 14, 2026.** This document supersedes the September 8–10 trading proposal and implementation notes in documents 01–09. It describes the current source implementation. Deployment and production migration are tracked separately in [Firebase setup](FIREBASE-SETUP.md#deployment-record).
+**Updated September 24, 2026.** This document describes the current sealed-round implementation. Deployment verification is tracked separately in [Firebase setup](FIREBASE-SETUP.md#deployment-record).
 
 ## Product
 
@@ -69,7 +69,7 @@ All production prize amounts default to zero. A displayed entitlement is conditi
 
 | Stage | Organizer action | Participant behavior |
 | --- | --- | --- |
-| Registration | Confirm settings; verify attendees; approve teams, backup organizers and independent judges. | Join a team; review onboarding; complete a profile and initial checkpoint. |
+| Registration | Confirm settings; approve attendees; open team selection; invite organizers and assign judges. | Sign in with Google, request approval, then create or join a team and choose a role when selection opens. Complete a profile and initial checkpoint. |
 | Initial pitch round | Open round one; rules and rosters lock. Close at its deadline. | Allocate a fresh budget privately; completed entitlements become visible afterward. |
 | Build checkpoint | Keep funding closed; publish announcements and schedule discovery. | Build, visit demos, message teams and archive a prototype update. |
 | Prototype round | Open and close round two. | Make a new allocation; prior investments remain unchanged. |
@@ -151,15 +151,16 @@ Ranked choices earn 3, 2 and 1 points. Ties break by first-choice count and then
 | Viewer | Available data |
 | --- | --- |
 | Signed-out visitor | Public event facts and rules; no private team, allocation, message or judging records |
-| Pending participant | Their access status and bounded existing-team names/IDs |
+| Pending participant | Their own access status and public event information |
+| Approved, unassigned participant | Team-selection status and safe team names, roster names/roles, and available roles; no regular workspace data |
 | Approved teammate | Project evidence and public roster names; their shared allocations, entitlements, ballot and conversations |
 | Judge | Assigned submissions, public progress, relevant roster names, own assignments and own sheet; no funding signal before results |
 | Organizer | Verified access requests, staff/roster controls, judge assignments/sheets, selected message reports, event controls and private award preview; no live allocations/ballots or ordinary DM access |
 | After publication | Published award results; organizers can export the full auditable funding/judging record |
 
-Email/password accounts must verify their email before requesting access. The account screen explicitly sends/resends verification email and refreshes identity after the person follows the link. Google sign-in can supply verified email identity. Email verification is not attendance verification: organizers still check the actual person and team.
+Sign-in uses Google only and requires a verified email. Signup collects the name and account email; organizer approval is separate from team assignment. Approved unassigned participants wait until an organizer opens team selection, then create or join a team and choose an available role. Creating a team can use any role. The server enforces one captain and one designated investor per team, with multiple members. Staff accounts skip team selection. See [joining and approval](14-joining-and-approval.md).
 
-The first funding round locks competing team membership and roles. Team-less staff identities can be approved separately; the last approved organizer is protected against removal. Account suspension remains an enforcement action, not a mechanism to create a new team budget.
+The first funding round locks competing team membership and roles. Organizers grant other organizer accounts through verified email invitations. Access removal preserves project and submitted records, requires a pause after registration, and cannot remove the acting organizer or the last approved organizer. Account suspension remains an enforcement action, not a mechanism to create a new team budget.
 
 Firestore client rules deny all writes. Limited direct reads support the current member's status, public metadata for approved members, non-judge project views and a competing team's own inbox. Private allocation, conversation, submission and judging reads go through the application services. Complete exports are permitted only after publication or cancellation, excluding ordinary conversations; pausing an active event is not a way to inspect sealed allocations.
 
@@ -178,12 +179,14 @@ The local demo and Firebase Functions call the same `GameService`. Its transacti
 | `MessagingService` | Conversation authorization, team rate limit, private inboxes, blocks and reports |
 | `JudgingService` | Assignments, conflicts, drafts, score locks, award preparation/review/publication |
 | `BallotService` | Private team ballot versions and deadlines |
-| `MembershipService` / permission classes | Verified access, roles, roster lock and profile permissions |
+| `MembershipService` / permission classes | Verified signup, independent approval, roles, roster lock and project permissions |
+| `TeamFormationService` | Organizer-controlled team selection with atomic membership and role availability |
+| `OrganizerAccessService` | Verified organizer email invitations and protected access removal |
 | `MemoryRepository` / `FirestoreRepository` | Serializable demo transactions / buffered native Firestore transactions |
 | `apps/web/src/platform/` | Focused React feature screens and shared rendering helpers |
 | Demo/Firebase gateways | Authentication, scoped snapshots, commands and inbox refresh behavior |
 
-The public Firebase endpoints are `gamePublic`, `gameSnapshot`, `gameCommand`, `gameConversation`, `gameExport`, and retained legacy `gamePool`. Version-two events reject legacy financial commands and pool requests. `gamePublic` returns event metadata without requiring sign-in; it does not expose sealed data.
+The Firebase callables are `gamePublic`, `gameSnapshot`, `gameCommand`, `gameConversation`, `gameExport`, and `posterStats`; `posterVisit` handles numbered HTTP poster links. `gamePublic` returns event metadata without requiring sign-in; it does not expose sealed data.
 
 All event data lives under `events/{eventId}`:
 
@@ -191,6 +194,7 @@ All event data lives under `events/{eventId}`:
 | --- | --- |
 | Event root | Metadata, current phase, server deadlines, version-two settings and first-round rule lock |
 | `members`, `accessRequests`, `teams` | Verified identities/roles, approval queue and project profiles |
+| `organizerInvites` | Normalized Google emails explicitly allowed organizer access |
 | `fundingRounds` | One record per round; frozen eligible team IDs, deadline, weight, denominator and revealed totals |
 | `roundAllocations` | Latest version of one team's sealed amount sheet per round |
 | `roundEntitlements` | Immutable per-team round allocation facts; void status is recorded explicitly |

@@ -1,21 +1,8 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, X, LoaderCircle } from 'lucide-react';
+import { ArrowUpRight, X } from 'lucide-react';
 import type { Team } from '@robinhacks/core';
 
-export const credits = (minor: number, decimals = true) =>
-  (minor / 100).toLocaleString(undefined, {
-    minimumFractionDigits: decimals ? 2 : 0,
-    maximumFractionDigits: 2,
-  });
-export const number = (value: number) => value.toLocaleString();
-export const date = (value: number) =>
-  new Date(value).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 export function TeamMark({
   team,
   large = false,
@@ -33,19 +20,6 @@ export function TeamMark({
     </span>
   );
 }
-export function Logo() {
-  return (
-    <img
-      className="robin-mark"
-      src="/favicon.svg?v=2"
-      width="28"
-      height="28"
-      alt=""
-      aria-hidden="true"
-    />
-  );
-}
-
 function markTextColor(color: string) {
   if (!/^#[0-9a-f]{6}$/i.test(color)) return '#000';
   const channels = [1, 3, 5].map((offset) => {
@@ -55,22 +29,6 @@ function markTextColor(color: string) {
   return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722 < 0.179
     ? '#fff'
     : '#000';
-}
-export function Empty({ title, children }: { title: string; children?: ReactNode }) {
-  return (
-    <div className="empty-state">
-      <h3>{title}</h3>
-      {children && <p>{children}</p>}
-    </div>
-  );
-}
-export function Loading({ label = 'Loading…' }: { label?: string }) {
-  return (
-    <div className="loading" role="status">
-      <LoaderCircle className="spin" size={21} />
-      {label}
-    </div>
-  );
 }
 export function Field({
   label,
@@ -180,28 +138,4 @@ export function Dialog({
     </div>,
     document.body,
   );
-}
-export function download(name: string, content: string, mime = 'text/csv;charset=utf-8') {
-  const url = URL.createObjectURL(new Blob([content], { type: mime }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = name;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-export function csv(rows: (string | number)[][]) {
-  return rows
-    .map((row) =>
-      row
-        .map(
-          (cell) =>
-            `"${String(cell)
-              .replaceAll('"', '""')
-              .replace(/^[=+@-]/, "'$&")}"`,
-        )
-        .join(','),
-    )
-    .join('\r\n');
 }

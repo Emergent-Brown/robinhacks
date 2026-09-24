@@ -9,7 +9,7 @@
       "robinhacks-2026-ajs.firebaseapp.com"
     ],
     "providers": {
-      "emailPassword": true,
+      "emailPassword": false,
       "googleSignIn": {
         "oAuthBrandDisplayName": "Emergent Hacks",
         "supportEmail": "organizer@example.com"

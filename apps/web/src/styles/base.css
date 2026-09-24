@@ -1,4 +1,4 @@
-/* Shared palette and type. Keep feature layout in pages.css. */
+/* Shared palette and type. Feature layouts live beside their platform components. */
 :root {
   font-family: Verdana, Geneva, Tahoma, sans-serif;
   font-size: 13px;

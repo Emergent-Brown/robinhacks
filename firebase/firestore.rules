@@ -1,39 +1,46 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Assumed model: events/{eventId} stores public event metadata only;
-    // members/{uid} stores approved/pending/suspended status, teamId and role.
-    // views/market contains bounded public profiles, pools and revealed funding.
-    // Wallets, commitments, notes, membership details and unpublished results
-    // are fetched through authenticated callable application services only.
-    function approved(eventId) {
+    // All mutations and private data use authorized server services. These
+    // document reads are narrow listeners for membership and event changes.
+    function verifiedGoogle() {
       return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+    function available(eventId) {
+      return get(/databases/$(database)/documents/events/$(eventId)).data.get('maintenance', false) == false;
+    }
+    function approved(eventId) {
+      return verifiedGoogle() && available(eventId)
         && exists(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid))
         && get(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid)).data.status == 'approved';
     }
+    function membership(eventId) {
+      return get(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid)).data;
+    }
     match /events/{eventId} {
+      // Unassigned participants need this listener to see formation open/close.
       allow get: if approved(eventId);
       allow list, create, update, delete: if false;
       match /members/{uid} {
-        allow get: if request.auth != null && request.auth.uid == uid;
+        allow get: if verifiedGoogle() && request.auth.uid == uid;
         allow list, create, update, delete: if false;
       }
       match /views/market {
         allow get: if approved(eventId)
-          && get(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid)).data.role != 'judge';
+          && (membership(eventId).role == 'organizer'
+            || (membership(eventId).teamId != null
+              && membership(eventId).role in ['captain', 'trader', 'member']));
         allow list, create, update, delete: if false;
       }
-      // A shared inbox contains only this team's conversation summaries.
-      // Messages, allocations, judge sheets and reports stay behind authorized callables.
       match /teamInboxes/{teamId} {
         allow get: if approved(eventId)
-          && get(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid)).data.teamId == teamId
-          && get(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid)).data.role in ['captain', 'trader', 'member'];
+          && membership(eventId).teamId == teamId
+          && membership(eventId).role in ['captain', 'trader', 'member'];
         allow list, create, update, delete: if false;
       }
     }
-    // No client-side creates or updates exist, so data validation and role
-    // enforcement live in the shared command schemas and trusted services.
     match /{document=**} {
       allow read, write: if false;
     }

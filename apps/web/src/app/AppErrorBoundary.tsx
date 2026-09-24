@@ -11,7 +11,7 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, { faile
       <main className="empty-state" style={{ maxWidth: 600, margin: '12vh auto', padding: 24 }}>
         <h1>Something went wrong.</h1>
         <p>
-          Reload the page to try again. If a trade was in progress, check its receipt after
+          Reload the page to try again. If you were saving changes, check their status after
           reloading.
         </p>
         <button className="button primary" onClick={() => window.location.reload()}>

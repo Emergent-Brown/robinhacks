@@ -20,37 +20,4 @@ export class EventPaths {
   team(id: string) {
     return this.doc('teams', id);
   }
-  wallet(id: string) {
-    return this.doc('wallets', id);
-  }
-  pool(id: string) {
-    return this.doc('pools', id);
-  }
-  issuer(id: string) {
-    return this.doc('issuers', id);
-  }
-  positions(id: string) {
-    return `${this.wallet(id)}/positions`;
-  }
-  position(id: string, issuer: string) {
-    identifier.parse(issuer);
-    return `${this.positions(id)}/${issuer}`;
-  }
-  commitment(id: string) {
-    return `${this.wallet(id)}/commitments/current`;
-  }
-  notes(id: string) {
-    return `${this.wallet(id)}/notes`;
-  }
-  note(id: string, issuer: string) {
-    identifier.parse(issuer);
-    return `${this.notes(id)}/${issuer}`;
-  }
-  receipts(id: string) {
-    return `${this.wallet(id)}/receipts`;
-  }
-  receipt(id: string, commandId: string) {
-    identifier.parse(commandId);
-    return `${this.receipts(id)}/${commandId}`;
-  }
 }

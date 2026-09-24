@@ -92,6 +92,14 @@ function validateFunding(data, event, teams, settings) {
   const sheets = indexed(rows(data, 'roundAllocations', 90), 'id', 'DUPLICATE_ALLOCATION');
   const entitlements = indexed(rows(data, 'roundEntitlements', 90), 'id', 'DUPLICATE_ENTITLEMENT');
   const members = indexed(rows(data, 'members', 500), 'uid', 'DUPLICATE_MEMBER');
+  // Removed participants remain valid historical allocation authors, but never active judges.
+  // One Google account can have several former event identities after removal and readmission.
+  const removedMembers = rows(
+    { removedMembers: data.removedMembers ?? [] },
+    'removedMembers',
+    1000,
+  );
+
   const submissions = indexed(rows(data, 'submissions', 30), 'teamId', 'DUPLICATE_SUBMISSION');
   check(
     [...submissions.keys()].every((id) => teams.has(id)),
@@ -165,9 +173,17 @@ function validateFunding(data, event, teams, settings) {
             typeof sheet.actorUid === 'string',
           'ALLOCATION_IDENTITY_OR_TIME_MISMATCH',
         );
-        const actor = members.get(sheet.actorUid);
+        const currentActor = members.get(sheet.actorUid);
+        const ownedAllocation = (actor) =>
+          actor && actor.teamId === teamId && ['captain', 'trader'].includes(actor.role);
         check(
-          actor && actor.teamId === teamId && ['captain', 'trader'].includes(actor.role),
+          ownedAllocation(currentActor) ||
+            removedMembers.some(
+              (actor) =>
+                actor.uid === sheet.actorUid &&
+                ownedAllocation(actor) &&
+                integer(actor.removedAt, sheet.updatedAt),
+            ),
           'ALLOCATION_ACTOR_MISMATCH',
         );
       }

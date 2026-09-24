@@ -1,4 +1,4 @@
-/* Reusable controls. Feature layouts live in pages.css. */
+/* Reusable controls. Platform components own their page layouts. */
 .button {
   display: inline-flex;
   align-items: center;
@@ -62,11 +62,7 @@
   background: #e0edf5;
   color: var(--ink);
 }
-.icon-button.saved {
-  color: #986818;
-}
-.text-link,
-.back-link {
+.text-link {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -78,13 +74,8 @@
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-.text-link:hover,
-.back-link:hover {
+.text-link:hover {
   color: #003b7a;
-}
-.back-link {
-  margin-bottom: 16px;
-  min-height: 28px;
 }
 .field {
   display: flex;
@@ -98,11 +89,7 @@
 }
 .field input,
 .field textarea,
-.field select,
-.compact-select select,
-.admin-member select,
-.approval-card select,
-.score-row input {
+.field select {
   width: 100%;
   border: 1px solid #9bacb9;
   background: #fff;
@@ -127,10 +114,6 @@
 .form-grid .field {
   min-width: 0;
 }
-.compact-select select {
-  width: auto;
-  font-size: 12px;
-}
 .empty-state {
   border: 1px solid var(--line);
   background: #fff;
@@ -149,15 +132,6 @@
 .empty-state .button {
   margin-top: 14px;
 }
-.loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  padding: 45px 20px;
-  font-size: 12px;
-  color: var(--muted);
-}
 .team-mark {
   display: inline-flex;
   align-items: center;
@@ -173,153 +147,6 @@
   width: 44px;
   height: 44px;
   font-size: 15px;
-}
-.avatar {
-  width: 30px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  background: #dce8ef;
-  border: 1px solid var(--line);
-  color: #30495a;
-  font-size: 10px;
-  font-weight: 700;
-}
-.avatar.large {
-  width: 44px;
-  height: 44px;
-  font-size: 14px;
-}
-.role-tag,
-.status-tag {
-  display: inline-block;
-  border: 1px solid var(--line);
-  background: #edf3f7;
-  padding: 2px 6px;
-  font-size: 10px;
-  color: #425b6a;
-}
-.role-tag.captain,
-.role-tag.organizer {
-  background: #d4e6f1;
-}
-.notice-inline,
-.form-error {
-  padding: 10px 12px;
-  font-size: 12px;
-  line-height: 1.6;
-  border: 1px solid var(--line);
-  background: #edf4f8;
-  margin: 12px 0;
-}
-.notice-inline svg {
-  vertical-align: -4px;
-  margin-right: 5px;
-}
-.form-error {
-  color: #912c2a;
-  border-color: #d6a9a1;
-  background: #fff4ef;
-  overflow-wrap: anywhere;
-}
-.section-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-  margin-bottom: 10px;
-}
-.section-heading > span,
-.section-heading > p {
-  font-size: 11px;
-  color: var(--muted);
-}
-.content-section {
-  margin-top: 24px;
-}
-.content-section > h2 {
-  margin-bottom: 8px;
-}
-.content-section > p {
-  margin-bottom: 10px;
-}
-.data-list {
-  border: 1px solid var(--line);
-  background: #fff;
-}
-.data-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line);
-  background: #fff;
-}
-.data-row:last-child {
-  border-bottom: 0;
-}
-.row-title {
-  flex: 1;
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  text-align: left;
-  font-size: 12px;
-  font-weight: 700;
-}
-button.row-title {
-  color: #0645ad;
-  text-decoration: underline;
-}
-.row-title small {
-  display: block;
-  font-size: 11px;
-  font-weight: 400;
-  margin-top: 2px;
-  color: var(--muted);
-}
-.data-row > strong {
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-}
-.tab-line {
-  display: flex;
-  gap: 0;
-  border-bottom: 1px solid #8eabbe;
-  margin: 0 0 16px;
-  overflow-x: auto;
-}
-.tab-line > button {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid transparent;
-  border-bottom: 0;
-  padding: 8px 13px;
-  background: none;
-  color: #3f5b6c;
-  min-height: 36px;
-  font-size: 12px;
-}
-.tab-line > button.active {
-  background: #d4e6f1;
-  border-color: #8eabbe;
-  color: #182f3c;
-  font-weight: 700;
-}
-.tab-line > button:hover {
-  background: #e3eef5;
-}
-.tab-line > button > span {
-  font-size: 10px;
-  background: #fff;
-  border: 1px solid #b7cdda;
-  padding: 0 4px;
 }
 .dialog-backdrop {
   position: fixed;
@@ -371,156 +198,6 @@ button.row-title {
   padding-top: 14px;
   border-top: 1px solid var(--line);
 }
-.detail-list {
-  margin: 12px 0;
-  font-size: 12px;
-}
-.detail-list > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 7px 0;
-  border-bottom: 1px solid #dce5ec;
-}
-.detail-list > div:last-child {
-  border-bottom: 0;
-}
-.detail-list dt {
-  color: var(--muted);
-}
-.detail-list dd {
-  margin: 0;
-  text-align: right;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.detail-list.padded {
-  border: 1px solid var(--line);
-  background: #f3f7fa;
-  padding: 6px 12px;
-}
-.trade-quote {
-  margin: 14px 0;
-  border: 1px solid var(--line);
-  background: #f2f7fa;
-  padding: 14px;
-}
-.trade-quote > span {
-  display: block;
-  color: var(--muted);
-  font-size: 11px;
-}
-.trade-quote > strong {
-  display: block;
-  margin-top: 4px;
-  font-size: 25px;
-  font-variant-numeric: tabular-nums;
-}
-.trade-quote > strong small {
-  font-size: 12px;
-  font-weight: 400;
-}
-.trade-quote .detail-list {
-  margin-bottom: 0;
-}
-.receipt-success {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 35px;
-  height: 35px;
-  background: var(--positive-light);
-  color: var(--positive);
-  margin-bottom: 10px;
-}
-.receipt-lead {
-  font-size: 16px;
-  font-weight: 700;
-  margin-bottom: 14px;
-}
-.receipt-id {
-  font-size: 10px;
-  font-family: monospace;
-  color: var(--muted);
-  overflow-wrap: anywhere;
-  margin-top: 10px;
-}
-.account-summary {
-  text-align: center;
-  margin: 4px 0 22px;
-}
-.account-summary h3 {
-  margin-top: 10px;
-}
-.account-summary p {
-  font-size: 12px;
-  margin: 4px 0 10px;
-  overflow-wrap: anywhere;
-  color: var(--muted);
-}
-.demo-roles {
-  display: grid;
-  gap: 8px;
-  margin-top: 16px;
-}
-.demo-roles .button {
-  justify-content: flex-start;
-  padding: 10px;
-}
-.demo-roles .button > span {
-  flex: 1;
-  text-align: left;
-}
-.demo-roles small {
-  display: block;
-  margin-top: 3px;
-  color: var(--muted);
-  font-weight: 400;
-}
-.demo-reset {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  border-top: 1px solid var(--line);
-  margin-top: 20px;
-  padding-top: 15px;
-}
-.demo-reset p {
-  width: 100%;
-}
-.rules-current {
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 12px;
-}
-.rules-current h3 {
-  margin-top: 5px;
-}
-.rules-current p {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--muted);
-}
-.rules-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.rules-list li {
-  display: flex;
-  gap: 12px;
-  padding: 14px 0;
-  border-bottom: 1px solid #dce5ec;
-}
-.rules-list li > span {
-  font-size: 11px;
-  color: var(--muted);
-  padding-top: 2px;
-}
-.rules-list p {
-  font-size: 12px;
-  margin-top: 4px;
-  color: #3c5261;
-}
 @media (max-width: 700px) {
   .button,
   .button.small {
@@ -532,11 +209,7 @@ button.row-title {
     min-height: 44px;
   }
   .field input,
-  .field select,
-  .compact-select select,
-  .admin-member select,
-  .approval-card select,
-  .score-row input {
+  .field select {
     min-height: 44px;
     font-size: 16px;
   }
@@ -560,21 +233,5 @@ button.row-title {
   }
   .dialog-actions > .button {
     flex: 1;
-  }
-  .tab-line > button {
-    min-height: 44px;
-    font-size: 11px;
-    padding: 8px 10px;
-  }
-  .detail-list > div {
-    gap: 12px;
-  }
-  .data-row {
-    gap: 8px;
-    padding: 10px 8px;
-  }
-  .demo-reset .text-link,
-  .auth-toggle {
-    min-height: 44px;
   }
 }

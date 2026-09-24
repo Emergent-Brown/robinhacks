@@ -5,10 +5,6 @@ import { config, Panel, useCommand, ErrorMessage, type PageProps } from './share
 export function Access({ data, actions }: PageProps) {
   const user = actions.gateway.user;
   const [name, setName] = useState(user?.displayName || '');
-  const [kind, setKind] = useState<'team' | 'judge' | 'organizer'>('team');
-  const [legacyMode, setLegacyMode] = useState<'signin' | 'reset'>('signin');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [pending, setPending] = useState(false);
@@ -27,28 +23,10 @@ export function Access({ data, actions }: PageProps) {
     setInfo('');
     setPending(true);
     try {
-      await actions.gateway.signIn('google');
+      await actions.gateway.signIn();
       await actions.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Sign-in failed. Please try again.');
-    } finally {
-      setPending(false);
-    }
-  }
-  async function signInEmail() {
-    setError('');
-    setInfo('');
-    setPending(true);
-    try {
-      if (legacyMode === 'reset') {
-        await actions.gateway.resetPassword?.(email.trim());
-        setInfo('If this account exists, a reset link is on its way.');
-      } else {
-        await actions.gateway.signIn('email', email.trim(), password);
-        await actions.refresh();
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not sign in. Try again.');
     } finally {
       setPending(false);
     }
@@ -73,17 +51,12 @@ export function Access({ data, actions }: PageProps) {
       setChecking(false);
     }
   }
-  async function identity(refresh = false) {
+  async function checkIdentity() {
     setPending(true);
     setError('');
     try {
-      if (refresh) {
-        await actions.gateway.refreshIdentity?.();
-        await actions.refresh();
-      } else {
-        await actions.gateway.verifyEmail?.();
-        setInfo('Verification email sent. Open the link, then check verification below.');
-      }
+      await actions.gateway.refreshIdentity?.();
+      await actions.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not verify your email.');
     } finally {
@@ -103,68 +76,16 @@ export function Access({ data, actions }: PageProps) {
             >
               {pending ? 'Connecting…' : 'Continue with Google'}
             </button>
-            <details className="p-access-legacy">
-              <summary>Already have an email account?</summary>
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void signInEmail();
-                }}
-              >
-                <Field label="Email">
-                  <input
-                    type="email"
-                    autoComplete="email"
-                    required
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                  />
-                </Field>
-                {legacyMode === 'signin' && (
-                  <Field label="Password">
-                    <input
-                      type="password"
-                      autoComplete="current-password"
-                      required
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                    />
-                  </Field>
-                )}
-                <button className="button secondary full" disabled={pending}>
-                  {legacyMode === 'reset' ? 'Send reset link' : 'Sign in with email'}
-                </button>
-                {actions.gateway.resetPassword && (
-                  <button
-                    className="p-link"
-                    type="button"
-                    onClick={() => {
-                      setLegacyMode(legacyMode === 'signin' ? 'reset' : 'signin');
-                      setError('');
-                      setInfo('');
-                    }}
-                  >
-                    {legacyMode === 'signin' ? 'Forgot password?' : 'Back to sign in'}
-                  </button>
-                )}
-              </form>
-            </details>
           </>
         ) : !user.emailVerified ? (
           <>
-            <h3>Verify your email</h3>
-            <p>
-              Verify {user.email} before requesting event access. Your organizer checks identities
-              to keep one investing account per team.
-            </p>
+            <h3>Check your Google account</h3>
+            <p>Use a Google account with a verified email to request event access.</p>
             <div className="p-actions">
-              <button className="button primary" disabled={pending} onClick={() => void identity()}>
-                Send verification email
-              </button>
               <button
                 className="button secondary"
                 disabled={pending}
-                onClick={() => void identity(true)}
+                onClick={() => void checkIdentity()}
               >
                 Check verification
               </button>
@@ -178,7 +99,9 @@ export function Access({ data, actions }: PageProps) {
               Your request is in the organizer's queue. We'll use <strong>{user.email}</strong> to
               identify your account.
             </p>
-            <p className="muted">Once approved, sign in with this account to enter the event.</p>
+            <p className="muted">
+              After approval, you’ll choose a team when the organizer opens team selection.
+            </p>
             <button
               className="button secondary"
               disabled={checking}
@@ -213,11 +136,13 @@ export function Access({ data, actions }: PageProps) {
               void cmd.run({
                 type: 'requestMembership',
                 displayName: name.trim(),
-                ...(kind !== 'team' ? { staffRole: kind } : {}),
               });
             }}
           >
-            <p>Tell the organizers what name to use. Your email is already verified.</p>
+            <p>
+              Confirm your name and email. You’ll choose a team after approval, when team selection
+              opens.
+            </p>
             <Field label="Your name">
               <input
                 value={name}
@@ -231,31 +156,12 @@ export function Access({ data, actions }: PageProps) {
             <Field label="Email on account">
               <input type="email" value={user.email} readOnly aria-readonly="true" />
             </Field>
-            <details className="p-access-staff">
-              <summary>
-                {kind === 'team' ? 'Joining as a judge or organizer?' : 'Requesting staff access'}
-              </summary>
-              <Field label="Access requested">
-                <select
-                  value={kind}
-                  onChange={(event) => setKind(event.target.value as typeof kind)}
-                >
-                  <option value="team">Participant</option>
-                  <option value="judge">Judge</option>
-                  <option value="organizer">Organizer</option>
-                </select>
-              </Field>
-              <p className="muted">Staff roles require separate organizer approval.</p>
-            </details>
-            {rosterLocked && kind === 'team' && (
+            {rosterLocked && (
               <p className="p-note">
                 Participant requests have closed. Contact an organizer if you need to join a team.
               </p>
             )}
-            <button
-              className="button primary full"
-              disabled={cmd.pending || (kind === 'team' && rosterLocked)}
-            >
+            <button className="button primary full" disabled={cmd.pending || rosterLocked}>
               {cmd.pending ? 'Sending…' : 'Send access request'}
             </button>
           </form>
@@ -267,7 +173,18 @@ export function Access({ data, actions }: PageProps) {
           </p>
         )}
         {user && (
-          <button className="p-link p-signout" onClick={() => void actions.gateway.signOut()}>
+          <button
+            className="p-link p-signout"
+            onClick={() =>
+              void actions.gateway
+                .signOut()
+                .catch((error) =>
+                  setError(
+                    error instanceof Error ? error.message : 'Could not sign out. Try again.',
+                  ),
+                )
+            }
+          >
             Sign out
           </button>
         )}

@@ -18,7 +18,7 @@ const command: Extract<Command, { type: 'updateProfile' }> = {
   bio: '  I build accessible tools for campus.  ',
 };
 
-function fixture(preset: 'seed' | 'trading' = 'trading') {
+function fixture(preset: 'registration' | 'funding' = 'funding') {
   const repository = new MemoryRepository(createPlatformDemoDocuments(preset, 10_000_000));
   const service = new GameService(repository, DEMO_EVENT_ID, { now: () => 10_000_000 });
   return { repository, service };
@@ -107,7 +107,7 @@ describe('voluntary member biographies', () => {
   });
 
   it('preserves the bio when an organizer changes a member role', async () => {
-    const h = fixture('seed');
+    const h = fixture('registration');
     const member = Object.entries(h.repository.dump()).find(
       ([key, value]) =>
         key.startsWith(`${root}/members/`) &&
@@ -176,7 +176,7 @@ describe('voluntary member biographies', () => {
 
 describe('project sectors', () => {
   it('keeps demo sectors and lets a captain change their sector before funding', async () => {
-    const h = fixture('seed');
+    const h = fixture('registration');
     const teamPath = `${root}/teams/team-1`;
     const previous = h.repository.dump()[teamPath] as Team;
     expect(previous.category).not.toBe('');
