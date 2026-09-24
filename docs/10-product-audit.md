@@ -32,7 +32,7 @@ The named staff roles and approval controls exist. No additional real judge or b
 - Confirm a teammate shares the same allocation sheet; a judge or organizer receives no competing wallet. Verify the backup organizer can operate the event.
 - Have at least two teams publish initial checkpoints. Open a round, edit allocations from two tabs, confirm conflict handling and the private view from every role.
 - Pause and resume an active deadline; confirm the same remaining time is restored for everyone. Close at the deadline and inspect immutable entitlements.
-- Exchange team messages, block a conversation, report a selected message, and confirm unrelated teams and staff cannot read the conversation.
+- Exchange team messages, block a conversation, report a selected message, and confirm unrelated teams and judges cannot read the conversation, while organizers can review it through the disclosed review interface.
 - Submit final code commit and demo evidence before the final round. Confirm edits and late submissions are rejected after the relevant lock.
 - Assign independent judges, declare a conflict, reload saved drafts, submit complete sheets and confirm scores lock.
 - Submit private team ballots, close voting, prepare awards and inspect original scores, rankings, exact investor totals and reserve. Confirm publication cannot bypass the review delay.
@@ -42,6 +42,6 @@ The named staff roles and approval controls exist. No additional real judge or b
 
 This is a single configured hackathon, not a general event marketplace. Funding opens manually at announced checkpoints; deadlines are enforced on the server. It has no resale, price chart, order book, private share transfer or payment processor. Funding receipts do not finance a team's spending account. An official project update and the final submission are different records.
 
-Current messages are bounded to 250 per conversation and 1,000 characters, with one send per five seconds for the whole team. Ordinary messaging remains available during building periods. Reports disclose the selected message to organizers, not the full conversation. There are at most 50 judge assignment records, with notes bounded to 1,500 characters per project. Submitted judge sheets lock; organizers cannot quietly rewrite a submitted score. A revealed funding round can be voided as a whole and cannot be replayed.
+Current messages are bounded to 250 per conversation and 1,000 characters, with one send per five seconds for the whole team. Ordinary messaging remains available during building periods. Reports flag a selected message for attention. Organizers can also review complete team conversations, with this access disclosed in each thread. #general is shared with all approved identities, including unassigned attendees. There are at most 50 judge assignment records, with notes bounded to 1,500 characters per project. Submitted judge sheets lock; organizers cannot quietly rewrite a submitted score. A revealed funding round can be voided as a whole and cannot be replayed.
 
 These are implemented product choices, not missing prerequisites. A full production rehearsal has not yet been confirmed. Automated validation, deployment and migration outcomes should be recorded in the [Firebase deployment record](FIREBASE-SETUP.md#deployment-record) only after they complete.

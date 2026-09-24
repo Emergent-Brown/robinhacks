@@ -197,6 +197,25 @@ export const platformCommandSchema = z.discriminatedUnion('type', [
       techStack: text(300),
     })
     .strict(),
+  z.object({ type: z.literal('sendGeneralMessage'), commandId, body: text(1000).min(1) }).strict(),
+  z
+    .object({
+      type: z.literal('readGeneral'),
+      commandId,
+      throughSequence: z.number().int().min(0).max(100000),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('removeChatMessage'),
+      commandId,
+      kind: z.enum(['general', 'team']),
+      id,
+      messageId: id,
+      sequence: z.number().int().min(1).max(100000).optional(),
+      reason: text(500).min(5),
+    })
+    .strict(),
   z
     .object({ type: z.literal('sendMessage'), commandId, toTeamId: id, body: text(1000).min(1) })
     .strict(),

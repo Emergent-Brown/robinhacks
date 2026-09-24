@@ -2,7 +2,9 @@ import type {
   AppSnapshot,
   Command,
   CommandResult,
-  TeamConversation,
+  MessageRequest,
+  MessagePage,
+  ConversationDirectoryEntry,
   PosterStatsPage,
 } from '@robinhacks/core';
 export interface SessionUser {
@@ -17,7 +19,8 @@ export interface AppGateway {
   subscribe(listener: () => void): () => void;
   signIn(): Promise<void>;
   refreshIdentity?(): Promise<void>;
-  conversation?(otherTeamId: string): Promise<TeamConversation | null>;
+  messages(request: MessageRequest): Promise<MessagePage>;
+  conversationDirectory(): Promise<ConversationDirectoryEntry[]>;
   signOut(): Promise<void>;
   snapshot(force?: boolean): Promise<AppSnapshot>;
   command(command: Command): Promise<CommandResult>;

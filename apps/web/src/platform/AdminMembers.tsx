@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { AccessRequest, Member } from '@robinhacks/core';
 import { Dialog, Field } from '../ui/primitives';
+import { AdminPersonEditor } from './AdminPersonEditor';
+import { managementLockReason } from './admin-management';
 import {
   Blank,
   config,
@@ -13,12 +15,16 @@ import {
   type PageProps,
 } from './shared';
 import './team-formation.css';
+import './admin-management.css';
 
 const isStaff = (role: Member['role']) => role === 'organizer' || role === 'judge';
 const roleLabel = (role: string) => (role === 'trader' ? 'Designated investor' : role);
 
 export function AdminMembers({ data, actions }: PageProps) {
   const [email, setEmail] = useState('');
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [editing, setEditing] = useState<Member | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [checkedAt, setCheckedAt] = useState<number | null>(null);
   const [refreshError, setRefreshError] = useState('');
@@ -43,6 +49,18 @@ export function AdminMembers({ data, actions }: PageProps) {
   const rosterEditable = registration || (data.event!.paused && !data.event!.activeOperationId);
   const canApprove = registration && !settings.rulesLockedAt;
   const formationOpen = !!settings.teamFormationOpen;
+  const managementLock = managementLockReason(data);
+  const visibleMembers = members.filter(
+    (member) =>
+      `${member.displayName} ${member.email || ''} ${member.teamId ? teamName(data, member.teamId) : ''}`
+        .toLowerCase()
+        .includes(search.trim().toLowerCase()) &&
+      (filter === 'all' ||
+        (filter === 'staff' && isStaff(member.role)) ||
+        (filter === 'participants' && !isStaff(member.role)) ||
+        (filter === 'unassigned' && !isStaff(member.role) && !member.teamId) ||
+        (filter === 'suspended' && member.status === 'suspended')),
+  );
   const approvedOrganizers = members.filter(
     (member) => member.role === 'organizer' && member.status === 'approved',
   ).length;
@@ -204,10 +222,34 @@ export function AdminMembers({ data, actions }: PageProps) {
         </p>
         {settings.rulesLockedAt && data.event!.paused && (
           <p className="p-note">
-            If a captain or designated investor is missing, use an approved teammate’s role menu to
-            fill the vacant role. Existing filled roles stay locked.
+            Use Edit to move approved people between teams or change their roles. Change a filled
+            captain or investor role to member before giving it to someone else. Past investments
+            stay with their original team.
           </p>
         )}
+        {managementLock && <p className="p-note">{managementLock}</p>}
+        <div className="p-admin-toolbar">
+          <Field label="Find a person">
+            <input
+              type="search"
+              placeholder="Name, email, or team"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </Field>
+          <Field label="Show">
+            <select value={filter} onChange={(event) => setFilter(event.target.value)}>
+              <option value="all">Everyone</option>
+              <option value="participants">Participants</option>
+              <option value="unassigned">Waiting for a team</option>
+              <option value="staff">Staff</option>
+              <option value="suspended">Suspended</option>
+            </select>
+          </Field>
+        </div>
+        <p className="p-admin-count">
+          {visibleMembers.length} of {members.length} people
+        </p>
         {!members.length ? (
           <Blank>No approved members yet.</Blank>
         ) : (
@@ -221,7 +263,7 @@ export function AdminMembers({ data, actions }: PageProps) {
                 </tr>
               </thead>
               <tbody>
-                {members.map((member) => {
+                {visibleMembers.map((member) => {
                   const protectedMember =
                     member.uid === data.member?.uid ||
                     (member.role === 'organizer' &&
@@ -244,9 +286,22 @@ export function AdminMembers({ data, actions }: PageProps) {
                         <small className="p-cell-note">{roleLabel(member.role)}</small>
                       </td>
                       <td>
+                        <button
+                          className="p-link"
+                          disabled={cmd.pending || !!managementLock}
+                          onClick={() => setEditing(member)}
+                        >
+                          Edit person / team
+                        </button>
                         <MemberActions
                           member={member}
-                          roles={memberRoleOptions(member, data)}
+                          roles={
+                            member.role === 'organizer'
+                              ? ['organizer', 'judge']
+                              : member.role === 'judge'
+                                ? ['judge']
+                                : ['member', 'judge']
+                          }
                           disabled={cmd.pending || !rosterEditable || protectedMember}
                           onChange={(command) =>
                             confirm(
@@ -343,6 +398,14 @@ export function AdminMembers({ data, actions }: PageProps) {
         )}
       </Panel>
       <ErrorMessage>{cmd.error}</ErrorMessage>
+      {editing && (
+        <AdminPersonEditor
+          data={data}
+          actions={actions}
+          member={editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
       {confirmation && (
         <Dialog title={confirmation.title} onClose={() => !cmd.pending && setConfirmation(null)}>
           <p>{confirmation.description}</p>
@@ -390,25 +453,27 @@ function MemberActions({
   return (
     <div className="p-member-controls">
       <span>{member.status}</span>
-      <select
-        aria-label={`Change role for ${member.displayName}`}
-        value={member.role}
-        disabled={disabled || roles.length < 2}
-        onChange={(event) =>
-          onChange({
-            type: 'setMemberRole',
-            uid: member.uid,
-            role: event.target.value as Member['role'],
-            status: member.status,
-          })
-        }
-      >
-        {roles.map((role) => (
-          <option key={role} value={role}>
-            {roleLabel(role)}
-          </option>
-        ))}
-      </select>
+      {!member.teamId && (
+        <select
+          aria-label={`Change role for ${member.displayName}`}
+          value={member.role}
+          disabled={disabled || roles.length < 2}
+          onChange={(event) =>
+            onChange({
+              type: 'setMemberRole',
+              uid: member.uid,
+              role: event.target.value as Member['role'],
+              status: member.status,
+            })
+          }
+        >
+          {roles.map((role) => (
+            <option key={role} value={role}>
+              {roleLabel(role)}
+            </option>
+          ))}
+        </select>
+      )}
       <button
         className="p-link"
         disabled={disabled}
@@ -428,36 +493,4 @@ function MemberActions({
       </button>
     </div>
   );
-}
-
-/** Show only role changes the server permits, including a vacant-role recovery while paused. */
-function memberRoleOptions(member: Member, data: PageProps['data']): Member['role'][] {
-  if (!member.teamId)
-    return member.role === 'organizer'
-      ? ['organizer', 'judge']
-      : member.role === 'judge'
-        ? ['judge']
-        : ['member', 'judge'];
-  const others = data.members.filter(
-    (candidate) =>
-      candidate.teamId === member.teamId &&
-      candidate.uid !== member.uid &&
-      candidate.status === 'approved',
-  );
-  const available = (role: Member['role']) =>
-    role === 'member' || !others.some((candidate) => candidate.role === role);
-  if (!config(data).rulesLockedAt)
-    return (['captain', 'trader', 'member'] as const).filter(
-      (role) => role === member.role || available(role),
-    );
-  const result: Member['role'][] = [member.role];
-  if (
-    member.status !== 'approved' ||
-    !data.event!.paused ||
-    ['FINALIZED', 'CANCELLED', 'ARCHIVED'].includes(data.event!.phase)
-  )
-    return result;
-  if (member.role !== 'captain' && available('captain')) result.push('captain');
-  if (member.role === 'member' && available('trader')) result.push('trader');
-  return result;
 }

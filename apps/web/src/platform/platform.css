@@ -168,7 +168,7 @@
 .p-main {
   max-width: 1080px;
   margin: auto;
-  padding: 27px 20px 55px;
+  padding: 32px 24px 60px;
   outline: none;
 }
 .p-page-heading {
@@ -176,7 +176,7 @@
   gap: 18px;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 22px;
+  margin-bottom: 26px;
 }
 .p-page-heading p {
   margin: 4px 0 0;
@@ -198,8 +198,8 @@
 .p-panel {
   background: #fff;
   border: 1px solid #b0c4d8;
-  padding: 19px 20px;
-  margin: 0 0 20px;
+  padding: 24px;
+  margin: 0 0 24px;
   min-width: 0;
 }
 .p-section-heading {
@@ -207,7 +207,7 @@
   align-items: center;
   gap: 16px;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 .p-section-heading h3 {
   margin: 0;
@@ -215,7 +215,7 @@
 .p-section-heading > .muted {
   font-size: 11px;
 }
-.p-panel > p:last-child {
+.p-panel > :last-child {
   margin-bottom: 0;
 }
 .p-panel > .p-table-wrap {
@@ -224,9 +224,9 @@
 .p-actions {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px 16px;
   flex-wrap: wrap;
-  margin: 13px 0 0;
+  margin: 18px 0 0;
 }
 .p-actions .muted {
   font-size: 11px;
@@ -234,21 +234,22 @@
 .p-two-column {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
-  gap: 20px;
+  gap: 24px;
   align-items: start;
-}
-.p-two-column > .p-panel {
-  height: 100%;
 }
 .p-home-columns {
   display: grid;
   grid-template-columns: 1.25fr 1fr;
-  gap: 20px;
+  gap: 24px;
 }
 .p-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 18px;
+  gap: 0 20px;
+}
+.platform-app .field {
+  gap: 7px;
+  margin-bottom: 18px;
 }
 .p-prose,
 .p-update-content dd {
@@ -1062,11 +1063,11 @@
     min-height: 24px !important;
   }
   .p-main {
-    padding: 21px 14px 33px;
+    padding: 24px 14px 36px;
   }
   .p-page-heading {
     gap: 12px;
-    margin-bottom: 18px;
+    margin-bottom: 22px;
     align-items: flex-start;
   }
   .p-page-heading > .muted {
@@ -1083,8 +1084,8 @@
     flex-wrap: wrap;
   }
   .p-panel {
-    padding: 16px 14px;
-    margin-bottom: 17px;
+    padding: 20px 16px;
+    margin-bottom: 20px;
   }
   .p-section-heading {
     align-items: flex-start;
@@ -1093,16 +1094,13 @@
   .p-section-heading > .p-link {
     font-size: 10px;
     text-align: right;
-    margin-top: -8px;
+    margin-top: 0;
   }
   .p-home-columns,
   .p-two-column,
   .p-form-grid {
     grid-template-columns: 1fr;
     gap: 0;
-  }
-  .p-two-column > .p-panel {
-    height: auto;
   }
   .p-facts {
     grid-template-columns: 80px minmax(0, 1fr);

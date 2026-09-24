@@ -24,7 +24,7 @@ Open **Admin → Settings**:
 - **Public event information** contains the registration URL, contact, attendee logistics, organizer description and website, public schedule, and planned windows. Save with **Save event settings**. Public information remains editable after funding starts.
 - **Funding rules and prizes → Judging rubric** contains the criterion labels and weights. Weights must total 100%. These rules lock when the first funding round opens; the score scale is fixed at 0–5.
 
-App access is managed separately in **Admin → Access → Approve**. See [Joining and approval](14-joining-and-approval.md).
+App access is managed separately in **Admin → People → Approve**. See [Joining and approval](14-joining-and-approval.md).
 
 Participants add or edit their own bio in **My team → Team members**. Bios are optional, limited to 280 characters, and visible on the team’s project page. Saving an empty bio removes it. The project sector is under **My team → Edit project**.
 

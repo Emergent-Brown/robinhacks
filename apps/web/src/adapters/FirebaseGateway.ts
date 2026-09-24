@@ -29,7 +29,9 @@ import type {
   Command,
   CommandResult,
   EventConfig,
-  TeamConversation,
+  MessageRequest,
+  MessagePage,
+  ConversationDirectoryEntry,
   PosterStatsPage,
 } from '@robinhacks/core';
 import type { AppGateway, SessionUser } from '../app/gateway';
@@ -158,6 +160,46 @@ export class FirebaseGateway implements AppGateway {
             ),
           ]),
     ];
+    this.marketStops.push(
+      onSnapshot(
+        doc(this.db, `events/${this.eventId}/messageChannels/general`),
+        (snapshot) => {
+          if (!snapshot.exists() || !this.cache?.platform) return;
+          const next = snapshot.data() as {
+            latestSequence: number;
+            lastMessage: string;
+            updatedAt: number;
+            lastAuthorUid?: string;
+            moderationVersion?: number;
+          };
+          const previous = this.cache.platform.general;
+          if (
+            next.latestSequence === previous.latestSequence &&
+            next.updatedAt === previous.updatedAt &&
+            (next.moderationVersion ?? 0) === previous.moderationVersion
+          )
+            return;
+          this.cache = {
+            ...this.cache,
+            platform: {
+              ...this.cache.platform,
+              general: {
+                moderationVersion: next.moderationVersion ?? 0,
+                latestSequence: next.latestSequence,
+                lastMessage: next.lastMessage,
+                updatedAt: next.updatedAt,
+                unread:
+                  next.latestSequence > previous.latestSequence
+                    ? next.lastAuthorUid !== this.user?.uid
+                    : previous.unread,
+              },
+            },
+          };
+          this.emit();
+        },
+        () => undefined,
+      ),
+    );
     if (this.cache?.member?.teamId) {
       const teamId = this.cache.member.teamId;
       let initial = true;
@@ -267,9 +309,23 @@ export class FirebaseGateway implements AppGateway {
   }
   async command(command: Command): Promise<CommandResult> {
     try {
-      return await this.call<CommandResult>('gameCommand', { command });
+      const result = await this.call<CommandResult>('gameCommand', { command });
+      if (command.type === 'readGeneral' && this.cache?.platform) {
+        const general = this.cache.platform.general;
+        this.cache = {
+          ...this.cache,
+          platform: {
+            ...this.cache.platform,
+            general: {
+              ...general,
+              unread: general.latestSequence > command.throughSequence,
+            },
+          },
+        };
+      }
+      return result;
     } finally {
-      this.invalidate();
+      if (!['sendGeneralMessage', 'readGeneral'].includes(command.type)) this.invalidate();
       this.emit();
     }
   }
@@ -279,7 +335,10 @@ export class FirebaseGateway implements AppGateway {
   async posterStats(after = 0): Promise<PosterStatsPage> {
     return this.call('posterStats', { after });
   }
-  async conversation(otherTeamId: string): Promise<TeamConversation | null> {
-    return this.call('gameConversation', { otherTeamId });
+  async messages(request: MessageRequest): Promise<MessagePage> {
+    return this.call('gameMessages', { request });
+  }
+  async conversationDirectory(): Promise<ConversationDirectoryEntry[]> {
+    return this.call('gameConversationDirectory', {});
   }
 }

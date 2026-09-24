@@ -1,6 +1,8 @@
 import type {
   CommunityCommand,
   ConversationSummary,
+  ConversationDirectoryEntry,
+  MessagePage,
   Member,
   MessageReport,
   Team,
@@ -13,9 +15,10 @@ import type { EventPaths } from '../paths';
 import type { Transaction } from '../repository';
 import { receipt, type CommandContext } from './context';
 import { Permissions } from './permissions';
+import { chatRecordId } from './chat-records';
 import { PlatformPermissions as Guard } from './platform-permissions';
 
-interface TeamInbox {
+export interface TeamInbox {
   teamId: string;
   conversations: ConversationSummary[];
   lastSentAt: number | null;
@@ -25,7 +28,7 @@ type MessagingCommand = Extract<
   { type: 'sendMessage' | 'readConversation' | 'blockConversation' | 'reportMessage' }
 >;
 
-/** Both participants share a conversation. Only their private inboxes expose its preview. */
+/** Team participants share an inbox; organizers can review threads through a separate read API. */
 export class MessagingService {
   static conversationId(first: string, second: string): string {
     return sha256(JSON.stringify([first, second].sort()));
@@ -39,11 +42,49 @@ export class MessagingService {
   ): Promise<TeamConversation | null> {
     const teamId = Guard.team(member);
     requireState(teamId !== otherTeamId, 'OWN_TEAM', 'Choose another team.');
-    const conversation = await tx.get<TeamConversation>(
-      paths.doc('conversations', MessagingService.conversationId(teamId, otherTeamId)),
-    );
+    const [conversation, ownTeam, otherTeam] = await Promise.all([
+      tx.get<TeamConversation>(
+        paths.doc('conversations', MessagingService.conversationId(teamId, otherTeamId)),
+      ),
+      tx.get<Team>(paths.team(teamId)),
+      tx.get<Team>(paths.team(otherTeamId)),
+    ]);
+    requireState(ownTeam && otherTeam, 'NOT_FOUND', 'This team no longer exists.');
     if (conversation) this.assertParticipants(conversation, teamId, otherTeamId);
     return conversation;
+  }
+
+  async page(
+    tx: Transaction,
+    paths: EventPaths,
+    member: Member,
+    otherTeamId: string,
+    before?: number,
+  ): Promise<MessagePage> {
+    const conversation = await this.readConversation(tx, paths, member, otherTeamId);
+    const other = await tx.get<Team>(paths.team(otherTeamId));
+    requireState(other, 'NOT_FOUND', 'This team no longer exists.');
+    return MessagingService.pageOf(conversation, other.name, before);
+  }
+
+  static pageOf(
+    conversation: TeamConversation | null,
+    title: string,
+    before?: number,
+  ): MessagePage {
+    const messages = conversation?.messages ?? [];
+    const end = Math.min(messages.length, before === undefined ? messages.length : before - 1);
+    const start = Math.max(0, end - 40);
+    return {
+      id: conversation?.id ?? '',
+      title,
+      teamIds: conversation?.teamIds ?? [],
+      messages: messages.slice(start, end),
+      blockedBy: conversation?.blockedBy ?? [],
+      nextBefore: start > 0 ? start + 1 : null,
+      latestSequence: messages.length,
+      moderationVersion: conversation?.moderationVersion ?? 0,
+    };
   }
 
   async inbox(tx: Transaction, paths: EventPaths, member: Member): Promise<ConversationSummary[]> {
@@ -156,7 +197,9 @@ export class MessagingService {
     } else {
       Permissions.editable(event);
       requireState(
-        !conversation.messages.some((message) => message.id === command.commandId),
+        !conversation.messages.some(
+          (message) => message.id === chatRecordId(member.uid, command.commandId),
+        ),
         'COMMAND_CONFLICT',
         'This message identifier already exists. Start a new message.',
       );
@@ -186,14 +229,59 @@ export class MessagingService {
         'This conversation has reached its 250-message limit.',
       );
       const message: TeamMessage = {
-        id: command.commandId,
+        id: chatRecordId(member.uid, command.commandId),
         fromTeamId: teamId,
         authorName: member.displayName,
+        authorUid: member.uid,
+        authorRole: member.role,
         body: command.body.trim(),
         createdAt: now,
       };
       conversation.messages = [...conversation.messages, message];
       conversation.readAt = { ...conversation.readAt, [teamId]: now };
+    }
+    if (command.type !== 'readConversation') {
+      const [directory, firstRoster, secondRoster] = await Promise.all([
+        tx.get<ConversationDirectoryEntry>(paths.doc('conversationDirectory', id)),
+        tx.list<Member>(`${paths.team(teamId)}/members`, 151),
+        tx.list<Member>(`${paths.team(otherTeamId)}/members`, 151),
+      ]);
+      const last = conversation.messages.at(-1);
+      tx.set(paths.doc('conversationDirectory', id), {
+        id,
+        teamIds: conversation.teamIds,
+        teamNames: conversation.teamIds.map((id) =>
+          id === ownTeam.id ? ownTeam.name : otherTeam.name,
+        ),
+        participantUids: [
+          ...new Set([
+            ...(directory?.participantUids ?? []),
+            member.uid,
+            ...[...firstRoster, ...secondRoster]
+              .filter((person) => person.status === 'approved')
+              .map((person) => person.uid),
+            ...conversation.messages.flatMap((message) =>
+              message.authorUid ? [message.authorUid] : [],
+            ),
+          ]),
+        ],
+        participantNames: {
+          ...(directory?.participantNames ?? {}),
+          ...Object.fromEntries(
+            [...firstRoster, ...secondRoster].map((person) => [person.uid, person.displayName]),
+          ),
+          ...Object.fromEntries(
+            conversation.messages.flatMap((message) =>
+              message.authorUid ? [[message.authorUid, message.authorName]] : [],
+            ),
+          ),
+          [member.uid]: member.displayName,
+        },
+        lastMessage: last?.body.slice(0, 160) ?? '',
+        updatedAt: last?.createdAt ?? now,
+        messageCount: conversation.messages.length,
+        blocked: conversation.blockedBy.length > 0,
+      } satisfies ConversationDirectoryEntry);
     }
     conversation.version += 1;
     tx.set(paths.doc('conversations', id), conversation);

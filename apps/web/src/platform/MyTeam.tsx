@@ -224,7 +224,7 @@ function ProjectEditor({ team, actions, close }: PageProps & { team: Team; close
   return (
     <Dialog title="Edit project" onClose={close} wide>
       <form
-        className="p-form"
+        className="p-form p-project-editor"
         onSubmit={(event) => {
           event.preventDefault();
           void cmd.run({ type: 'updateTeam', expectedVersion: team.version, patch: form }, close);

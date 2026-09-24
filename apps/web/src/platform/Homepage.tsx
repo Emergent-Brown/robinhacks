@@ -5,6 +5,28 @@ import { JudgingRubric } from './JudgingRubric';
 import { config, navigate, Panel, type PageProps } from './shared';
 import './homepage.css';
 
+// Supplied sponsor artwork is kept unchanged; CSS handles optical sizing.
+const sponsors = [
+  { name: 'Lovable', file: 'lovable.svg', width: 950, height: 173, style: 'wide' },
+  { name: 'zerohash', file: 'zerohash.svg', width: 758, height: 166, style: 'wide' },
+  { name: 'Omi', file: 'omi.png', width: 801, height: 240, style: 'omi' },
+  {
+    name: 'East Side Pockets',
+    file: 'east-side-pockets.png',
+    width: 539,
+    height: 211,
+    style: 'pockets',
+  },
+  { name: 'Culture Pop', file: 'culture-pop.jpeg', width: 768, height: 497, style: 'culture-pop' },
+  {
+    name: 'Flatbread Co.',
+    file: 'flatbread-company.png',
+    width: 400,
+    height: 200,
+    style: 'flatbread',
+  },
+] as const;
+
 export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
   const [rubricOpen, setRubricOpen] = useState(false);
   const { details, funding } = config(data);
@@ -150,6 +172,25 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
             <p>The organizer will publish the schedule here.</p>
           )}
           <p className="muted">Schedule subject to change.</p>
+        </Panel>
+      </section>
+      <section className="p-home-sponsors" aria-labelledby="home-sponsors-title">
+        <Panel>
+          <h2 id="home-sponsors-title">Sponsors</h2>
+          <ul className="p-sponsor-grid">
+            {sponsors.map((sponsor) => (
+              <li key={sponsor.file} className={`p-sponsor p-sponsor--${sponsor.style}`}>
+                <img
+                  src={`/sponsors/${sponsor.file}`}
+                  alt={sponsor.name}
+                  width={sponsor.width}
+                  height={sponsor.height}
+                  loading="lazy"
+                  decoding="async"
+                />
+              </li>
+            ))}
+          </ul>
         </Panel>
       </section>
       {rubricOpen && (

@@ -104,7 +104,8 @@ export function TeamFormation({ data, actions }: PageProps) {
               : 'You’re on the attendee list. The organizer will open team selection so everyone can create or join a team together.'}
           </p>
           <p className="muted">
-            Your project, investments, and messages become available after you choose a team.
+            Your project, investments, and team inbox become available after you choose a team. You
+            can use #general now.
           </p>
           {settings.details.contactEmail && (
             <a href={`mailto:${settings.details.contactEmail}`}>Email the organizer</a>

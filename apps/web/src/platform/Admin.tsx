@@ -4,6 +4,8 @@ import { useClock } from '../hooks/useApp';
 import { WindowOpener } from './WindowOpener';
 import { AdminSettings } from './AdminSettings';
 import { AdminMembers } from './AdminMembers';
+import { AdminTeams } from './AdminTeams';
+import { OrganizerNoteEditor } from './OrganizerNote';
 import { AdminJudging } from './AdminJudging';
 import { AdminPosters } from './AdminPosters';
 import {
@@ -11,6 +13,7 @@ import {
   config,
   ErrorMessage,
   money,
+  navigate,
   Panel,
   platform,
   stamp,
@@ -20,7 +23,7 @@ import {
   type PageProps,
 } from './shared';
 
-type Tab = 'operations' | 'access' | 'judging' | 'settings' | 'reports' | 'posters';
+type Tab = 'operations' | 'access' | 'teams' | 'judging' | 'settings' | 'reports' | 'posters';
 export function Admin({ data, actions }: PageProps) {
   const [tab, setTab] = useState<Tab>('operations');
   const [exportError, setExportError] = useState('');
@@ -43,22 +46,30 @@ export function Admin({ data, actions }: PageProps) {
     <>
       <div className="p-page-heading">
         <h1>Admin</h1>
-        <button className="p-link" onClick={() => void download()}>
-          Export event record
-        </button>
+        <div className="p-actions">
+          <button className="p-link" onClick={() => navigate('messages')}>
+            Review conversations
+          </button>
+          <button className="p-link" onClick={() => void download()}>
+            Export event record
+          </button>
+        </div>
       </div>
       <nav className="p-tabs" aria-label="Admin sections">
-        {(['operations', 'access', 'judging', 'settings', 'reports', 'posters'] as const).map(
-          (item) => (
-            <button
-              key={item}
-              aria-current={tab === item ? 'page' : undefined}
-              onClick={() => setTab(item)}
-            >
-              {item === 'operations'
-                ? 'Event controls'
-                : item === 'access'
-                  ? 'Access'
+        {(
+          ['operations', 'access', 'teams', 'judging', 'settings', 'reports', 'posters'] as const
+        ).map((item) => (
+          <button
+            key={item}
+            aria-current={tab === item ? 'page' : undefined}
+            onClick={() => setTab(item)}
+          >
+            {item === 'operations'
+              ? 'Event controls'
+              : item === 'access'
+                ? 'People'
+                : item === 'teams'
+                  ? 'Teams'
                   : item === 'judging'
                     ? 'Judging'
                     : item === 'settings'
@@ -66,15 +77,16 @@ export function Admin({ data, actions }: PageProps) {
                       : item === 'posters'
                         ? 'Posters'
                         : 'Reports'}
-            </button>
-          ),
-        )}
+          </button>
+        ))}
       </nav>
       <ErrorMessage>{exportError}</ErrorMessage>
       {tab === 'operations' ? (
         <Operations data={data} actions={actions} />
       ) : tab === 'access' ? (
         <AdminMembers data={data} actions={actions} />
+      ) : tab === 'teams' ? (
+        <AdminTeams data={data} actions={actions} />
       ) : tab === 'judging' ? (
         <AdminJudging data={data} actions={actions} />
       ) : tab === 'settings' ? (
@@ -138,7 +150,6 @@ function Operations({ data, actions }: PageProps) {
   const now = useClock();
   const [pauseReason, setPauseReason] = useState('');
   const [voidReason, setVoidReason] = useState('');
-  const [announcement, setAnnouncement] = useState(event.announcement);
   const [winnerId, setWinnerId] = useState('');
   const [tiebreak, setTiebreak] = useState('');
   const [discardReason, setDiscardReason] = useState('');
@@ -156,6 +167,7 @@ function Operations({ data, actions }: PageProps) {
   }
   return (
     <>
+      <OrganizerNoteEditor data={data} actions={actions} />
       <Panel title="Event status">
         <dl className="p-facts">
           <dt>Phase</dt>
@@ -237,7 +249,7 @@ function Operations({ data, actions }: PageProps) {
             </p>
             {settings.teamFormationOpen && (
               <p className="p-note">
-                Team selection is open. Close it in Admin → Access before opening funding.
+                Team selection is open. Close it in Admin → People before opening funding.
               </p>
             )}
             <WindowOpener
@@ -545,26 +557,6 @@ function Operations({ data, actions }: PageProps) {
             )}
           </>
         )}
-      </Panel>
-      <Panel title="Announcement">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void cmd.run({ type: 'setAnnouncement', announcement });
-          }}
-        >
-          <Field label="Message shown to participants">
-            <textarea
-              maxLength={500}
-              rows={3}
-              value={announcement}
-              onChange={(e) => setAnnouncement(e.target.value)}
-            />
-          </Field>
-          <button className="button secondary" disabled={cmd.pending}>
-            Save announcement
-          </button>
-        </form>
       </Panel>
       <details className="p-danger">
         <summary>Cancel event</summary>

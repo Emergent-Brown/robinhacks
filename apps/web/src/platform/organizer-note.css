@@ -1,0 +1,58 @@
+.p-note-form {
+  display: grid;
+  gap: 18px;
+}
+.p-note-form > p {
+  margin: 0;
+}
+.p-note-current {
+  padding: 16px;
+  background: #f0f6fb;
+  border-radius: 8px;
+}
+.p-note-current p {
+  margin: 8px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.p-note-current small {
+  color: #536b80;
+}
+.p-note-conflict {
+  padding: 14px;
+  border: 1px solid #b99858;
+  border-radius: 8px;
+}
+.p-note-conflict p {
+  margin: 0 0 12px;
+}
+.p-organizer-banner {
+  display: flex;
+  align-items: start;
+  gap: 16px;
+}
+.p-organizer-banner p {
+  flex: 1;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.p-organizer-banner button {
+  flex-shrink: 0;
+}
+.p-context-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+}
+.p-formation-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.p-formation-nav button[aria-current='page'] {
+  background: #164f85;
+  color: white;
+}

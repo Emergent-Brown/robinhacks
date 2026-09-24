@@ -29,7 +29,19 @@ const posterRedirect = new PosterRedirect(posters, limiter, () => {
 });
 const envelope = z.object({ eventId: identifier }).strict();
 const commandEnvelope = z.object({ eventId: identifier, command: z.unknown() }).strict();
-const conversationEnvelope = z.object({ eventId: identifier, otherTeamId: identifier }).strict();
+const messagesEnvelope = z
+  .object({
+    eventId: identifier,
+    request: z
+      .object({
+        kind: z.enum(['general', 'team', 'review']),
+        id: identifier.optional(),
+        before: z.number().int().min(1).max(100001).optional(),
+      })
+      .strict()
+      .refine((request) => request.kind === 'general' || !!request.id, 'Select a conversation.'),
+  })
+  .strict();
 const configuredOrigins = process.env.ALLOWED_ORIGINS?.split(',')
   .map((value) => value.trim())
   .filter(Boolean);
@@ -169,14 +181,19 @@ export const gamePublic = onCall({ ...options, enforceAppCheck: false }, (reques
   }),
 );
 
-export const gameConversation = onCall(options, (request) =>
+export const gameMessages = onCall(options, (request) =>
   transport(async () => {
-    const identity = await actor(request, 'conversation', 30);
-    const data = conversationEnvelope.parse(request.data);
-    return new GameService(repository, data.eventId, clock).conversation(
-      identity.uid,
-      data.otherTeamId,
-    );
+    const identity = await actor(request, 'messages', 60);
+    const data = messagesEnvelope.parse(request.data);
+    return new GameService(repository, data.eventId, clock).messages(identity.uid, data.request);
+  }),
+);
+
+export const gameConversationDirectory = onCall(options, (request) =>
+  transport(async () => {
+    const identity = await actor(request, 'conversation-directory', 12);
+    const data = envelope.parse(request.data);
+    return new GameService(repository, data.eventId, clock).conversationDirectory(identity.uid);
   }),
 );
 

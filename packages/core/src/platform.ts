@@ -129,8 +129,14 @@ export interface TeamMessage {
   id: string;
   fromTeamId: string;
   authorName: string;
+  /** Immutable identity at send time; older imported messages can omit it. */
+  authorUid?: string;
+  authorRole?: string;
   body: string;
   createdAt: number;
+  removedAt?: number;
+  removedBy?: string;
+  removalReason?: string;
 }
 export interface ConversationSummary {
   id: string;
@@ -146,7 +152,50 @@ export interface TeamConversation {
   messages: TeamMessage[];
   blockedBy: string[];
   readAt: Record<string, number>;
+  moderationVersion?: number;
   version: number;
+}
+/** #general pages are bounded so a busy event never rewrites its entire chat history. */
+export interface GeneralMessage extends Omit<TeamMessage, 'fromTeamId'> {
+  fromTeamId: string | null;
+  authorUid: string;
+  authorRole: string;
+  sequence: number;
+}
+export interface GeneralChannelSummary {
+  moderationVersion: number;
+  latestSequence: number;
+  lastMessage: string;
+  updatedAt: number;
+  unread: boolean;
+}
+export interface MessageRequest {
+  kind: 'general' | 'team' | 'review';
+  id?: string;
+  /** Exclusive message sequence; returned by the previous page. */
+  before?: number;
+}
+export interface MessagePage {
+  id: string;
+  title: string;
+  teamIds: string[];
+  messages: Array<TeamMessage | GeneralMessage>;
+  blockedBy: string[];
+  nextBefore: number | null;
+  latestSequence: number;
+  moderationVersion: number;
+}
+export interface ConversationDirectoryEntry {
+  id: string;
+  teamIds: string[];
+  teamNames: string[];
+  /** People who could read the thread when it was last active, plus its authors. */
+  participantUids: string[];
+  participantNames: Record<string, string>;
+  lastMessage: string;
+  updatedAt: number;
+  messageCount: number;
+  blocked: boolean;
 }
 export interface MessageReport {
   id: string;
@@ -210,6 +259,7 @@ export interface PlatformSnapshot {
   submissions: ProjectSubmission[];
   roster: Array<{ uid: string; name: string; teamId: string; role: string; bio?: string }>;
   conversations: ConversationSummary[];
+  general: GeneralChannelSummary;
   reports: MessageReport[];
   assignments: JudgeAssignment[];
   judgingSheets: JudgingSheet[];
@@ -256,6 +306,16 @@ export type CommunityCommand = WithId<
       expectedPhaseVersion: number;
     }
   | { type: 'submitProject'; expectedTeamVersion: number; commitSha: string; techStack: string }
+  | { type: 'sendGeneralMessage'; body: string }
+  | { type: 'readGeneral'; throughSequence: number }
+  | {
+      type: 'removeChatMessage';
+      kind: 'general' | 'team';
+      id: string;
+      messageId: string;
+      sequence?: number;
+      reason: string;
+    }
   | { type: 'sendMessage'; toTeamId: string; body: string }
   | { type: 'readConversation'; otherTeamId: string }
   | { type: 'blockConversation'; otherTeamId: string; blocked: boolean }
@@ -330,6 +390,13 @@ export const emptyPlatformSnapshot = (): PlatformSnapshot => ({
   submissions: [],
   roster: [],
   conversations: [],
+  general: {
+    moderationVersion: 0,
+    latestSequence: 0,
+    lastMessage: '',
+    updatedAt: 0,
+    unread: false,
+  },
   reports: [],
   assignments: [],
   judgingSheets: [],

@@ -1,3 +1,4 @@
+import { chatRecordId } from '../packages/application/src/services/chat-records';
 import { describe, expect, it } from 'vitest';
 import type { Command, Member, ProjectUpdate } from '@robinhacks/core';
 import { GameService } from '../packages/application/src/game-service';
@@ -79,29 +80,23 @@ describe('actor-scoped receipts cannot overwrite append-only records', () => {
   it('keeps message identifiers unique within a shared conversation when the other team replies', async () => {
     const h = fixture();
     await h.service.execute(PLATFORM_USERS.captain, h.message);
-    await expect(
-      h.service.execute(h.second, {
-        ...h.message,
-        toTeamId: 'team-1',
-        body: 'A reply with a conflicting ID.',
-      }),
-    ).rejects.toMatchObject({ code: 'COMMAND_CONFLICT' });
-    const conversation = await h.service.conversation(h.second.uid, 'team-1');
-    expect(conversation?.messages).toHaveLength(1);
-    expect(conversation?.messages[0]).toMatchObject({
-      id: h.message.commandId,
+    await h.service.execute(h.second, {
+      ...h.message,
+      toTeamId: 'team-1',
+      body: 'A reply with the same command ID from a different actor.',
+    });
+    const conversation = await h.service.messages(h.second.uid, { kind: 'team', id: 'team-1' });
+    expect(conversation.messages).toHaveLength(2);
+    expect(new Set(conversation.messages.map((message) => message.id)).size).toBe(2);
+    expect(conversation.messages[0]).toMatchObject({
+      id: chatRecordId(PLATFORM_USERS.captain.uid, h.message.commandId),
       fromTeamId: 'team-1',
       body: 'Can we see your prototype?',
     });
     await h.service.execute(PLATFORM_USERS.captain, h.message);
-    expect((await h.service.conversation(h.second.uid, 'team-1'))?.messages).toHaveLength(1);
-    await h.service.execute(h.second, {
-      ...h.message,
-      commandId: 'unique-reply-message',
-      toTeamId: 'team-1',
-      body: 'Yes, visit our table.',
-    });
-    expect((await h.service.conversation(h.second.uid, 'team-1'))?.messages).toHaveLength(2);
+    expect(
+      (await h.service.messages(h.second.uid, { kind: 'team', id: 'team-1' })).messages,
+    ).toHaveLength(2);
   });
 
   it('does not let a second reporter replace the first reporter’s audit record', async () => {
@@ -114,7 +109,7 @@ describe('actor-scoped receipts cannot overwrite append-only records', () => {
       type: 'reportMessage',
       commandId: 'shared-report-identifier',
       otherTeamId: 'team-1',
-      messageId: h.message.commandId,
+      messageId: chatRecordId(PLATFORM_USERS.captain.uid, h.message.commandId),
       reason: 'Please review this message.',
     };
     await h.service.execute(h.second, report);

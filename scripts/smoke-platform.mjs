@@ -144,6 +144,28 @@ async function main() {
     'FORMATION_CLOSED',
   );
   pass('Google signup exposes only name/email approval, then waits for organizer-opened formation');
+  await change(
+    'sendGeneralMessage',
+    { body: 'Welcome. Team selection starts after the introduction.' },
+    organizer,
+  );
+  await change(
+    'sendGeneralMessage',
+    { body: 'Looking forward to building with everyone.' },
+    newCaptain,
+  );
+  const general = await success('gameMessages', { request: { kind: 'general' } }, newCaptain);
+  assert.equal(general.title, '#general');
+  assert.ok(
+    general.messages.some(
+      (message) => message.authorUid === actorUid(organizer) && message.authorRole === 'organizer',
+    ),
+  );
+  assert.equal(general.messages.at(-1).authorUid, actorUid(newCaptain));
+  assert.ok(general.messages.length <= 40);
+  await denied('gameMessages', { request: { kind: 'general' } }, newMember, 'MEMBERSHIP_REQUIRED');
+  await denied('gameMessages', { request: { kind: 'general' } }, undefined, 'SIGN_IN_REQUIRED');
+  pass('Approved unassigned attendees can use #general; pending and anonymous users cannot');
 
   await change(
     'setTeamFormation',
@@ -290,10 +312,48 @@ async function main() {
     },
     captain,
   );
-  const conversation = await success('gameConversation', { otherTeamId: 'team-2' }, member);
+  const conversation = await success(
+    'gameMessages',
+    { request: { kind: 'team', id: 'team-2' } },
+    member,
+  );
   assert.equal(conversation.messages.at(-1).body, 'Can we review your offline demo together?');
-  await denied('gameConversation', { otherTeamId: 'team-2' }, judge, 'TEAM_REQUIRED');
+  await denied('gameMessages', { request: { kind: 'team', id: 'team-2' } }, judge, 'TEAM_REQUIRED');
   pass('Team conversation is shared with teammates and hidden from judges');
+  const directory = await success('gameConversationDirectory', {}, organizer);
+  const thread = directory.find((entry) => entry.id === conversation.id);
+  assert.ok(thread?.participantUids.includes(actorUid(captain)));
+  assert.ok(!Object.hasOwn(thread, 'messages'));
+  const reviewed = await success(
+    'gameMessages',
+    { request: { kind: 'review', id: thread.id } },
+    organizer,
+  );
+  assert.equal(reviewed.messages.at(-1).authorUid, actorUid(captain));
+  await denied('gameConversationDirectory', {}, captain, 'ORGANIZER_REQUIRED');
+  await denied(
+    'gameMessages',
+    { request: { kind: 'review', id: thread.id } },
+    judge,
+    'ORGANIZER_REQUIRED',
+  );
+  const target = reviewed.messages.at(-1);
+  await change(
+    'removeChatMessage',
+    { kind: 'team', id: thread.id, messageId: target.id, reason: 'Local moderation rehearsal.' },
+    organizer,
+  );
+  const moderated = await success(
+    'gameMessages',
+    { request: { kind: 'team', id: 'team-2' } },
+    member,
+  );
+  assert.equal(moderated.messages.at(-1).body, 'Message removed by an organizer.');
+  assert.equal(moderated.messages.at(-1).authorUid, target.authorUid);
+  pass(
+    'Organizers review complete team threads and moderate with a visible, attributed removal notice',
+  );
+
   // Advance only this local fixture's deadline; no production project can be reached.
   const app = initializeApp({ projectId: 'demo-robinhacks' }, 'sealed-smoke');
   try {

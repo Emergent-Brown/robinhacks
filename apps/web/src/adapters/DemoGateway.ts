@@ -9,10 +9,10 @@ import {
   DEMO_EVENT_ID,
   PLATFORM_USERS,
 } from '../../../../packages/application/src/platform-fixtures';
-import type { AppSnapshot, Command } from '@robinhacks/core';
+import type { AppSnapshot, Command, MessageRequest } from '@robinhacks/core';
 import type { AppGateway, SessionUser } from '../app/gateway';
 // A fresh namespace keeps the current signup/team flow separate from earlier demos.
-const STORE = 'emergent-hacks-demo-v4';
+const STORE = 'emergent-hacks-demo-v5';
 export class DemoGateway implements AppGateway {
   readonly mode = 'demo' as const;
   user: SessionUser | null = PLATFORM_USERS.captain;
@@ -63,9 +63,13 @@ export class DemoGateway implements AppGateway {
   async refreshIdentity() {
     this.emit();
   }
-  async conversation(otherTeamId: string) {
-    return this.service.conversation(this.user?.uid ?? '', otherTeamId);
+  async messages(request: MessageRequest) {
+    return this.service.messages(this.user?.uid ?? '', request);
   }
+  async conversationDirectory() {
+    return this.service.conversationDirectory(this.user?.uid ?? '');
+  }
+
   async exportEvent() {
     return this.service.exportEvent(this.user?.uid ?? '');
   }

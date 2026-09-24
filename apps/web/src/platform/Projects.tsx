@@ -162,7 +162,13 @@ export function Projects({ data }: PageProps) {
           </tbody>
         </table>
       </div>
-      {!visible.length && <Blank>No projects match your search.</Blank>}
+      {!visible.length && (
+        <Blank>
+          {all.length
+            ? 'No projects match your search.'
+            : 'Teams will appear here once they create a project.'}
+        </Blank>
+      )}
     </div>
   );
 }

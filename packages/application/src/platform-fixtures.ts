@@ -9,6 +9,7 @@ import type {
   Team,
 } from '@robinhacks/core';
 import { demoProjects } from './demo-projects';
+import { addDemoMessages } from './demo-messages';
 import type { DocumentMap } from './memory-repository';
 export const DEMO_EVENT_ID = 'robinhacks-2026';
 export const PLATFORM_USERS = {
@@ -305,5 +306,6 @@ export function createPlatformDemoDocuments(
     asOf: now,
     phaseVersion: event.phaseVersion,
   };
+  addDemoMessages(docs, root, teams, now, preset !== 'registration');
   return docs;
 }

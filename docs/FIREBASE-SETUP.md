@@ -18,7 +18,7 @@ The source implements sealed funding rounds with Google-only signup, independent
 | Sign-in | Google only |
 | Initial organizer | Configured verified Google identity, separate from competing teams |
 | Billing | Blaze, linked to an owner-managed billing account |
-| Current server source | Six second-generation callables in `us-west1`: `gameCommand`, `gameSnapshot`, `gamePublic`, `gameConversation`, `gameExport`, `posterStats`; HTTP redirect `posterVisit` |
+| Current server source | Seven second-generation callables in `us-west1`: `gameCommand`, `gameSnapshot`, `gamePublic`, `gameMessages`, `gameConversationDirectory`, `gameExport`, `posterStats`; HTTP redirect `posterVisit` |
 
 Sample teams belong to local browser/emulator fixtures, not production. Current source does not establish which release is deployed; verify the live client and Functions after publication.
 
@@ -81,7 +81,7 @@ npm run test:emulator
 npm run deploy
 ```
 
-`deploy` builds the client and Functions, then deploys classic Hosting, Firestore rules/indexes and the current Functions in the selected project. `gamePublic` serves limited signed-out event information, and `gameConversation` authorizes a specific team conversation.
+`deploy` builds the client and Functions, then deploys classic Hosting, Firestore rules/indexes and the current Functions in the selected project. `gamePublic` serves limited signed-out event information, and `gameMessages` authorizes paginated general/team/review messages; `gameConversationDirectory` provides organizer-only conversation metadata.
 
 Auth configuration is separate from routine deployment, in ignored `firebase.auth.local.json`. To configure Auth on a new workstation, copy the example, replace the Google support email with the approved support address, and review the authorized domains:
 
@@ -102,9 +102,9 @@ It checks version-two Registration, the existing organizer, an empty project ros
 
 ## Sign-in, approval and team selection
 
-1. Sign in with the organizer Google account. Confirm **Admin → Access** is available.
+1. Sign in with the organizer Google account. Confirm **Admin → People** is available.
 2. A participant signs in with Google, confirms their name and verified email, and submits a request.
-3. Approve the attendee in Admin → Access. They remain unassigned and cannot enter the workspace yet.
+3. Approve the attendee in Admin → People. They remain unassigned and cannot enter the workspace yet.
 4. Select **Start team selection**. The attendee creates or joins a team and chooses Captain, Designated investor or Member. Staff accounts skip this step.
 5. Add backup organizers through **Organizer emails**. Their matching verified Google account receives organizer access on sign-in or refresh. Assign judges from approved unassigned accounts.
 6. Confirm every participating team has a captain and required checkpoint before opening funding. The first round locks competing memberships and rules.
@@ -212,3 +212,9 @@ See [the fresh event reset runbook](16-fresh-event-reset.md) for the separate, d
 **September 24, 2026 — fresh registration and team selection:** Production Hosting, Firestore rules, and all seven current Functions were deployed; retired `gamePool` was deleted. Google was verified as the only enabled provider; email/password, phone, and anonymous sign-in were disabled through the configuration API. After a private local backup, the authorized reset removed three other Auth accounts and the previous event data. Read-only verification confirmed one Auth account, the owner's approved organizer membership, no teams/rounds/submissions/pending requests, and closed team selection in Registration. Public event configuration and poster counters were preserved.
 
 Validation: 219 application tests, 114 Firestore emulator checks, and 15 real Auth/Functions transport checks passed. Browser checks exercised waiting, organizer opening, role availability, creation, joining, dashboard gating, and a 390-pixel phone layout. The live homepage and Google-only sign-in screen were inspected. Interactive Google popup sign-in could not be completed in the embedded browser (`auth/network-request-failed`); live Auth configuration, authorized domains, and the hosted handler responded successfully. The UI now gives a readable connection/retry message. Owner permissions were verified directly in Auth/Firestore; no new live participant was created for testing. The browser-local demo was republished and expires October 24, 2026.
+
+**September 24, 2026 — organizer tools and event chat:** Deployed Hosting, Firestore rules/indexes, and eight Functions (seven callables plus the poster redirect). Added `gameMessages` and `gameConversationDirectory`; deleted the retired `gameConversation` endpoint. Published versioned organizer notes, pinned #general, organizer conversation review/moderation, team/person management, submission corrections, six sponsor logos, and responsive spacing updates. Existing event data was preserved; no live participant message was sent during verification.
+
+Validation: 250 application tests, 133 Firestore rules/repository checks, and 17 local Auth/Functions transport checks passed, along with TypeScript and production/demo builds. Browser-local checks covered posting notes/general messages, approved unassigned chat access, organizer person-filtered read-only review, team creation and captain assignment, and project/admin/chat layouts at 390 and 1280 pixels. Independent review led to guards for frozen team entry, withdrawals during funding, disqualification, bounded correction archives, and cache clearing after access changes. The production domain served the current build and all six sponsor images; new message endpoints rejected anonymous access, public snapshots remained limited, and the retired endpoint returned 404. The populated demo was republished through October 24, 2026. Interactive live Google sign-in was not repeated for this release.
+
+See [Organizer tools](17-organizer-tools.md) for the operating instructions.

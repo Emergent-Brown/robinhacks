@@ -34,6 +34,11 @@ service cloud.firestore {
               && membership(eventId).role in ['captain', 'trader', 'member']));
         allow list, create, update, delete: if false;
       }
+      // Only a channel summary is broadcast. Messages and read cursors use the server API.
+      match /messageChannels/general {
+        allow get: if approved(eventId);
+        allow list, create, update, delete: if false;
+      }
       match /teamInboxes/{teamId} {
         allow get: if approved(eventId)
           && membership(eventId).teamId == teamId

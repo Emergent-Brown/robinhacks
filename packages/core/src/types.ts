@@ -28,6 +28,9 @@ export interface EventConfig {
   activeOperationId: string | null;
   publishedResultId: string | null;
   announcement: string;
+  announcementVersion?: number;
+  announcementUpdatedAt?: number;
+  announcementAuthor?: string;
   tieSeed: string;
 }
 export interface Member {
@@ -105,6 +108,74 @@ export interface OrganizerInvite {
   email: string;
   createdAt: number;
 }
+export type TeamProfilePatch = Partial<
+  Pick<
+    Team,
+    | 'name'
+    | 'ticker'
+    | 'pitch'
+    | 'category'
+    | 'color'
+    | 'problem'
+    | 'building'
+    | 'demoUrl'
+    | 'repoUrl'
+    | 'update'
+  >
+>;
+export type SubmissionPatch = Partial<
+  Pick<
+    import('./platform').ProjectSubmission,
+    'name' | 'pitch' | 'problem' | 'building' | 'demoUrl' | 'repoUrl' | 'commitSha' | 'techStack'
+  >
+>;
+export type TeamManagementCommand =
+  | { type: 'adminCreateTeam'; commandId: string; name: string }
+  | {
+      type: 'adminUpdateTeam';
+      commandId: string;
+      teamId: string;
+      expectedVersion: number;
+      patch: TeamProfilePatch;
+    }
+  | {
+      type: 'adminAssignMember';
+      commandId: string;
+      uid: string;
+      teamId: string | null;
+      role: FormationRole;
+      expectedVersion: number;
+    }
+  | {
+      type: 'adminUpdateMember';
+      commandId: string;
+      uid: string;
+      expectedVersion: number;
+      displayName: string;
+      bio: string;
+    }
+  | {
+      type: 'adminDeleteTeam';
+      commandId: string;
+      teamId: string;
+      expectedVersion: number;
+      reason: string;
+    }
+  | {
+      type: 'adminReopenSubmission';
+      commandId: string;
+      teamId: string;
+      expectedVersion: number;
+      reason: string;
+    }
+  | {
+      type: 'adminUpdateSubmission';
+      commandId: string;
+      teamId: string;
+      expectedVersion: number;
+      reason: string;
+      patch: SubmissionPatch;
+    };
 export interface AppSnapshot {
   formationTeams?: FormationTeam[];
   organizerInvites?: OrganizerInvite[];
@@ -118,6 +189,7 @@ export interface AppSnapshot {
 }
 export type Command =
   | PlatformCommand
+  | TeamManagementCommand
   | {
       type: 'requestMembership';
       commandId: string;
@@ -161,7 +233,7 @@ export type Command =
       reason: string;
       expectedPhaseVersion: number;
     }
-  | { type: 'setAnnouncement'; commandId: string; announcement: string }
+  | { type: 'setAnnouncement'; commandId: string; announcement: string; expectedVersion: number }
   | {
       type: 'haltIssuer';
       commandId: string;

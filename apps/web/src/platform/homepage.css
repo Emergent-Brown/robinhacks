@@ -1,24 +1,83 @@
 .p-home-organization {
   border-top: 1px solid #d5e0ea;
-  padding-top: 2px;
-  margin-top: 20px;
+  padding-top: 20px;
+  margin-top: 24px;
+}
+.p-home-organization h3 {
+  margin-top: 0;
+}
+.p-home .p-page-heading .p-actions {
+  margin-top: 0;
+}
+.p-home .p-steps {
+  margin: 0;
+}
+.p-home .p-steps li {
+  margin-bottom: 18px;
+}
+.p-home .p-steps li:last-child {
+  margin-bottom: 0;
 }
 .p-logistics-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 36px;
+  gap: 24px 36px;
+  margin-top: 20px;
 }
 .p-logistics-grid h3 {
   color: #174e82;
+  margin-top: 0;
 }
 .p-logistics-grid p {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.p-logistics-grid > div > :last-child {
+  margin-bottom: 0;
+}
 .p-home .p-schedule-round {
   background: #eef6fc;
   padding: 14px 12px;
   border-left: 3px solid #3974a2;
+}
+.p-sponsor-grid {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0;
+  margin: 20px 0 0;
+}
+.p-sponsor {
+  min-width: 0;
+  height: 132px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  border: 1px solid #e0e7ed;
+  background: #fff;
+}
+.p-sponsor img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 192px;
+  max-height: 92px;
+  object-fit: contain;
+}
+.p-sponsor--omi img {
+  max-width: 142px;
+}
+.p-sponsor--culture-pop {
+  padding: 0;
+}
+.p-sponsor--culture-pop img {
+  max-width: 240px;
+  max-height: 132px;
+}
+.p-sponsor--flatbread img {
+  max-width: 160px;
 }
 @media (max-width: 600px) {
   .p-home .p-page-heading {
@@ -30,7 +89,7 @@
   }
   .p-logistics-grid {
     grid-template-columns: 1fr;
-    gap: 0;
+    gap: 22px;
   }
   .p-home .p-schedule li {
     grid-template-columns: minmax(104px, 0.8fr) minmax(0, 1.2fr);
@@ -41,5 +100,23 @@
   }
   .p-home .p-section-heading > .muted {
     font-size: 12px;
+  }
+  .p-sponsor-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 18px;
+  }
+  .p-sponsor {
+    height: 108px;
+    padding: 12px;
+  }
+  .p-sponsor--omi img {
+    max-width: 110px;
+  }
+  .p-sponsor--culture-pop {
+    padding: 0;
+  }
+  .p-sponsor--culture-pop img {
+    max-height: 106px;
   }
 }

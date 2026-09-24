@@ -21,7 +21,82 @@ const url = z.union([
 ]);
 const role = z.enum(['organizer', 'judge', 'captain', 'trader', 'member']);
 const status = z.enum(['approved', 'pending', 'suspended']);
+const teamProfile = {
+  name: name.optional(),
+  pitch: line(140).optional(),
+  category: line(40).optional(),
+  problem: line(1200).optional(),
+  building: line(1200).optional(),
+  demoUrl: url.optional(),
+  repoUrl: url.optional(),
+};
+const teamCorrection = { commandId, teamId: identifier, expectedVersion: version };
+const reason = line(500).min(5);
 const eventCommandSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('adminCreateTeam'), commandId, name }).strict(),
+  z
+    .object({
+      type: z.literal('adminUpdateTeam'),
+      ...teamCorrection,
+      patch: z
+        .object({
+          ...teamProfile,
+          ticker: line(12).min(1).optional(),
+          color: z
+            .string()
+            .regex(/^#[0-9a-f]{6}$/i)
+            .optional(),
+          update: line(500).optional(),
+        })
+        .strict()
+        .refine((patch) => Object.keys(patch).length > 0, 'Include a profile change.'),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('adminAssignMember'),
+      commandId,
+      uid: identifier,
+      teamId: identifier.nullable(),
+      role: z.enum(['captain', 'trader', 'member']),
+      expectedVersion: version,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('adminUpdateMember'),
+      commandId,
+      uid: identifier,
+      expectedVersion: version,
+      displayName: name,
+      bio: line(280),
+    })
+    .strict(),
+  z.object({ type: z.literal('adminDeleteTeam'), ...teamCorrection, reason }).strict(),
+  z.object({ type: z.literal('adminReopenSubmission'), ...teamCorrection, reason }).strict(),
+  z
+    .object({
+      type: z.literal('adminUpdateSubmission'),
+      ...teamCorrection,
+      reason,
+      patch: z
+        .object({
+          name: name.optional(),
+          pitch: line(140).min(1).optional(),
+          problem: line(1200).min(1).optional(),
+          building: line(1200).min(1).optional(),
+          demoUrl: url.optional(),
+          repoUrl: url.optional(),
+          commitSha: z
+            .string()
+            .regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i)
+            .optional(),
+          techStack: line(300).optional(),
+        })
+        .strict()
+        .refine((patch) => Object.keys(patch).length > 0, 'Include an evidence correction.'),
+    })
+    .strict(),
   z
     .object({
       type: z.literal('requestMembership'),
@@ -115,7 +190,14 @@ const eventCommandSchema = z.discriminatedUnion('type', [
       expectedPhaseVersion: version,
     })
     .strict(),
-  z.object({ type: z.literal('setAnnouncement'), commandId, announcement: line(500) }).strict(),
+  z
+    .object({
+      type: z.literal('setAnnouncement'),
+      commandId,
+      announcement: line(500),
+      expectedVersion: version,
+    })
+    .strict(),
   z
     .object({
       type: z.literal('haltIssuer'),

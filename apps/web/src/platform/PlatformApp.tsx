@@ -9,6 +9,7 @@ import { Admin } from './Admin';
 import { Investments } from './Investments';
 import { Judging } from './Judging';
 import { Messages } from './Messages';
+import { OrganizerNoteDialog } from './OrganizerNote';
 import { MyTeam } from './MyTeam';
 import { TeamFormation } from './TeamFormation';
 import { ProjectDetail, Projects } from './Projects';
@@ -21,8 +22,15 @@ function readRoute() {
   const [page = '', id = ''] = location.hash.replace(/^#\/?/, '').split('/');
   return {
     page: page === '' ? 'home' : page.startsWith('platform') ? page.slice(8) : 'projects',
-    id: decodeURIComponent(id),
+    id: safeRouteId(id),
   };
+}
+function safeRouteId(id: string) {
+  try {
+    return decodeURIComponent(id);
+  } catch {
+    return '';
+  }
 }
 export function PlatformApp({
   data,
@@ -36,7 +44,7 @@ export function PlatformApp({
   notice?: string;
 }) {
   const [route, setRoute] = useState(readRoute);
-  const [modal, setModal] = useState<'account' | 'demo' | 'onboarding' | null>(null);
+  const [modal, setModal] = useState<'account' | 'demo' | 'onboarding' | 'note' | null>(null);
   const [offline, setOffline] = useState(!navigator.onLine);
   const [localError, setLocalError] = useState('');
   const now = useClock();
@@ -51,7 +59,9 @@ export function PlatformApp({
   const showResults = !judge || event.phase === 'FINALIZED';
   const settings = config(data);
   const active = state.rounds.find((round) => round.state === 'open');
-  const unread = state.conversations.filter((item) => item.unread).length;
+  const unread =
+    state.conversations.filter((item) => item.unread).length + (state.general.unread ? 1 : 0);
+  const messagesLabel = `Messages${unread ? ` (${unread})` : ''}`;
   const onboardingKey = `emergenthacks:onboarding:${event.id}:${user?.uid}`;
   useEffect(() => {
     const update = () => {
@@ -102,19 +112,27 @@ export function PlatformApp({
       setLocalError(e instanceof Error ? e.message : 'Could not reset demo.');
     }
   }
-  const pages = judge
+  const pages = organizer
     ? [
         ['projects', 'Projects'],
-        ['judging', 'Judging'],
+        ['messages', messagesLabel],
+        ['admin', 'Admin'],
         ['more', 'More'],
       ]
-    : [
-        ['projects', 'Projects'],
-        ['investments', 'Investments'],
-        ['messages', `Messages${unread ? ` (${unread})` : ''}`],
-        ['team', 'My team'],
-        ['more', 'More'],
-      ];
+    : judge
+      ? [
+          ['projects', 'Projects'],
+          ['judging', 'Judging'],
+          ['messages', messagesLabel],
+          ['more', 'More'],
+        ]
+      : [
+          ['projects', 'Projects'],
+          ['investments', 'Investments'],
+          ['messages', messagesLabel],
+          ['team', 'My team'],
+          ['more', 'More'],
+        ];
   const deadline = [
     ...(active ? [{ label: active.name, time: active.closesAt }] : []),
     ...(settings.submissionsOpen && settings.submissionClosesAt
@@ -165,14 +183,6 @@ export function PlatformApp({
                   Results
                 </button>
               )}
-              {organizer && (
-                <button
-                  aria-current={route.page === 'admin' ? 'page' : undefined}
-                  onClick={() => navigate('admin')}
-                >
-                  Admin
-                </button>
-              )}
               <button
                 aria-current={route.page === 'rules' ? 'page' : undefined}
                 onClick={() => navigate('rules')}
@@ -217,9 +227,20 @@ export function PlatformApp({
                           ? 'Registration'
                           : 'Between funding rounds'}
           </span>
-          <button className="p-link" disabled={actions.busy} onClick={() => void actions.refresh()}>
-            Refresh
-          </button>
+          <div className="p-context-actions">
+            {organizer && (
+              <button className="p-link" onClick={() => setModal('note')}>
+                {event.announcement ? 'Edit note' : 'Post note'}
+              </button>
+            )}
+            <button
+              className="p-link"
+              disabled={actions.busy}
+              onClick={() => void actions.refresh()}
+            >
+              Refresh
+            </button>
+          </div>
         </div>
       )}
       {(offline || error || localError) && (
@@ -239,8 +260,15 @@ export function PlatformApp({
         </div>
       )}
       {event.announcement && approved && (
-        <div className="p-banner">
-          <strong>Organizer note:</strong> {event.announcement}
+        <div className="p-banner p-organizer-banner">
+          <p>
+            <strong>Organizer note:</strong> {event.announcement}
+          </p>
+          {organizer && (
+            <button className="p-link" onClick={() => setModal('note')}>
+              Edit note
+            </button>
+          )}
         </div>
       )}
       {reminder && (
@@ -262,7 +290,29 @@ export function PlatformApp({
             <Homepage data={data} actions={actions} onJoin={() => navigate('access')} />
           )
         ) : needsTeam ? (
-          <TeamFormation data={data} actions={actions} />
+          <>
+            <nav className="p-formation-nav" aria-label="Event access">
+              <button
+                className="button secondary"
+                aria-current={route.page !== 'messages' ? 'page' : undefined}
+                onClick={() => navigate('team')}
+              >
+                Choose your team
+              </button>
+              <button
+                className="button secondary"
+                aria-current={route.page === 'messages' ? 'page' : undefined}
+                onClick={() => navigate('messages', 'general')}
+              >
+                #general{state.general.unread ? ' · New messages' : ''}
+              </button>
+            </nav>
+            {route.page === 'messages' ? (
+              <Messages data={data} actions={actions} id="general" />
+            ) : (
+              <TeamFormation data={data} actions={actions} />
+            )}
+          </>
         ) : route.page === 'home' ? (
           <Homepage data={data} actions={actions} onJoin={() => navigate('team')} />
         ) : route.page === 'projects' ? (
@@ -273,7 +323,7 @@ export function PlatformApp({
           )
         ) : route.page === 'investments' && !judge ? (
           <Investments data={data} actions={actions} />
-        ) : route.page === 'messages' && !judge ? (
+        ) : route.page === 'messages' ? (
           <Messages data={data} actions={actions} id={route.id} />
         ) : route.page === 'team' ? (
           <MyTeam data={data} actions={actions} />
@@ -320,7 +370,7 @@ export function PlatformApp({
               key={page}
               aria-current={
                 route.page === page ||
-                (page === 'more' && ['admin', 'results', 'rules', 'home'].includes(route.page))
+                (page === 'more' && ['results', 'rules', 'home'].includes(route.page))
                   ? 'page'
                   : undefined
               }
@@ -338,6 +388,9 @@ export function PlatformApp({
             ×
           </button>
         </div>
+      )}
+      {modal === 'note' && organizer && (
+        <OrganizerNoteDialog data={data} actions={actions} onClose={() => setModal(null)} />
       )}
       {modal === 'account' && (
         <Dialog title="Your account" onClose={() => setModal(null)}>

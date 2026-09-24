@@ -1,6 +1,6 @@
 # Resetting the event
 
-Use this only when the owner has explicitly approved deleting the event's participants and work. Routine attendee removal belongs in **Admin → Access → Remove**. That revokes event access; it keeps submitted records and private authorship history for the results audit. It does not delete someone's Google account.
+Use this only when the owner has explicitly approved deleting the event's participants and work. Routine attendee removal belongs in **Admin → People → Remove**. That revokes event access; it keeps submitted records and private authorship history for the results audit. It does not delete someone's Google account.
 
 The reset script is restricted to the Firebase project selected in `.firebaserc`, event `robinhacks-2026`, and the verified Google owner `shulman.aj@gmail.com`. It refuses a project containing other events because Firebase Auth users belong to the whole project.
 
@@ -35,4 +35,4 @@ If the script fails after maintenance begins, resolve the reported problem and r
 
 ## Open registration to participants
 
-Sign in at [Emergent Hacks](https://emergenthacks.com/) with the owner's Google account. In **Admin → Access**, approve attendees, add organizer Google emails as needed, then click **Start team selection** when people are ready to form teams. Close selection before opening funding.
+Sign in at [Emergent Hacks](https://emergenthacks.com/) with the owner's Google account. In **Admin → People**, approve attendees, add organizer Google emails as needed, then click **Start team selection** when people are ready to form teams. Close selection before opening funding.

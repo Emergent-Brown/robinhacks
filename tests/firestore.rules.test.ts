@@ -50,6 +50,12 @@ const googleClaims = {
 const privatePaths = [
   'organizerInvites/invited@example.test',
   'removedMembers/previous-captain',
+  'submissionCorrections/correction-one',
+  'teamManagementAudit/change-one',
+  'messageChannels/general/pages/0',
+  'generalReadStates/captain',
+  'conversationDirectory/chat-one',
+  'moderatedMessages/message-one',
   'members/captain',
   'members/teammate',
   'members/pending',
@@ -163,6 +169,11 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
         doc(db, `${eventRoot}/members/unassigned`),
         member('unassigned', 'member', 'approved', null),
       );
+      batch.set(doc(db, `${eventRoot}/messageChannels/general`), {
+        latestSequence: 1,
+        lastMessage: 'Welcome',
+        updatedAt: 1,
+      });
       batch.set(doc(db, `${eventRoot}/teamInboxes/team-a`), { conversations: [] });
       batch.set(
         doc(db, `${eventRoot}/members/pending`),
@@ -229,6 +240,30 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
       'awardResults/current',
     ])
       await assertFails(getDoc(doc(databases.judge!, `${eventRoot}/${path}`)));
+  });
+
+  it('shares only the general summary with every approved Google identity', async () => {
+    for (const uid of ['captain', 'teammate', 'other-team', 'organizer', 'judge', 'unassigned'])
+      await assertSucceeds(getDoc(doc(databases[uid]!, `${eventRoot}/messageChannels/general`)));
+    for (const uid of [
+      'anonymous',
+      'outsider',
+      'pending',
+      'suspended',
+      'foreign-member',
+      'forged-claims',
+      'password',
+      'unverified',
+    ])
+      await assertFails(getDoc(doc(databases[uid]!, `${eventRoot}/messageChannels/general`)));
+    for (const uid of ['captain', 'organizer', 'unassigned']) {
+      await assertFails(
+        setDoc(doc(databases[uid]!, `${eventRoot}/messageChannels/general`), {
+          latestSequence: 99,
+        }),
+      );
+      await assertFails(getDocs(collection(databases[uid]!, `${eventRoot}/messageChannels`)));
+    }
   });
 
   it('allows only approved members of a team to read its inbox listener', async () => {
@@ -322,6 +357,12 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
     'manifests',
     'adminAudit',
     'commandReceipts',
+    'conversationDirectory',
+    'generalReadStates',
+    'messageChannels/general/pages',
+    'moderatedMessages',
+    'submissionCorrections',
+    'teamManagementAudit',
     'wallets/team-a/positions',
     'wallets/team-a/notes',
     'wallets/team-a/receipts',
@@ -441,6 +482,46 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
       expect(claims.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
       const roster = await admin.collection(`${root}/members`).where('teamId', '==', teamId).get();
       expect(roster.docs.filter((doc) => doc.data().role === 'trader')).toHaveLength(1);
+      // Organizer moves use the same real transaction adapter as participant formation.
+      const losingJoin = newcomers
+        .slice(1)
+        .find((_, index) => claims[index]!.status === 'rejected')!;
+      const losingMember = (await service.snapshot(losingJoin.uid)).member!;
+      await service.execute(PLATFORM_USERS.organizer, {
+        type: 'adminAssignMember',
+        commandId: 'formation-admin-assign',
+        uid: losingJoin.uid,
+        teamId,
+        role: 'member',
+        expectedVersion: losingMember.version,
+      });
+      expect(
+        (await admin.doc(`${root}/teams/${teamId}/members/${losingJoin.uid}`).get()).data()?.role,
+      ).toBe('member');
+      const movedMember = (await service.snapshot(losingJoin.uid)).member!;
+      await expect(
+        service.execute(PLATFORM_USERS.organizer, {
+          type: 'adminAssignMember',
+          commandId: 'formation-admin-duplicate-captain',
+          uid: losingJoin.uid,
+          teamId,
+          role: 'captain',
+          expectedVersion: movedMember.version,
+        }),
+      ).rejects.toThrow('already has a captain');
+      await service.execute(PLATFORM_USERS.organizer, {
+        type: 'adminAssignMember',
+        commandId: 'formation-admin-unassign',
+        uid: losingJoin.uid,
+        teamId: null,
+        role: 'member',
+        expectedVersion: movedMember.version,
+      });
+      expect(
+        (await admin.doc(`${root}/teams/${teamId}/members/${losingJoin.uid}`).get()).exists,
+      ).toBe(false);
+      expect((await service.snapshot(losingJoin.uid)).market.entries).toEqual([]);
+      expect((await admin.collection(`${root}/teamManagementAudit`).get()).size).toBe(2);
       const client = environment.authenticatedContext(newcomers[0]!.uid, googleClaims).firestore();
       await assertSucceeds(getDoc(doc(client, root)));
       await service.execute(PLATFORM_USERS.organizer, {
@@ -456,6 +537,7 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
         .authenticatedContext(PLATFORM_USERS.organizer.uid, googleClaims)
         .firestore();
       await assertFails(getDoc(doc(organizerClient, root)));
+      await assertFails(getDoc(doc(organizerClient, `${root}/messageChannels/general`)));
       await expect(service.snapshot(PLATFORM_USERS.organizer.uid)).rejects.toThrow();
     } finally {
       await deleteApp(adminApp);

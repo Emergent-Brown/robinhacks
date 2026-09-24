@@ -115,7 +115,11 @@ The signed-out homepage explains the event, shows confirmed logistics and links 
 
 Messages belong to a pair of teams, with teammate names attached to individual sends. All approved competing teammates can participate. Judges and organizers do not enter competing team conversations. Each team has a private inbox with previews, shared read status and blocking controls.
 
-A conversation holds at most 250 messages, each at most 1,000 characters. A team can send one message every five seconds across all its conversations. Either team can block the conversation; a sender cannot undo the recipient's block. A report exposes the selected message and reason to organizers. It does not give them routine access to the full conversation. Up to 100 reports can be filed through the app; the event's contact is the fallback reporting route.
+A conversation holds at most 250 messages, each at most 1,000 characters. A team can send one message every five seconds across all its conversations. Either team can block the conversation; a sender cannot undo the recipient's block. Organizers can review every team conversation through a separate read-only browser filtered by team or participant. Participants are told this in the conversation. Reports flag a selected message and reason for attention. Up to 100 reports can be filed through the app; the event's contact is the fallback reporting route.
+
+**#general** stays pinned above team conversations for every approved identity, including attendees who have not chosen a team and judges. All approved participants may post; organizer posts carry an Organizer label. Only organizers may post after the event becomes read-only. Messages are limited to 1,000 characters, one send per person every five seconds, and 100,000 messages per event. The server reads at most 40 messages per request from at most two storage chunks. Individual read markers do not change anyone else’s unread status. General-message notifications update a small cached summary instead of fetching the full event snapshot for every participant.
+
+Organizers review team threads without joining a team or sending as another person. The participant filter includes current-team threads and historical participation recorded while a conversation was active. A removal replaces the visible body with a notice and the organizer’s reason, preserves authorship, records the original privately, and adds an audit entry. Moderation revisions invalidate previously loaded text; identity, team and role changes also clear the local conversation cache. Conversation review does not expose live funding allocations or community ballots.
 
 Discussions and private diligence are allowed throughout the event. Public official progress updates provide shared evidence. The conduct policy prohibits deceptive claims, sabotage, quid-pro-quo backing and deliberate outcome manipulation. Private allocations reduce some gaming opportunities; they do not make social coordination impossible.
 
@@ -155,7 +159,7 @@ Ranked choices earn 3, 2 and 1 points. Ties break by first-choice count and then
 | Approved, unassigned participant | Team-selection status and safe team names, roster names/roles, and available roles; no regular workspace data |
 | Approved teammate | Project evidence and public roster names; their shared allocations, entitlements, ballot and conversations |
 | Judge | Assigned submissions, public progress, relevant roster names, own assignments and own sheet; no funding signal before results |
-| Organizer | Verified access requests, staff/roster controls, judge assignments/sheets, selected message reports, event controls and private award preview; no live allocations/ballots or ordinary DM access |
+| Organizer | Verified access requests, staff/roster controls, judge assignments/sheets, all team conversation history, message moderation, event controls and private award preview; no live allocations or ballots |
 | After publication | Published award results; organizers can export the full auditable funding/judging record |
 
 Sign-in uses Google only and requires a verified email. Signup collects the name and account email; organizer approval is separate from team assignment. Approved unassigned participants wait until an organizer opens team selection, then create or join a team and choose an available role. Creating a team can use any role. The server enforces one captain and one designated investor per team, with multiple members. Staff accounts skip team selection. See [joining and approval](14-joining-and-approval.md).
@@ -176,7 +180,9 @@ The local demo and Firebase Functions call the same `GameService`. Its transacti
 | `FundingService` | Rules configuration, private sheets, funding deadlines, close and whole-round void |
 | `CommunityService` | Evidence/social/judging command facade and role-scoped snapshot composition |
 | `ProjectService` | Append-only checkpoints and immutable final submissions |
-| `MessagingService` | Conversation authorization, team rate limit, private inboxes, blocks and reports |
+| `MessagingService` | Team conversation authorization, team rate limit, inboxes, blocks and reports |
+| `GeneralChatService` | Approved-member event chat, bounded history pages and individual read cursors |
+| `ChatReviewService` | Organizer-only conversation directory, read-only review and attributed moderation |
 | `JudgingService` | Assignments, conflicts, drafts, score locks, award preparation/review/publication |
 | `BallotService` | Private team ballot versions and deadlines |
 | `MembershipService` / permission classes | Verified signup, independent approval, roles, roster lock and project permissions |
@@ -186,7 +192,7 @@ The local demo and Firebase Functions call the same `GameService`. Its transacti
 | `apps/web/src/platform/` | Focused React feature screens and shared rendering helpers |
 | Demo/Firebase gateways | Authentication, scoped snapshots, commands and inbox refresh behavior |
 
-The Firebase callables are `gamePublic`, `gameSnapshot`, `gameCommand`, `gameConversation`, `gameExport`, and `posterStats`; `posterVisit` handles numbered HTTP poster links. `gamePublic` returns event metadata without requiring sign-in; it does not expose sealed data.
+The Firebase callables are `gamePublic`, `gameSnapshot`, `gameCommand`, `gameMessages`, `gameConversationDirectory`, `gameExport`, and `posterStats`; `posterVisit` handles numbered HTTP poster links. `gamePublic` returns event metadata without requiring sign-in; it does not expose sealed data.
 
 All event data lives under `events/{eventId}`:
 
@@ -200,7 +206,11 @@ All event data lives under `events/{eventId}`:
 | `roundEntitlements` | Immutable per-team round allocation facts; void status is recorded explicitly |
 | `projectUpdates` | Append-only checkpoint evidence and author timestamps |
 | `submissions` | One immutable final snapshot per project |
-| `conversations`, `teamInboxes` | Private bounded messages, blocks, shared read state and own-team summaries |
+| `conversations`, `teamInboxes` | Team messages, blocks, shared read state and own-team summaries; organizer review through the server |
+| `conversationDirectory` | Organizer-only thread metadata and historical participant identities |
+| `messageChannels/general`, its `pages` subcollection | Shared channel summary and 40-message chunks; only the summary supports direct client reads |
+| `generalReadStates` | Individual read cursors and general-chat send throttles |
+| `moderatedMessages` | Private original text, actor and reason for each removal |
 | `messageReports` | The reported message and reason for organizer review |
 | `judgeAssignments`, `judgingSheets` | Separate judge scopes, conflicts, persisted drafts and submission locks |
 | `communityBallots` | Private versioned team rankings |
@@ -217,7 +227,7 @@ This matrix summarizes the implemented decisions without reproducing the meeting
 | --- | --- |
 | Unified event name and uncluttered identity | Emergent Hacks name; Silicon Valley theme; restrained shared navigation and typography |
 | Public shareable homepage | Public event metadata endpoint, confirmed logistical fields, schedule, registration and contact |
-| Direct team communication | Private conversations, shared inboxes, blocks and selected-message reports |
+| Direct team communication | Team conversations, shared inboxes, blocks, reports and disclosed organizer review |
 | Formal project submissions | Explicit immutable submission with existing profile, demo, repository, full commit and roster |
 | Native judging | Independent staff role, assignments/conflicts, saved drafts, locked sheets and reviewed results |
 | Remove undefined categories | Category removed from current forms and discovery UI |

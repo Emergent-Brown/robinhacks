@@ -19,11 +19,11 @@ Open [localhost:5173](http://localhost:5173). Demo mode contains 12 fictional pr
 
 The **Demo** controls switch between attendee, captain, teammate, organizer and judge. Available presets:
 
-| Preset    | Current experience                                                  |
-| --------- | ------------------------------------------------------------------- |
-| `registration` | Approved attendee waiting for organizer-controlled team selection |
-| `funding` | Second sealed funding round open, first-round entitlements visible |
-| `judging` | Three completed rounds, final submissions, independent judging open |
+| Preset         | Current experience                                                  |
+| -------------- | ------------------------------------------------------------------- |
+| `registration` | Approved attendee waiting for organizer-controlled team selection   |
+| `funding`      | Second sealed funding round open, first-round entitlements visible  |
+| `judging`      | Three completed rounds, final submissions, independent judging open |
 
 Reset the registration preset to rehearse approval and team selection before funding.
 
@@ -42,7 +42,7 @@ The local project is `demo-robinhacks`; the seed script refuses remote emulator 
 - Google-only signup, independent organizer approval, and participant team/role selection opened by organizers. See [joining and approval](docs/14-joining-and-approval.md).
 - Verified Google identity, organizer email invitations, protected access removal, and locked team rosters.
 - Project profiles with sectors and optional teammate bios, search by project or person, unopened-project discovery, archived checkpoints, and immutable final submissions with demo, repository and full Git commit.
-- Private team-to-team messages, shared inboxes, blocking and reports.
+- Pinned #general chat for all approved attendees, including people still choosing a team. Team inboxes include blocking and reports; organizers can review any thread by team or participant and remove messages with an attributed notice.
 - Autosaved team allocations, read-only round history, deadline enforcement, simultaneous closing, per-round entitlements, audit records and exact payout calculations.
 - An independent judge portal with assignments, conflicts, saved drafts, submitted score locks and reviewed awards.
 - A private community ballot, results publication, and post-event export/reconciliation.
@@ -71,8 +71,8 @@ Read [11 · Sealed rounds](docs/11-sealed-rounds.md) for the complete current ru
 ## Run an event
 
 1. Complete [Firebase setup](docs/FIREBASE-SETUP.md). Rehearse sign-in with the primary organizer, a backup and a judge.
-2. Fill **Admin → Settings** with confirmed event details, prize amounts, reserve policy and judging rubric. Approve actual attendees and separate staff accounts in **Admin → Access**.
-3. In **Admin → Access**, start team selection. Approved attendees create or join teams and choose an available role. Check every team has a captain, close team selection, then collect an initial checkpoint from every active team. Open round one; this locks the funding/judging rules and competing rosters.
+2. Fill **Admin → Settings** with confirmed event details, prize amounts, reserve policy and judging rubric. Approve actual attendees and separate staff accounts in **Admin → People**.
+3. In **Admin → People**, start team selection. Approved attendees create or join teams and choose an available role. Check every team has a captain, close team selection, then collect an initial checkpoint from every active team. Open round one; this locks the funding/judging rules and competing rosters.
 4. At the deadline, close the round to reveal totals and freeze entitlements. Teams build, publish the next checkpoint and allocate a fresh budget in round two.
 5. Open final submissions before round three. Every active project must submit final evidence and its final checkpoint before the last funding window opens.
 6. Finish funding, open judging, assign projects, and collect complete independent score sheets. Run the separate community ballot.
@@ -133,6 +133,7 @@ Environment files, local Auth configuration, production exports, credentials, de
 - [10 · Readiness audit](docs/10-product-audit.md): event facts, staffing, deployment and rehearsal still to confirm.
 - [Firebase setup](docs/FIREBASE-SETUP.md): infrastructure and release steps.
 - [Joining and approval](docs/14-joining-and-approval.md): Google signup, team selection, organizer invitations and access removal.
+- [Organizer tools](docs/17-organizer-tools.md): notes, #general, conversation review, team/person management and submission corrections.
 - [Architecture](docs/architecture.md): current service boundaries, authorization and data flow.
 
 Owner-only maintenance: [fresh event reset](docs/16-fresh-event-reset.md).

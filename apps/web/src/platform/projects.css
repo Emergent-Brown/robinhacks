@@ -2,7 +2,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(170px, 230px);
   gap: 16px;
-  margin: 22px 0 15px;
+  margin: 24px 0 20px;
 }
 .p-project-filters > div {
   min-width: 0;
@@ -23,7 +23,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  margin: 0 0 12px;
+  margin: 0 0 16px;
   color: #506c82;
   font-size: 12px;
 }
@@ -43,6 +43,21 @@
 }
 .p-profile-roster.p-roster > li {
   display: block;
+  padding: 16px 0;
+}
+.p-profile-roster .p-person-heading select {
+  width: auto;
+  max-width: 100%;
+}
+.p-project-name {
+  overflow-wrap: anywhere;
+}
+.p-project-directory .p-discovery {
+  margin-top: 20px;
+}
+.p-project-directory .p-discovery p {
+  margin-top: 8px;
+  line-height: 1.65;
 }
 .p-person-heading {
   display: flex;
@@ -60,8 +75,8 @@
   overflow-wrap: anywhere;
 }
 .p-bio-editor {
-  margin-top: 14px;
-  padding-top: 12px;
+  margin-top: 20px;
+  padding-top: 20px;
   border-top: 1px solid #d9e3ec;
 }
 .p-bio-editor > p {
@@ -71,6 +86,13 @@
   text-align: right;
   font-size: 11px;
   color: #5c7388;
+}
+.p-project-editor .field {
+  gap: 7px;
+  margin-bottom: 20px;
+}
+.p-project-editor .p-actions {
+  margin-top: 24px;
 }
 @media (max-width: 600px) {
   .p-project-filters {
@@ -85,12 +107,12 @@
   }
   .p-project-directory .p-discovery {
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 16px;
   }
   .p-project-directory .p-discovery li + li {
     border-left: 0;
     border-top: 1px solid #d6e1eb;
-    padding: 10px 0 0;
+    padding: 16px 0 0;
   }
   .p-project-directory .p-discovery p {
     display: block;

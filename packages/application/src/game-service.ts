@@ -12,8 +12,8 @@ import type {
   FundingCommand,
   CommunityCommand,
   FundingRound,
-  TeamConversation,
   OrganizerInvite,
+  MessageRequest,
 } from '@robinhacks/core';
 import { fundingCommandTypes, platformCommandTypes } from './platform-schema';
 import { FundingService } from './services/funding-service';
@@ -28,6 +28,7 @@ import { Permissions } from './services/permissions';
 import { ProfileService } from './services/profile-service';
 import { TeamFormationService } from './services/team-formation-service';
 import { OrganizerAccessService } from './services/organizer-access-service';
+import { TeamManagementService } from './services/team-management-service';
 
 interface AcceptedCommand {
   payloadKey: string;
@@ -59,6 +60,7 @@ export class GameService {
   private readonly profiles = new ProfileService();
   private readonly formation = new TeamFormationService();
   private readonly organizers = new OrganizerAccessService();
+  private readonly teamManagement = new TeamManagementService();
   private readonly funding = new FundingService();
   private readonly community = new CommunityService();
 
@@ -107,7 +109,13 @@ export class GameService {
         !['organizer', 'judge'].includes(member.role)
       )
         requireState(
-          ['createFormationTeam', 'joinFormationTeam', 'updateProfile'].includes(command.type),
+          [
+            'createFormationTeam',
+            'joinFormationTeam',
+            'updateProfile',
+            'sendGeneralMessage',
+            'readGeneral',
+          ].includes(command.type),
           'TEAM_FORMATION_REQUIRED',
           'Choose your team and role before entering the event.',
         );
@@ -155,6 +163,15 @@ export class GameService {
           case 'removeMember':
             result = await this.organizers.execute(context, command);
             break;
+          case 'adminCreateTeam':
+          case 'adminUpdateTeam':
+          case 'adminAssignMember':
+          case 'adminDeleteTeam':
+          case 'adminReopenSubmission':
+          case 'adminUpdateSubmission':
+          case 'adminUpdateMember':
+            result = await this.teamManagement.execute(context, command);
+            break;
           case 'setMemberRole':
             result = await this.membership.role(context, command);
             break;
@@ -172,9 +189,22 @@ export class GameService {
             break;
           case 'setAnnouncement': {
             Permissions.organizer(context.member);
-            Permissions.editable(event);
-            tx.set(this.paths.root, { ...event, announcement: command.announcement });
-            result = { message: 'Event announcement updated.' };
+            requireState(
+              command.expectedVersion === (event.announcementVersion ?? 0),
+              'NOTE_CHANGED',
+              'Another organizer updated this note. Load the current note before saving.',
+            );
+            tx.set(this.paths.root, {
+              ...event,
+              announcement: command.announcement,
+              announcementVersion: (event.announcementVersion ?? 0) + 1,
+              announcementUpdatedAt: now,
+              announcementAuthor: context.member.displayName,
+              phaseVersion: event.phaseVersion + 1,
+            });
+            result = {
+              message: command.announcement ? 'Organizer note posted.' : 'Organizer note removed.',
+            };
             break;
           }
           case 'haltIssuer':
@@ -186,6 +216,9 @@ export class GameService {
       if (
         ![
           'sendMessage',
+          'sendGeneralMessage',
+          'readGeneral',
+          'removeChatMessage',
           'readConversation',
           'blockConversation',
           'reportMessage',
@@ -203,7 +236,8 @@ export class GameService {
         result,
       });
       if (
-        context.member.role === 'organizer' ||
+        (context.member.role === 'organizer' &&
+          !['readGeneral', 'readConversation'].includes(command.type)) ||
         ['updateTeam', 'setMemberRole', 'publishUpdate', 'submitProject'].includes(command.type)
       ) {
         const audit: AuditEntry = {
@@ -276,6 +310,7 @@ export class GameService {
       }
       if (member.teamId === null && !['organizer', 'judge'].includes(member.role)) {
         snapshot.formationTeams = await this.formation.directory(tx, this.paths);
+        snapshot.platform!.general = await this.community.generalSummary(tx, this.paths, member);
         return snapshot;
       }
       if (['organizer', 'judge'].includes(member.role))
@@ -332,24 +367,49 @@ export class GameService {
     });
   }
 
-  async conversation(uid: string, otherTeamId: string): Promise<TeamConversation | null> {
+  async messages(uid: string, request: MessageRequest) {
     identifier.parse(uid);
-    identifier.parse(otherTeamId);
+    requireState(
+      ['general', 'team', 'review'].includes(request.kind),
+      'INVALID_CHANNEL',
+      'Choose a channel.',
+    );
+    if (request.kind !== 'general') identifier.parse(request.id);
+    requireState(
+      request.before === undefined ||
+        (Number.isSafeInteger(request.before) && request.before >= 1 && request.before <= 100001),
+      'INVALID_CURSOR',
+      'Refresh the conversation before loading more messages.',
+    );
     return this.repository.transaction(async (tx) => {
-      const member = await tx.get<Member>(this.paths.member(uid));
+      const [member, event] = await Promise.all([
+        tx.get<Member>(this.paths.member(uid)),
+        tx.get<EventConfig>(this.paths.root),
+      ]);
       Permissions.member(member);
-      const event = await tx.get<EventConfig>(this.paths.root);
       requireState(
-        !event?.maintenance,
+        event?.platform && !event.maintenance,
         'MAINTENANCE',
         'Event setup is in progress. Please try again shortly.',
       );
+      return this.community.messages(tx, this.paths, member, request);
+    });
+  }
+
+  async conversationDirectory(uid: string) {
+    identifier.parse(uid);
+    return this.repository.transaction(async (tx) => {
+      const [member, event] = await Promise.all([
+        tx.get<Member>(this.paths.member(uid)),
+        tx.get<EventConfig>(this.paths.root),
+      ]);
+      Permissions.member(member);
       requireState(
-        event?.platform,
-        'PLATFORM_REQUIRED',
-        'Messaging is not enabled for this event.',
+        event?.platform && !event.maintenance,
+        'MAINTENANCE',
+        'Event setup is in progress. Please try again shortly.',
       );
-      return this.community.readConversation(tx, this.paths, member, otherTeamId);
+      return this.community.conversationDirectory(tx, this.paths, member);
     });
   }
 
@@ -417,13 +477,15 @@ export class GameService {
         'accessRequests',
       ])
         data[name] = await tx.list(this.paths.collection(name), 1000);
-      const removedMembers = await tx.list(this.paths.collection('removedMembers'), 1001);
-      requireState(
-        removedMembers.length <= 1000,
-        'EXPORT_HISTORY_LIMIT',
-        'This event has more than 1,000 removed-member records. Export requires support to preserve the complete history.',
-      );
-      data.removedMembers = removedMembers;
+      for (const name of ['removedMembers', 'submissionCorrections', 'teamManagementAudit']) {
+        const records = await tx.list(this.paths.collection(name), 1001);
+        requireState(
+          records.length <= 1000,
+          'EXPORT_HISTORY_LIMIT',
+          `This event has more than 1,000 ${name} records. Export requires support to preserve the complete history.`,
+        );
+        data[name] = records;
+      }
       const exportId = `export_${uid.slice(0, 60)}_${this.clock.now()}`;
       tx.set(this.paths.doc('adminAudit', exportId), {
         id: exportId,

@@ -11,6 +11,7 @@ import type {
   ProjectSubmission,
   ProjectUpdate,
   TeamConversation,
+  MessageRequest,
 } from '@robinhacks/core';
 import type { EventPaths } from '../paths';
 import type { Transaction } from '../repository';
@@ -18,6 +19,8 @@ import type { CommandContext } from './context';
 import { BallotService } from './ballot-service';
 import { JudgingService } from './judging-service';
 import { MessagingService } from './messaging-service';
+import { GeneralChatService } from './general-chat-service';
+import { ChatReviewService } from './chat-review-service';
 import { Permissions } from './permissions';
 import { PlatformPermissions } from './platform-permissions';
 import { ProjectService } from './project-service';
@@ -29,6 +32,8 @@ type CommunitySnapshot = Omit<PlatformSnapshot, 'rounds' | 'allocation' | 'entit
 export class CommunityService {
   private readonly projects = new ProjectService();
   private readonly messaging = new MessagingService();
+  private readonly general = new GeneralChatService();
+  private readonly review = new ChatReviewService();
   private readonly judging = new JudgingService();
   private readonly ballots = new BallotService();
 
@@ -40,6 +45,11 @@ export class CommunityService {
       case 'setSubmissionWindow':
       case 'submitProject':
         return this.projects.execute(context, command);
+      case 'sendGeneralMessage':
+      case 'readGeneral':
+        return this.general.execute(context, command);
+      case 'removeChatMessage':
+        return this.review.remove(context, command);
       case 'sendMessage':
       case 'readConversation':
       case 'blockConversation':
@@ -67,6 +77,23 @@ export class CommunityService {
     return this.messaging.readConversation(tx, paths, member, otherTeamId);
   }
 
+  generalSummary(tx: Transaction, paths: EventPaths, member: Member) {
+    return this.general.summary(tx, paths, member);
+  }
+
+  messages(tx: Transaction, paths: EventPaths, member: Member, request: MessageRequest) {
+    Permissions.member(member);
+    if (request.kind === 'general') return this.general.page(tx, paths, member, request.before);
+    if (request.kind === 'review')
+      return this.review.page(tx, paths, member, request.id!, request.before);
+    return this.messaging.page(tx, paths, member, request.id!, request.before);
+  }
+
+  conversationDirectory(tx: Transaction, paths: EventPaths, member: Member) {
+    Permissions.member(member);
+    return this.review.directory(tx, paths, member);
+  }
+
   async snapshot({ tx, paths, event, member }: SnapshotContext): Promise<CommunitySnapshot> {
     Permissions.member(member);
     PlatformPermissions.config(event);
@@ -78,6 +105,7 @@ export class CommunityService {
       submissions,
       members,
       conversations,
+      general,
       reports,
       assignments,
       judgingSheets,
@@ -88,6 +116,7 @@ export class CommunityService {
       tx.list<ProjectSubmission>(paths.collection('submissions'), 31),
       tx.list<Member>(paths.collection('members'), 501),
       competitor ? this.messaging.inbox(tx, paths, member) : Promise.resolve([]),
+      this.general.summary(tx, paths, member),
       organizer
         ? tx.list<MessageReport>(paths.collection('messageReports'), 101)
         : Promise.resolve([]),
@@ -132,6 +161,7 @@ export class CommunityService {
           ...(candidate.bio ? { bio: candidate.bio } : {}),
         })),
       conversations,
+      general,
       reports,
       assignments,
       judgingSheets,

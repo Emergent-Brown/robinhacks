@@ -7,7 +7,7 @@ While the request is pending, **Check status** fetches a fresh result and shows 
 ## For attendees
 
 1. Send your name and verified Google email for approval.
-2. After approval, wait on the team-selection screen until the organizer opens selection. The project, investment, and messaging pages become available after you join a team.
+2. After approval, wait on the team-selection screen until the organizer opens selection. You can already read and post in the pinned **#general** chat. Project, investment, and team messaging pages become available after you join a team.
 3. Choose **Join a team** or **Create a team**, then select your role. Creating a team does not automatically make you captain.
 4. Each team can have one **Captain**, one **Designated investor**, and multiple **Members**. Taken roles are disabled. The server checks role availability again when you join, including when two people choose the same role together.
 5. Continue to **My team**. A captain must be in place before funding begins. Ask an organizer to correct a mistaken team assignment.
@@ -16,7 +16,7 @@ The captain manages team roles, project details, and investments. The designated
 
 ## For organizers
 
-Sign in with your organizer Google account and open **Admin → Access**. On mobile, Admin is under **More**. [Open Admin directly](https://emergenthacks.com/#/platformadmin).
+Sign in with your organizer Google account and open **Admin → People**. Admin is also in the mobile navigation. [Open Admin directly](https://emergenthacks.com/#/platformadmin).
 
 - **Approve attendees:** Select **Check for sign-ups**, review the verified name and email, then select **Approve**. Approval does not choose or create their team.
 - **Start team selection:** The Team selection panel shows how many approved people are unassigned. Select **Start team selection** and confirm. You can close and reopen selection during unpaused registration. Closing leaves unassigned attendees on the waiting screen.
@@ -24,7 +24,7 @@ Sign in with your organizer Google account and open **Admin → Access**. On mob
 - **Add an organizer:** Under **Organizer emails**, enter their Google account email, review the access grant, and confirm. They receive organizer access on their next Google sign-in or refresh. This creates no email message. A competing team account must be removed from its team before receiving staff access.
 - **Assign a judge:** Approve the person first, then change their unassigned membership to Judge. Judges and organizers skip team selection and do not receive team investment accounts.
 - **Remove access:** Select **Remove** next to the person, check the name and email in the confirmation, and confirm. This removes their event membership, request, team-member record, and matching organizer invitation. Their project, investments, and submitted records stay. Outside registration, pause the event first.
-- **Replace a missing captain or investor:** After funding starts, pause the event and use an approved existing teammate’s role menu to fill an empty captain or designated-investor slot. Filled roles cannot be swapped, and this does not admit new teammates or change team funding.
+- **Move people or change roles:** Use **Edit person / team** beside a person in People. Pick the destination team and an available role, or unassign them. To replace an occupied captain/investor slot, first change its current holder to Member. Pause after registration; prior investments and submitted rosters remain attributed to their original team. See [organizer tools](17-organizer-tools.md).
 - **Remove an organizer email:** This revokes both the invitation and matching existing organizer membership. It is not just removing a reminder from a list. You cannot remove yourself or the last approved organizer.
 
 Participants cannot approve themselves or select an organizer role during signup. All privileged commands require a verified Google identity and approved organizer membership; permissions, phase restrictions, role limits, and version checks run on the server. Changes are audited.
@@ -37,4 +37,4 @@ Participants cannot approve themselves or select an organizer role during signup
 - [TeamFormationService](../packages/application/src/services/team-formation-service.ts): atomic membership and role selection.
 - [OrganizerAccessService](../packages/application/src/services/organizer-access-service.ts): email invitations and protected access removal.
 
-The team-selection snapshot contains only team names, roster names and roles, and role availability. Unassigned attendees do not receive normal project, funding, message, or judging data. Organizer invitation emails are visible only to organizers.
+The team-selection snapshot contains team names, roster names and roles, role availability, and the general-channel summary. Unassigned attendees can use #general, but do not receive normal project, funding, team-message, or judging data. Organizer invitation emails are visible only to organizers.
