@@ -1,25 +1,15 @@
+import { useState } from 'react';
 import { EventSchedule } from '@robinhacks/core';
-import { ExternalLink } from '../ui/primitives';
+import { Dialog, ExternalLink } from '../ui/primitives';
 import { JudgingRubric } from './JudgingRubric';
 import { config, navigate, Panel, type PageProps } from './shared';
 import './homepage.css';
 
-function jumpTo(id: string) {
-  const section = document.getElementById(id);
-  section?.focus({ preventScroll: true });
-  section?.scrollIntoView({ behavior: 'auto', block: 'start' });
-}
-
 export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
+  const [rubricOpen, setRubricOpen] = useState(false);
   const { details, funding } = config(data);
   const logistics = details.logistics;
   const organization = details.organization;
-  const sections = [
-    ...(logistics ? [['home-logistics', 'Logistics']] : []),
-    ['home-schedule', 'Schedule'],
-    ['home-rubric', 'Judging rubric'],
-    ...(organization ? [['home-organizers', 'Who are we?']] : []),
-  ];
   return (
     <div className="p-home">
       <div className="p-page-heading">
@@ -47,13 +37,6 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
           )}
         </div>
       </div>
-      <nav className="p-home-jumps" aria-label="On this page">
-        {sections.map(([id, label]) => (
-          <button key={id} type="button" onClick={() => jumpTo(id!)}>
-            {label}
-          </button>
-        ))}
-      </nav>
       <div className="p-home-columns">
         <Panel title="About the event">
           <p className="p-prose">{details.about}</p>
@@ -67,6 +50,15 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
             <p>
               Questions? <a href={`mailto:${details.contactEmail}`}>{details.contactEmail}</a>
             </p>
+          )}
+          {organization && (
+            <div className="p-home-organization">
+              <h3>Who are we?</h3>
+              <p className="p-prose">{organization.about}</p>
+              {organization.url && (
+                <ExternalLink href={organization.url}>Meet Emergent</ExternalLink>
+              )}
+            </div>
           )}
         </Panel>
         <Panel title="During the hackathon">
@@ -83,13 +75,17 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
               before each deadline.
             </li>
             <li>
-              <strong>Finish and submit.</strong> Judges evaluate the work independently of funding.
+              <strong>Finish and submit.</strong> Judges evaluate the work independently of funding.{' '}
+              <button className="p-link" aria-haspopup="dialog" onClick={() => setRubricOpen(true)}>
+                View the judging rubric
+              </button>
+              .
             </li>
           </ol>
         </Panel>
       </div>
       {logistics && (
-        <section id="home-logistics" tabIndex={-1} aria-labelledby="home-logistics-title">
+        <section aria-labelledby="home-logistics-title">
           <Panel>
             <h2 id="home-logistics-title">Logistics</h2>
             <div className="p-logistics-grid">
@@ -120,7 +116,7 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
           </Panel>
         </section>
       )}
-      <section id="home-schedule" tabIndex={-1} aria-labelledby="home-schedule-title">
+      <section aria-labelledby="home-schedule-title">
         <Panel>
           <div className="p-section-heading">
             <h2 id="home-schedule-title">Schedule</h2>
@@ -156,25 +152,11 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
           <p className="muted">Schedule subject to change.</p>
         </Panel>
       </section>
-      <div className="p-home-columns">
-        <section id="home-rubric" tabIndex={-1} aria-labelledby="home-rubric-title">
-          <Panel>
-            <h2 id="home-rubric-title">Emergent Hacks rubric</h2>
-            <JudgingRubric funding={funding} />
-          </Panel>
-        </section>
-        {organization && (
-          <section id="home-organizers" tabIndex={-1} aria-labelledby="home-organizers-title">
-            <Panel>
-              <h2 id="home-organizers-title">Who are we?</h2>
-              <p className="p-prose">{organization.about}</p>
-              {organization.url && (
-                <ExternalLink href={organization.url}>Meet Emergent</ExternalLink>
-              )}
-            </Panel>
-          </section>
-        )}
-      </div>
+      {rubricOpen && (
+        <Dialog title="Emergent Hacks rubric" onClose={() => setRubricOpen(false)}>
+          <JudgingRubric funding={funding} />
+        </Dialog>
+      )}
     </div>
   );
 }

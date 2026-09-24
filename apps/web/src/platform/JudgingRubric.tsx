@@ -1,4 +1,5 @@
 import { JUDGING_SCORE_MAX, type FundingSettings } from '@robinhacks/core';
+import './judging-rubric.css';
 
 /** The public scorecard reads the same criteria and weights used by judges. */
 export function JudgingRubric({ funding }: { funding: FundingSettings }) {

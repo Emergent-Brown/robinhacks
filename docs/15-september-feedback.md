@@ -6,13 +6,13 @@ This update implements the website feedback PDF and the requested homepage logis
 
 | Area | Implementation |
 | --- | --- |
-| Homepage | Short links jump to logistics, schedule, judging, and “Who are we?” The logistics cover the Nelson address, meals, overnight building, and what to bring. The organizer section links to [Emergent](https://emergentconference.org). |
+| Homepage | The About card includes “Who are we?” and a link to [Emergent](https://emergentconference.org). Logistics cover the Nelson address, meals, overnight building, and what to bring. The Finish and submit step opens the rubric in a modal; the homepage has no section menu. |
 | Schedule | Building blocks are split around meals, the funding reveal, and other scheduled activities. Final investments explicitly follow the hackathon-wide demos. The three funding windows remain 30 minutes by default. |
 | Registration | “Join the event” opens the supplied Google Form. The header’s sign-in and the logistics section’s dashboard link still open the app’s Google sign-in and approval flow. Completing the form does not create or approve an app account. |
 | Investments | Participants can select any of the three rounds. Completed allocations and upcoming rounds are read-only; the live allocation draft and autosave remain mounted when browsing history. Reward copy explains the team’s conditional share of the investor prize pool. |
 | Projects | Search includes teammate names and sectors. Projects show their sector, and a sector filter narrows the list. Opened projects disappear from discovery suggestions. Discovery stays neutral rather than ranking teams by funding. |
 | Profiles | Team members can publish an optional short bio beside their name. Captains and designated investors can edit the project’s sector between funding rounds, under the existing project-edit rules. |
-| Judging | The homepage publishes the actual configured rubric. Judges use whole-number scores from 0 to 5; the server and export reconciliation enforce the same scale. Defaults are functionality 35%, usefulness 30%, originality 20%, and technical execution 15%. |
+| Judging | The homepage rubric modal shows the actual configured rubric. Judges use whole-number scores from 0 to 5; the server and export reconciliation enforce the same scale. Defaults are functionality 35%, usefulness 30%, originality 20%, and technical execution 15%. |
 | Mobile navigation | Navigation labels are larger and spacing is tighter on small screens. Project discovery and filters stack to fit phone screens. |
 
 The PDF offered alternative discovery and round-naming ideas. This release retains neutral discovery and adds explicit Round 1, Round 2, and Round 3 labels alongside the descriptive checkpoint names. Funding totals remain outside the judging formula.

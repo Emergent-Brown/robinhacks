@@ -1,0 +1,18 @@
+.p-public-rubric .p-table {
+  width: 100%;
+  margin-top: 16px;
+}
+.p-public-rubric tbody th {
+  font-weight: 400;
+  color: #152636;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.p-public-rubric td {
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .p-public-rubric .p-table {
+    font-size: 12px;
+  }
+}
