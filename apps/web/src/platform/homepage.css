@@ -1,0 +1,84 @@
+.p-home-jumps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+  padding: 0 0 16px;
+  margin: -8px 0 22px;
+  border-bottom: 1px solid #c7d5e2;
+}
+.p-home-jumps button {
+  padding: 8px 0;
+  min-height: 44px;
+  border: 0;
+  background: none;
+  color: #174e82;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.p-home section {
+  scroll-margin-top: 20px;
+}
+.p-home section:focus {
+  outline: 2px solid #7aa3c5;
+  outline-offset: 4px;
+}
+.p-logistics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 36px;
+}
+.p-logistics-grid h3 {
+  color: #174e82;
+}
+.p-logistics-grid p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.p-home .p-schedule-round {
+  background: #eef6fc;
+  padding: 14px 12px;
+  border-left: 3px solid #3974a2;
+}
+.p-public-rubric .p-table {
+  width: 100%;
+  margin-top: 16px;
+}
+.p-public-rubric tbody th {
+  font-weight: 400;
+  color: #152636;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.p-public-rubric td {
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .p-home .p-page-heading {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .p-home .p-page-heading .p-actions {
+    justify-content: space-between;
+  }
+  .p-logistics-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .p-home .p-schedule li {
+    grid-template-columns: minmax(104px, 0.8fr) minmax(0, 1.2fr);
+    font-size: 13px;
+  }
+  .p-home .p-home-jumps {
+    gap: 2px 18px;
+  }
+  .p-home .p-section-heading {
+    flex-wrap: wrap;
+  }
+  .p-home .p-section-heading > .muted {
+    font-size: 12px;
+  }
+  .p-home .p-public-rubric .p-table {
+    font-size: 12px;
+  }
+}

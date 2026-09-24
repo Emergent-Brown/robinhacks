@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { EventSchedule } from '@robinhacks/core';
+import { EventSchedule, type RoundEntitlement } from '@robinhacks/core';
+import './investments.css';
 import { useClock } from '../hooks/useApp';
 import { newCommandId } from '../app/gateway';
 import {
@@ -25,7 +26,14 @@ export function Investments({ data, actions }: PageProps) {
   const settings = config(data).funding;
   const now = useClock();
   const active = state.rounds.find((round) => round.state === 'open');
-  const roundKey = active?.id || 'none';
+  const [selectedNumber, setSelectedNumber] = useState(
+    active?.number || config(data).currentRound || 1,
+  );
+  const [draftStatus, setDraftStatus] = useState<AllocationStatus>('saved');
+  const selected = state.rounds.find((round) => round.number === selectedNumber);
+  const entitlement = state.entitlements.find((entry) => entry.roundNumber === selectedNumber);
+  const selectedTitle = `Round ${selectedNumber} · ${settings.roundNames[selectedNumber - 1]}`;
+
   return (
     <>
       <div className="p-page-heading">
@@ -34,116 +42,188 @@ export function Investments({ data, actions }: PageProps) {
           Funding rules
         </button>
       </div>
-      <ol className="p-rounds">
+      <ol className="p-investment-rounds" aria-label="Choose an investment round">
         {settings.roundNames.map((name, index) => {
-          const round = state.rounds.find((item) => item.number === index + 1);
+          const number = index + 1;
+          const round = state.rounds.find((item) => item.number === number);
           const planned = config(data).details.timing?.rounds[index];
+          const status = !round
+            ? 'Upcoming'
+            : round.state === 'open'
+              ? now >= round.closesAt
+                ? 'Locked · awaiting reveal'
+                : 'Open now'
+              : round.state === 'void'
+                ? 'Voided'
+                : 'Complete';
           return (
-            <li key={name} className={round?.state === 'open' ? 'current' : ''}>
-              <strong>
-                {index + 1}. {name}
-              </strong>
-              <span>
-                {percent(settings.roundWeightsBps[index]! / 10000)} reward weight ·{' '}
-                {round
-                  ? round.state === 'open' && now >= round.closesAt
-                    ? 'Deadline reached'
-                    : round.state
-                  : 'Upcoming'}
-              </span>
-              {(round || planned) && (
-                <span>
-                  {round
-                    ? EventSchedule.label(
-                        { startsAt: round.openedAt, closesAt: round.closesAt },
-                        config(data).details.timeZone,
-                      )
-                    : `Planned: ${EventSchedule.label(planned!, config(data).details.timeZone)}`}
+            <li key={number}>
+              <button
+                className="p-investment-round"
+                aria-pressed={selectedNumber === number}
+                onClick={() => setSelectedNumber(number)}
+              >
+                <span className="p-investment-round-top">
+                  <span className="p-investment-round-number">Round {number}</span>
+                  <span className="p-investment-round-status">{status}</span>
                 </span>
-              )}
+                <strong>{name}</strong>
+                <span className="p-investment-round-weight">
+                  {percent(settings.roundWeightsBps[index]! / 10000)} of the investor prize pool
+                </span>
+                {(round || planned) && (
+                  <span className="p-investment-round-time">
+                    {round
+                      ? EventSchedule.label(
+                          { startsAt: round.openedAt, closesAt: round.closesAt },
+                          config(data).details.timeZone,
+                        )
+                      : EventSchedule.label(planned!, config(data).details.timeZone)}
+                  </span>
+                )}
+                {round?.id === active?.id && active && draftStatus !== 'saved' && (
+                  <span className="p-investment-round-draft" role="status">
+                    {draftStatus === 'saving' ? 'Saving allocation…' : 'Unsaved changes'}
+                  </span>
+                )}
+              </button>
             </li>
           );
         })}
       </ol>
       {data.member?.teamId ? (
-        <AllocationSheet key={roundKey} data={data} actions={actions} />
+        <>
+          {/* Keep the live editor mounted: browsing another round must not discard a draft
+              or interrupt autosave. Historical and upcoming views never contain inputs. */}
+          {active && (
+            <div hidden={selectedNumber !== active.number}>
+              <AllocationSheet
+                key={active.id}
+                data={data}
+                actions={actions}
+                onStatusChange={setDraftStatus}
+              />
+            </div>
+          )}
+          {active && selectedNumber !== active.number && draftStatus === 'unsaved' && (
+            <p className="p-note" role="status">
+              Round {active.number} has unsaved changes.{' '}
+              <button className="p-link" onClick={() => setSelectedNumber(active.number)}>
+                Return to your allocation
+              </button>
+            </p>
+          )}
+          {selected?.state !== 'open' && (
+            <Panel title={selectedTitle}>
+              {!selected ? (
+                <>
+                  <p>This round has not opened yet.</p>
+                  <p className="muted">
+                    Your team will receive {settings.budget} fresh credits when the organizer opens
+                    the round. You can make your investments then.
+                  </p>
+                </>
+              ) : entitlement ? (
+                <LockedEntitlement data={data} entitlement={entitlement} />
+              ) : (
+                <Blank>
+                  {selected.state === 'void'
+                    ? 'This round was voided. It awards no share of the investor prize pool.'
+                    : 'Your team has no investments recorded for this round.'}
+                </Blank>
+              )}
+            </Panel>
+          )}
+        </>
       ) : (
-        <Panel>
+        <Panel title={selectedTitle}>
           <p>Investments belong to participating teams. Your staff account has no allocation.</p>
         </Panel>
       )}
-      <Panel title="Your locked entitlements">
-        <p className="muted">
-          These are private to your team. Each amount pays only if that project wins the judges’
-          grand prize.
-        </p>
-        {!state.entitlements.length && (
-          <Blank>Your completed-round allocations will appear here.</Blank>
-        )}
-        {state.entitlements.map((entitlement) => (
-          <section className="p-entitlement" key={entitlement.id}>
-            <h3>{settings.roundNames[entitlement.roundNumber - 1]}</h3>
-            {entitlement.voided ? (
-              <p>This round was voided. It awards no entitlement.</p>
-            ) : (
-              <>
-                <p className="muted">
-                  {entitlement.spent} credits invested · {entitlement.expired} expired
-                </p>
-                <div className="p-table-wrap">
-                  <table className="p-table">
-                    <thead>
-                      <tr>
-                        <th>Project</th>
-                        <th>Your credits</th>
-                        <th>Locked entitlement</th>
-                        {settings.investorPoolMinor > 0 && <th>If it wins</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {entitlement.projects.map((project) => {
-                        const fraction =
-                          ((project.weightBps / 10000) * project.credits) / project.denominator;
-                        return (
-                          <tr key={project.projectId}>
-                            <td>
-                              <button
-                                className="p-link"
-                                onClick={() => navigate('projects', project.projectId)}
-                              >
-                                {teamName(data, project.projectId)}
-                              </button>
-                            </td>
-                            <td>{project.credits}</td>
-                            <td>
-                              {percent(fraction)}
-                              <small className="p-cell-note">
-                                {project.credits} ÷ {project.denominator} ×{' '}
-                                {percent(project.weightBps / 10000)}
-                              </small>
-                            </td>
-                            {settings.investorPoolMinor > 0 && (
-                              <td>
-                                {money(Math.floor(fraction * settings.investorPoolMinor))}
-                                <small className="p-cell-note">Before final rounding</small>
-                              </td>
-                            )}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </section>
-        ))}
-      </Panel>
     </>
   );
 }
 
-function AllocationSheet({ data, actions }: PageProps) {
+function LockedEntitlement({
+  data,
+  entitlement,
+}: {
+  data: PageProps['data'];
+  entitlement: RoundEntitlement;
+}) {
+  const settings = config(data).funding;
+  if (entitlement.voided)
+    return <p>This round was voided. It awards no share of the investor prize pool.</p>;
+  return (
+    <>
+      <p>
+        If the team you invested in wins, your team receives this share of the investor prize pool.
+      </p>
+      <p className="muted">
+        Only the judges’ grand-prize winner pays out. These investments are private to your team.
+      </p>
+      <p className="p-note">
+        {entitlement.spent} credits invested · {entitlement.expired} expired · Allocations locked
+      </p>
+      {!entitlement.projects.length ? (
+        <Blank>Your team did not invest any credits in this round.</Blank>
+      ) : (
+        <div className="p-table-wrap">
+          <table className="p-table">
+            <thead>
+              <tr>
+                <th>Project</th>
+                <th>Your credits</th>
+                <th>Your share if it wins</th>
+                {settings.investorPoolMinor > 0 && <th>Prize if it wins</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {entitlement.projects.map((project) => {
+                const fraction =
+                  ((project.weightBps / 10000) * project.credits) / project.denominator;
+                return (
+                  <tr key={project.projectId}>
+                    <td>
+                      <button
+                        className="p-link"
+                        onClick={() => navigate('projects', project.projectId)}
+                      >
+                        {teamName(data, project.projectId)}
+                      </button>
+                    </td>
+                    <td>{project.credits}</td>
+                    <td>
+                      {percent(fraction)}
+                      <small className="p-cell-note">
+                        {project.credits} ÷ {project.denominator} ×{' '}
+                        {percent(project.weightBps / 10000)}
+                      </small>
+                    </td>
+                    {settings.investorPoolMinor > 0 && (
+                      <td>
+                        {money(Math.floor(fraction * settings.investorPoolMinor))}
+                        <small className="p-cell-note">Before final rounding</small>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+type AllocationStatus = 'saved' | 'saving' | 'unsaved';
+
+function AllocationSheet({
+  data,
+  actions,
+  onStatusChange,
+}: PageProps & { onStatusChange: (status: AllocationStatus) => void }) {
   const state = platform(data);
   const funding = config(data).funding;
   const active = state.rounds.find((round) => round.state === 'open');
@@ -155,6 +235,9 @@ function AllocationSheet({ data, actions }: PageProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [conflict, setConflict] = useState(false);
+  useEffect(() => {
+    onStatusChange(saving ? 'saving' : dirty ? 'unsaved' : 'saved');
+  }, [dirty, saving, onStatusChange]);
   const revision = useRef(0);
   const savingRef = useRef(false);
   const seenVersion = useRef(saved?.version || 0);
@@ -277,7 +360,7 @@ function AllocationSheet({ data, actions }: PageProps) {
     );
   return (
     <Panel
-      title={`${active.name} · your team’s allocation`}
+      title={`Round ${active.number} · ${active.name}`}
       aside={
         <span className="p-status" role="status">
           {saving ? 'Saving…' : dirty ? 'Unsaved changes' : 'Saved'}
@@ -285,8 +368,8 @@ function AllocationSheet({ data, actions }: PageProps) {
       }
     >
       <p>
-        Private until {stamp(active.closesAt, config(data).details.timeZone)}. Your captain and
-        designated investor share this allocation.
+        Invest by {stamp(active.closesAt, config(data).details.timeZone)}. Your captain and
+        designated investor share this allocation. Individual investments stay private to your team.
       </p>
       {data.event!.paused && (
         <p className="p-note">

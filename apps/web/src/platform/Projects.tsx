@@ -1,5 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ExternalLink, TeamMark } from '../ui/primitives';
+import {
+  discoverProjects,
+  filterProjects,
+  projectSectors,
+  projectVisits,
+} from './project-discovery';
+import './projects.css';
 import {
   Blank,
   config,
@@ -15,36 +22,22 @@ import {
 function visitedKey(data: PageProps['data']) {
   return `emergenthacks:visited:${data.event!.id}:${data.member?.uid}`;
 }
-function getVisited(key: string): string[] {
-  try {
-    return JSON.parse(localStorage.getItem(key) || '[]');
-  } catch {
-    return [];
-  }
-}
 export function Projects({ data }: PageProps) {
   const [search, setSearch] = useState('');
+  const [sector, setSector] = useState('');
   const [rotation, setRotation] = useState(0);
   const all = teams(data).filter((t) => t.eligibility === 'active');
-  const visited = getVisited(visitedKey(data));
-  const featured = useMemo(() => {
-    const seed = `${data.member?.uid}:${config(data).currentRound}:${rotation}`;
-    const hash = (value: string) =>
-      [...(seed + value)].reduce((n, c) => ((n << 5) - n + c.charCodeAt(0)) | 0, 0) >>> 0;
-    return all
-      .filter((t) => t.id !== data.member?.teamId)
-      .sort(
-        (a, b) =>
-          Number(visited.includes(a.id)) - Number(visited.includes(b.id)) ||
-          hash(a.id) - hash(b.id),
-      )
-      .slice(0, 3);
-  }, [all.map((t) => t.id).join('|'), rotation, data.member?.uid, config(data).currentRound]);
-  const visible = all.filter((t) =>
-    `${t.name} ${t.pitch} ${t.problem} ${t.building}`.toLowerCase().includes(search.toLowerCase()),
+  const visited = projectVisits.read(visitedKey(data));
+  const featured = discoverProjects(
+    all,
+    visited,
+    data.member?.teamId,
+    `${data.member?.uid}:${config(data).currentRound}:${rotation}`,
   );
+  const sectors = projectSectors(all);
+  const visible = filterProjects(all, platform(data).roster, search, sector);
   return (
-    <>
+    <div className="p-project-directory">
       <div className="p-page-heading">
         <h1>Projects</h1>
         <span className="muted">{all.length} teams</span>
@@ -53,35 +46,71 @@ export function Projects({ data }: PageProps) {
         <Panel
           title="Meet a few teams"
           aside={
-            <button className="p-link" onClick={() => setRotation(rotation + 1)}>
-              Show another group
-            </button>
+            all.filter((team) => team.id !== data.member?.teamId && !visited.includes(team.id))
+              .length > 3 && (
+              <button className="p-link" onClick={() => setRotation(rotation + 1)}>
+                Show another group
+              </button>
+            )
           }
         >
           <p className="muted">
-            Start with projects you haven’t opened. Visit their demos or ask what they are working
-            on.
+            A few projects you haven’t opened yet. Take a look and meet the people building them.
           </p>
           <ul className="p-discovery">
             {featured.map((team) => (
               <li key={team.id}>
                 <ProjectLink team={team} />
+                {team.category && <span className="p-project-sector">{team.category}</span>}
                 <p>{team.pitch || 'Pitch coming soon.'}</p>
               </li>
             ))}
           </ul>
         </Panel>
       )}
-      <div className="p-search">
-        <label htmlFor="project-search">Search projects</label>
-        <input
-          id="project-search"
-          type="search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Name, pitch, or problem"
-        />
+      <div className="p-project-filters">
+        <div>
+          <label htmlFor="project-search">Search projects and people</label>
+          <input
+            id="project-search"
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Project, person, or sector"
+          />
+        </div>
+        <div>
+          <label htmlFor="project-sector">Sector</label>
+          <select
+            id="project-sector"
+            value={sector}
+            onChange={(event) => setSector(event.target.value)}
+          >
+            <option value="">All sectors</option>
+            {sectors.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
+      {(search || sector) && (
+        <div className="p-project-results">
+          <span role="status">
+            {visible.length} {visible.length === 1 ? 'project' : 'projects'} found
+          </span>
+          <button
+            className="p-link"
+            onClick={() => {
+              setSearch('');
+              setSector('');
+            }}
+          >
+            Clear filters
+          </button>
+        </div>
+      )}
       <div className="p-table-wrap">
         <table className="p-table p-projects">
           <thead>
@@ -104,7 +133,13 @@ export function Projects({ data }: PageProps) {
                       <TeamMark team={team} />
                       <div>
                         <ProjectLink team={team} />
+                        {team.category && <span className="p-project-sector">{team.category}</span>}
                         <p>{team.pitch || 'Pitch coming soon.'}</p>
+                        {roster.length > 0 && (
+                          <span className="p-mobile-only p-project-people">
+                            {roster.map((person) => person.name).join(', ')}
+                          </span>
+                        )}
                         <span className="p-mobile-only muted">
                           {updates[0]
                             ? `Updated ${stamp(updates[0].createdAt)}`
@@ -128,12 +163,17 @@ export function Projects({ data }: PageProps) {
         </table>
       </div>
       {!visible.length && <Blank>No projects match your search.</Blank>}
-    </>
+    </div>
   );
 }
 
 export function ProjectDetail({ data, id }: PageProps & { id: string }) {
   const team = teams(data).find((t) => t.id === id);
+  const key = visitedKey(data);
+  const teamId = team?.id;
+  useEffect(() => {
+    if (teamId) projectVisits.mark(key, teamId);
+  }, [key, teamId]);
   if (!team)
     return (
       <Blank>
@@ -143,10 +183,6 @@ export function ProjectDetail({ data, id }: PageProps & { id: string }) {
         </button>
       </Blank>
     );
-  const key = visitedKey(data);
-  const visited = getVisited(key);
-  if (!visited.includes(id))
-    localStorage.setItem(key, JSON.stringify([...visited, id].slice(-100)));
   const updates = platform(data)
     .updates.filter((update) => update.teamId === id)
     .sort((a, b) => b.createdAt - a.createdAt);
@@ -162,6 +198,7 @@ export function ProjectDetail({ data, id }: PageProps & { id: string }) {
           <div>
             <h1>{team.name}</h1>
             <p>{team.pitch}</p>
+            {team.category && <span className="p-project-sector">{team.category}</span>}
           </div>
         </div>
         {data.member?.teamId && data.member.teamId !== id && (
@@ -186,11 +223,14 @@ export function ProjectDetail({ data, id }: PageProps & { id: string }) {
           </Panel>
         </div>
         <Panel title="Team">
-          <ul className="p-roster">
+          <ul className="p-roster p-profile-roster">
             {roster.map((person) => (
               <li key={person.uid}>
-                <strong>{person.name}</strong>
-                <span>{person.role === 'trader' ? 'Designated investor' : person.role}</span>
+                <div className="p-person-heading">
+                  <strong>{person.name}</strong>
+                  <span>{person.role === 'trader' ? 'Designated investor' : person.role}</span>
+                </div>
+                {person.bio && <p className="p-person-bio">{person.bio}</p>}
               </li>
             ))}
           </ul>

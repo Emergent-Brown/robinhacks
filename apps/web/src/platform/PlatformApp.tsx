@@ -3,7 +3,8 @@ import type { AppSnapshot } from '@robinhacks/core';
 import { Dialog } from '../ui/primitives';
 import type { AppActions } from '../hooks/useApp';
 import { useClock } from '../hooks/useApp';
-import { Access, Homepage } from './Access';
+import { Access } from './Access';
+import { Homepage } from './Homepage';
 import { Admin } from './Admin';
 import { Investments } from './Investments';
 import { Judging } from './Judging';
@@ -312,7 +313,7 @@ export function PlatformApp({
               }
               onClick={() => navigate(page!)}
             >
-              {label}
+              {page === 'investments' ? 'Invest' : label}
             </button>
           ))}
         </nav>

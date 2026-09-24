@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { AppSnapshot } from '@robinhacks/core';
 import { Dialog } from '../ui/primitives';
 import { config, money, percent, rewardCopy } from './shared';
+import { JudgingRubric } from './JudgingRubric';
 
 export function Rules({ data }: { data: AppSnapshot }) {
   const { funding } = config(data);
@@ -28,7 +29,8 @@ export function Rules({ data }: { data: AppSnapshot }) {
       <ul>
         {funding.roundNames.map((name, index) => (
           <li key={name}>
-            {name}: {percent(funding.roundWeightsBps[index]! / 10000)} of investor rewards.
+            Round {index + 1} · {name}: {percent(funding.roundWeightsBps[index]! / 10000)} of
+            investor rewards.
           </li>
         ))}
       </ul>
@@ -53,6 +55,7 @@ export function Rules({ data }: { data: AppSnapshot }) {
         . Community prize:{' '}
         {funding.communityPrizeMinor > 0 ? money(funding.communityPrizeMinor) : 'not announced'}.
       </p>
+      <JudgingRubric funding={funding} />
       <h2>Fair play and final review</h2>
       <p>
         No reciprocal-backing deals, extra team accounts, false project claims, or deliberate

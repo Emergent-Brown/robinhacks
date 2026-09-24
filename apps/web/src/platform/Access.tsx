@@ -1,95 +1,6 @@
 import { useEffect, useState } from 'react';
-import { EventSchedule } from '@robinhacks/core';
-import { Field, ExternalLink } from '../ui/primitives';
-import { config, navigate, Panel, useCommand, ErrorMessage, type PageProps } from './shared';
-
-export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
-  const details = config(data).details;
-  return (
-    <>
-      <div className="p-page-heading">
-        <div>
-          <p className="p-kicker">{details.theme}</p>
-          <h1>{data.event!.name}</h1>
-        </div>
-        <div className="p-actions">
-          <button className="p-link" onClick={() => navigate('rules')}>
-            Event rules
-          </button>
-          <button className="button primary" onClick={onJoin}>
-            Join the event
-          </button>
-        </div>
-      </div>
-      <div className="p-home-columns">
-        <Panel title="About the event">
-          <p className="p-prose">{details.about}</p>
-          <dl className="p-facts">
-            <dt>When</dt>
-            <dd>{details.dateLabel || 'Date to be announced'}</dd>
-            <dt>Where</dt>
-            <dd>{data.event!.venue || 'Venue to be announced'}</dd>
-          </dl>
-          {details.registrationUrl && (
-            <ExternalLink href={details.registrationUrl}>Event registration</ExternalLink>
-          )}
-          {details.contactEmail && (
-            <p>
-              Questions? <a href={`mailto:${details.contactEmail}`}>{details.contactEmail}</a>
-            </p>
-          )}
-        </Panel>
-        <Panel title="During the hackathon">
-          <ol className="p-steps">
-            <li>
-              <strong>Build a project.</strong> Keep a public page with the problem, demo, and team.
-            </li>
-            <li>
-              <strong>Meet the other teams.</strong> Read their updates, visit demos, and ask
-              questions.
-            </li>
-            <li>
-              <strong>Invest in three rounds.</strong> Allocate a fresh credit budget privately
-              before each deadline.
-            </li>
-            <li>
-              <strong>Finish and submit.</strong> Judges evaluate the work independently of funding.
-            </li>
-          </ol>
-        </Panel>
-      </div>
-      <Panel title="Schedule">
-        {details.schedule.length ? (
-          <ol className="p-schedule">
-            {details.schedule.map((item, i) => {
-              const planned = EventSchedule.resolve(details.timing, item.window);
-              return (
-                <li key={i}>
-                  <time>
-                    {planned ? EventSchedule.label(planned, details.timeZone) : item.time}
-                  </time>
-                  <div>
-                    <strong>{item.title}</strong>
-                    {item.description && <p>{item.description}</p>}
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        ) : (
-          <p>The organizer will publish the schedule here.</p>
-        )}
-        <p className="muted">
-          All times are{' '}
-          {details.timeZone === 'America/New_York'
-            ? 'Eastern'
-            : details.timeZone.replaceAll('_', ' ')}
-          . Schedule subject to change.
-        </p>
-      </Panel>
-    </>
-  );
-}
+import { Field } from '../ui/primitives';
+import { config, Panel, useCommand, ErrorMessage, type PageProps } from './shared';
 
 export function Access({ data, actions }: PageProps) {
   const user = actions.gateway.user;
@@ -181,13 +92,15 @@ export function Access({ data, actions }: PageProps) {
   }
   return (
     <div className="p-access">
-      <Panel
-        title={!user ? 'Join Emergent Hacks' : 'Event access'}
-      >
+      <Panel title={!user ? 'Join Emergent Hacks' : 'Event access'}>
         {!user ? (
           <>
             <p>Sign in with Google, then send your name to the organizers for approval.</p>
-            <button className="button primary full" disabled={pending} onClick={() => void signIn()}>
+            <button
+              className="button primary full"
+              disabled={pending}
+              onClick={() => void signIn()}
+            >
               {pending ? 'Connecting…' : 'Continue with Google'}
             </button>
             <details className="p-access-legacy">
@@ -266,7 +179,11 @@ export function Access({ data, actions }: PageProps) {
               identify your account.
             </p>
             <p className="muted">Once approved, sign in with this account to enter the event.</p>
-            <button className="button secondary" disabled={checking} onClick={() => void checkStatus()}>
+            <button
+              className="button secondary"
+              disabled={checking}
+              onClick={() => void checkStatus()}
+            >
               {checking ? 'Checking…' : 'Check status'}
             </button>
             {checkedAt && (
@@ -278,10 +195,7 @@ export function Access({ data, actions }: PageProps) {
             {config(data).details.contactEmail && (
               <p className="p-access-contact">
                 Need help?{' '}
-                <a href={`mailto:${config(data).details.contactEmail}`}>
-                  Email the organizer
-                </a>
-                .
+                <a href={`mailto:${config(data).details.contactEmail}`}>Email the organizer</a>.
               </p>
             )}
           </div>
@@ -318,9 +232,14 @@ export function Access({ data, actions }: PageProps) {
               <input type="email" value={user.email} readOnly aria-readonly="true" />
             </Field>
             <details className="p-access-staff">
-              <summary>{kind === 'team' ? 'Joining as a judge or organizer?' : 'Requesting staff access'}</summary>
+              <summary>
+                {kind === 'team' ? 'Joining as a judge or organizer?' : 'Requesting staff access'}
+              </summary>
               <Field label="Access requested">
-                <select value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}>
+                <select
+                  value={kind}
+                  onChange={(event) => setKind(event.target.value as typeof kind)}
+                >
                   <option value="team">Participant</option>
                   <option value="judge">Judge</option>
                   <option value="organizer">Organizer</option>

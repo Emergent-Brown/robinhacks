@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { JudgingEntry } from '@robinhacks/core';
+import { isJudgingScore, JUDGING_SCORE_MAX, type JudgingEntry } from '@robinhacks/core';
 import { Dialog, ExternalLink, Field } from '../ui/primitives';
 import {
   Blank,
@@ -78,12 +78,7 @@ export function Judging({ data, actions }: PageProps) {
         assignment?.conflictIds.includes(id) ||
         (entries[id]?.conflict
           ? entries[id]!.note.trim().length >= 3
-          : rubric.every(
-              (criterion) =>
-                Number.isInteger(entries[id]?.scores[criterion.id]) &&
-                entries[id]!.scores[criterion.id]! >= 0 &&
-                entries[id]!.scores[criterion.id]! <= 10,
-            )),
+          : rubric.every((criterion) => isJudgingScore(entries[id]?.scores[criterion.id]))),
     );
   const submission = state.submissions.find((item) => item.teamId === selected);
   const entry = entries[selected] || { scores: {}, note: '', conflict: false };
@@ -97,8 +92,8 @@ export function Judging({ data, actions }: PageProps) {
         </span>
       </div>
       <p>
-        Score the submitted work using the published rubric. Funding activity and other judges’
-        scores are hidden.
+        Score each criterion from 0 to {JUDGING_SCORE_MAX} using the published rubric. Funding
+        activity and other judges’ scores are hidden.
       </p>
       {locked && (
         <p className="p-note">
@@ -141,7 +136,7 @@ export function Judging({ data, actions }: PageProps) {
                   <span>
                     {assignment?.conflictIds.includes(id) || entries[id]?.conflict
                       ? 'Conflict'
-                      : rubric.every((c) => Number.isInteger(entries[id]?.scores[c.id]))
+                      : rubric.every((c) => isJudgingScore(entries[id]?.scores[c.id]))
                         ? 'Scored'
                         : 'Needs scores'}
                   </span>
@@ -192,19 +187,26 @@ export function Judging({ data, actions }: PageProps) {
                     <Field
                       key={criterion.id}
                       label={`${criterion.label} · ${criterion.weight}%`}
-                      hint="0 = weakest; 10 = strongest"
+                      hint={`0 = weakest; ${JUDGING_SCORE_MAX} = strongest`}
                     >
                       <select
                         disabled={locked || !judgingOpen}
                         value={entry.scores[criterion.id] ?? ''}
                         onChange={(event) =>
                           edit(selected, {
-                            scores: { ...entry.scores, [criterion.id]: Number(event.target.value) },
+                            scores:
+                              event.target.value === ''
+                                ? Object.fromEntries(
+                                    Object.entries(entry.scores).filter(
+                                      ([id]) => id !== criterion.id,
+                                    ),
+                                  )
+                                : { ...entry.scores, [criterion.id]: Number(event.target.value) },
                           })
                         }
                       >
                         <option value="">Select score</option>
-                        {Array.from({ length: 11 }, (_, i) => (
+                        {Array.from({ length: JUDGING_SCORE_MAX + 1 }, (_, i) => (
                           <option key={i} value={i}>
                             {i}
                           </option>

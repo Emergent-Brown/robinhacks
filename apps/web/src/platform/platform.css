@@ -138,7 +138,7 @@
   text-underline-offset: 3px;
   cursor: pointer;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 13px;
 }
 .p-desktop-nav button[aria-current='page'] {
   font-weight: 700;
@@ -1008,8 +1008,9 @@
     border-top: 3px solid transparent;
     background: none;
     color: #466a87;
-    padding: 8px 3px;
-    font-size: 10px;
+    padding: 8px 2px;
+    font-size: 12px;
+    white-space: nowrap;
   }
   .p-mobile-nav button[aria-current='page'] {
     border-top-color: #1d638f;
@@ -1337,8 +1338,8 @@
   }
   .p-tabs button {
     min-height: 44px;
-    padding: 9px 12px;
-    font-size: 11px;
+    padding: 9px 10px;
+    font-size: 13px;
   }
   .p-inline-form {
     display: block;

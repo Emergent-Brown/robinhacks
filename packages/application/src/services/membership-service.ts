@@ -411,9 +411,9 @@ export class MembershipService {
         'Project profiles stay fixed during a funding round. Publish changes between rounds.',
       );
       requireState(
-        !('category' in command.patch) && !('update' in command.patch),
+        !('update' in command.patch),
         'USE_CHECKPOINT_UPDATE',
-        'Use the timestamped checkpoint update form. Categories are not used.',
+        'Use the timestamped checkpoint update form to share progress.',
       );
     }
     requireState(

@@ -94,7 +94,7 @@ Canceling stops participation without publishing prize results; history remains 
 
 ## Profiles, evidence and final submission
 
-A project page contains its name, concise pitch, problem, implementation, demo/repository links and public roster names. There is no free-text category. Captains/designated investors edit profiles between funding windows. Profiles remain fixed during an open funding window and after final submission.
+A project page contains its name, concise pitch, problem, implementation, demo/repository links, an optional sector, and public roster names. Members may add their own optional bio (up to 280 characters); only approved teammates appear in the public roster. Search includes teammate names and sectors, and project discovery excludes pages already opened on the current browser. Captains/designated investors edit project profiles between funding windows. Project profiles remain fixed during an open funding window and after final submission; members can still update their own bios.
 
 Checkpoint updates are separate append-only records:
 
@@ -123,7 +123,7 @@ Discussions and private diligence are allowed throughout the event. Public offic
 
 Judges request a separate staff identity and require organizer approval. A judge cannot also be a competing team member. Assignment records contain the projects to review and declared conflicts. Judges receive assigned immutable submissions, public progress, relevant public roster names and their own sheet. Before publication, they receive no funding totals, other judges' drafts, private ballots, investor entitlements or award previews.
 
-The default rubric uses whole-number criterion scores from 0 to 10:
+The default rubric uses whole-number criterion scores from 0 to 5:
 
 | Criterion | Weight |
 | --- | --- |

@@ -467,10 +467,51 @@ describe('independent judging and durable score sheets', () => {
     expect((await h.snapshot('judge-one')).assignments[0]?.projectIds).toEqual(['alpha', 'bravo']);
   });
 
+  it.each([0, 5])('accepts the published score boundary %i', async (value) => {
+    const h = fixture('judging');
+    await assignAll(h);
+    const sheet = entries(value);
+    await h.run('judge-one', {
+      type: 'saveJudgingSheet',
+      entries: sheet,
+      expectedVersion: 0,
+      submit: true,
+    });
+    expect((await h.snapshot('judge-one')).judgingSheets[0]?.entries).toEqual(sheet);
+  });
+
+  it.each([-1, 6, 10, 2.5])(
+    'rejects score %s without overwriting a saved judging draft',
+    async (value) => {
+      const h = fixture('judging');
+      await assignAll(h);
+      const saved = entries(3);
+      await h.run('judge-one', {
+        type: 'saveJudgingSheet',
+        entries: saved,
+        expectedVersion: 0,
+        submit: false,
+      });
+      await expect(
+        h.run('judge-one', {
+          type: 'saveJudgingSheet',
+          entries: entries(value),
+          expectedVersion: 1,
+          submit: false,
+        }),
+      ).rejects.toMatchObject({ code: 'INVALID_SCORES' });
+      expect((await h.snapshot('judge-one')).judgingSheets[0]).toMatchObject({
+        entries: saved,
+        version: 1,
+        submittedAt: null,
+      });
+    },
+  );
+
   it('preserves a 1,500-character judge note and rejects larger notes without overwriting the draft', async () => {
     const h = fixture('judging');
     await assignAll(h);
-    const draft = entries(7);
+    const draft = entries(3);
     draft.alpha.note = '界'.repeat(1500);
     await h.run('judge-one', {
       type: 'saveJudgingSheet',
@@ -505,7 +546,7 @@ describe('independent judging and durable score sheets', () => {
     await assignAll(h, 'judge-two');
     await h.run('judge-two', {
       type: 'saveJudgingSheet',
-      entries: entries(5),
+      entries: entries(3),
       expectedVersion: 0,
       submit: false,
     });
@@ -524,7 +565,7 @@ describe('independent judging and durable score sheets', () => {
   it('saves partial drafts and rejects stale concurrent changes and premature final submission', async () => {
     const h = fixture('judging');
     await assignAll(h);
-    const draft = { alpha: { scores: { functionality: 7 }, note: 'Working.', conflict: false } };
+    const draft = { alpha: { scores: { functionality: 3 }, note: 'Working.', conflict: false } };
     await h.run('judge-one', {
       type: 'saveJudgingSheet',
       entries: draft,
@@ -535,7 +576,7 @@ describe('independent judging and durable score sheets', () => {
     await expect(
       h.run('judge-one', {
         type: 'saveJudgingSheet',
-        entries: entries(8),
+        entries: entries(4),
         expectedVersion: 0,
         submit: false,
       }),
@@ -551,13 +592,13 @@ describe('independent judging and durable score sheets', () => {
     const attempts = await Promise.allSettled([
       h.run('judge-one', {
         type: 'saveJudgingSheet',
-        entries: entries(7),
+        entries: entries(3),
         expectedVersion: 1,
         submit: false,
       }),
       h.run('judge-one', {
         type: 'saveJudgingSheet',
-        entries: entries(8),
+        entries: entries(4),
         expectedVersion: 1,
         submit: false,
       }),
@@ -570,7 +611,7 @@ describe('independent judging and durable score sheets', () => {
     await expect(
       h.run('captain-a', {
         type: 'saveJudgingSheet',
-        entries: entries(7),
+        entries: entries(3),
         expectedVersion: 0,
         submit: false,
       }),
@@ -578,7 +619,7 @@ describe('independent judging and durable score sheets', () => {
     await expect(
       h.run('judge-one', {
         type: 'saveJudgingSheet',
-        entries: entries(11),
+        entries: entries(6),
         expectedVersion: 0,
         submit: false,
       }),
@@ -586,21 +627,21 @@ describe('independent judging and durable score sheets', () => {
     await expect(
       h.run('judge-one', {
         type: 'saveJudgingSheet',
-        entries: { alpha: { scores: { invented: 8 }, note: '', conflict: false } },
+        entries: { alpha: { scores: { invented: 4 }, note: '', conflict: false } },
         expectedVersion: 0,
         submit: false,
       }),
     ).rejects.toMatchObject({ code: 'INVALID_SCORES' });
     await h.run('judge-one', {
       type: 'saveJudgingSheet',
-      entries: entries(7),
+      entries: entries(3),
       expectedVersion: 0,
       submit: true,
     });
     await expect(
       h.run('judge-one', {
         type: 'saveJudgingSheet',
-        entries: entries(8),
+        entries: entries(4),
         expectedVersion: 1,
         submit: false,
       }),
@@ -636,7 +677,7 @@ describe('independent judging and durable score sheets', () => {
     await expect(
       h.run('judge-one', {
         type: 'saveJudgingSheet',
-        entries: entries(8),
+        entries: entries(4),
         expectedVersion: 0,
         submit: false,
       }),
@@ -645,7 +686,7 @@ describe('independent judging and durable score sheets', () => {
   it('excludes declared conflicts and requires another judge to cover the affected project', async () => {
     const h = fixture('judging');
     await assignAll(h);
-    const conflicted = entries(7);
+    const conflicted = entries(3);
     conflicted.alpha = { scores: {}, note: 'Mentored this team.', conflict: true };
     await h.run('judge-one', {
       type: 'saveJudgingSheet',
@@ -670,7 +711,7 @@ describe('independent judging and durable score sheets', () => {
     });
     await h.run('judge-two', {
       type: 'saveJudgingSheet',
-      entries: { alpha: { scores: scores(9), note: '', conflict: false } },
+      entries: { alpha: { scores: scores(5), note: '', conflict: false } },
       expectedVersion: 0,
       submit: true,
     });
@@ -754,8 +795,8 @@ describe('community ballots and reviewed awards', () => {
     const h = fixture('judging');
     await assignAll(h);
     await assignAll(h, 'judge-two');
-    const sheet = entries(5);
-    sheet.alpha.scores = scores(9);
+    const sheet = entries(3);
+    sheet.alpha.scores = scores(5);
     await h.run('judge-one', {
       type: 'saveJudgingSheet',
       entries: sheet,
@@ -788,7 +829,7 @@ describe('community ballots and reviewed awards', () => {
     await assignAll(h);
     await h.run('judge-one', {
       type: 'saveJudgingSheet',
-      entries: entries(8),
+      entries: entries(4),
       expectedVersion: 0,
       submit: true,
     });
@@ -812,8 +853,8 @@ describe('community ballots and reviewed awards', () => {
   it('settles only the grand-prize pool using immutable round fractions and a separate ballot', async () => {
     const h = fixture('judging');
     await assignAll(h);
-    const sheet = entries(5);
-    sheet.alpha.scores = scores(9);
+    const sheet = entries(3);
+    sheet.alpha.scores = scores(5);
     await h.run('judge-one', {
       type: 'saveJudgingSheet',
       entries: sheet,
@@ -871,8 +912,8 @@ describe('community ballots and reviewed awards', () => {
   it('requires the review delay, keeps the result immutable and detects changed eligibility', async () => {
     const h = fixture('judging');
     await assignAll(h);
-    const sheet = entries(5);
-    sheet.alpha.scores = scores(9);
+    const sheet = entries(3);
+    sheet.alpha.scores = scores(5);
     await h.run('judge-one', {
       type: 'saveJudgingSheet',
       entries: sheet,
@@ -910,8 +951,8 @@ describe('community ballots and reviewed awards', () => {
   it('discards only an unpublished preview and retains the archived review evidence', async () => {
     const h = fixture('judging');
     await assignAll(h);
-    const sheet = entries(5);
-    sheet.alpha.scores = scores(9);
+    const sheet = entries(3);
+    sheet.alpha.scores = scores(5);
     await h.run('judge-one', {
       type: 'saveJudgingSheet',
       entries: sheet,
@@ -937,8 +978,8 @@ describe('community ballots and reviewed awards', () => {
   it('prevents another organizer from overwriting an archived preview using the same command identifier', async () => {
     const h = fixture('judging');
     await assignAll(h);
-    const sheet = entries(5);
-    sheet.alpha.scores = scores(9);
+    const sheet = entries(3);
+    sheet.alpha.scores = scores(5);
     await h.run('judge-one', {
       type: 'saveJudgingSheet',
       entries: sheet,

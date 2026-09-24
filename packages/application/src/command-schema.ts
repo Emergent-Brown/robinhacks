@@ -81,6 +81,7 @@ const legacyCommandSchema = z.discriminatedUnion('type', [
     })
     .strict(),
   z.object({ type: z.literal('setMemberRole'), commandId, uid: identifier, role, status }).strict(),
+  z.object({ type: z.literal('updateProfile'), commandId, bio: line(280) }).strict(),
   z
     .object({
       type: z.literal('updateTeam'),

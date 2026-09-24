@@ -4,7 +4,7 @@ A mobile-friendly hackathon platform for building projects, meeting other teams,
 
 The repository retains the technical name `robinhacks`. The participant-facing event is **Emergent Hacks**, with **Silicon Valley** as its theme. React and TypeScript provide the interface; Firebase Authentication, Firestore and callable Functions provide the deployed backend. The local demo runs the same application services and economic rules without a cloud account.
 
-**Updated September 22, 2026:** the [live event](https://emergenthacks.com/) uses the sealed-round platform. The [populated demo](https://robinhacks-2026-ajs--walkthrough-pyhnt4be.web.app/) supports captain, teammate, organizer and judge perspectives. The empty production event was upgraded with its existing organizer preserved. See the [deployment record](docs/FIREBASE-SETUP.md#deployment-record) for verification and remaining rehearsal checks.
+**Updated September 24, 2026:** the [live event](https://emergenthacks.com/) uses the sealed-round platform. The [populated demo](https://robinhacks-2026-ajs--walkthrough-pyhnt4be.web.app/) supports captain, teammate, organizer and judge perspectives. The empty production event was upgraded with its existing organizer preserved. See the [deployment record](docs/FIREBASE-SETUP.md#deployment-record) for verification and remaining rehearsal checks.
 
 ## Start locally
 
@@ -37,18 +37,18 @@ The local project is `demo-robinhacks`; the seed script refuses remote emulator 
 
 ## What is included
 
-- A public event homepage with editable event details, schedule, registration link and contact.
+- A public event homepage with editable event details, logistics, schedule, registration link, organizer information, contact and judging rubric.
 - Numbered NFC poster links that count visits in Firestore, redirect to the homepage, and show organizer-only totals under Admin → Posters. See [poster tracking](docs/13-poster-tracking.md).
 - Google-based participant requests with organizer assignment to an existing or new team. See [joining and approval](docs/14-joining-and-approval.md).
 - Verified email/Google sign-in, organizer approval, team and staff access requests, backup organizer controls and locked team rosters.
-- Project profiles, public team names, rotating discovery suggestions, archived checkpoints, and immutable final submissions with demo, repository and full Git commit.
+- Project profiles with sectors and optional teammate bios, search by project or person, unopened-project discovery, archived checkpoints, and immutable final submissions with demo, repository and full Git commit.
 - Private team-to-team messages, shared inboxes, blocking and reports.
-- Autosaved team allocations, deadline enforcement, simultaneous closing, per-round entitlements, audit records and exact payout calculations.
+- Autosaved team allocations, read-only round history, deadline enforcement, simultaneous closing, per-round entitlements, audit records and exact payout calculations.
 - An independent judge portal with assignments, conflicts, saved drafts, submitted score locks and reviewed awards.
 - A private community ballot, results publication, and post-event export/reconciliation.
 - A short onboarding tour and replayable rules; layouts support desktop and phone screens.
 
-The interface keeps compact blue navigation, Verdana typography, simple tables and direct labels. There are no live share prices, buy/sell controls, liquidation marks or category fields in the sealed-round experience. The official Emergent logo and real event facts remain organizer-supplied configuration/assets; unconfirmed dates, venues and prizes should not be invented.
+The interface keeps compact blue navigation, Verdana typography, simple tables and direct labels. There are no live share prices, buy/sell controls or liquidation marks in the sealed-round experience. The official Emergent logo and real event facts remain organizer-supplied configuration/assets; unconfirmed dates, venues and prizes should not be invented.
 
 ## Default rules
 
@@ -129,6 +129,7 @@ Environment files, local Auth configuration, production exports, credentials, de
 ## Documentation and historical recordings
 
 - [11 · Sealed rounds](docs/11-sealed-rounds.md): authoritative current product and engineering guide.
+- [15 · September website feedback](docs/15-september-feedback.md): homepage logistics, registration, project discovery, bios, round history and judging updates; organizer controls and guarded publication steps.
 - [10 · Readiness audit](docs/10-product-audit.md): event facts, staffing, deployment and rehearsal still to confirm.
 - [Firebase setup](docs/FIREBASE-SETUP.md): infrastructure, safe migration and release steps.
 - Documents **01–09**: historical September 8–10 trading proposal and implementation notes, superseded by document 11.

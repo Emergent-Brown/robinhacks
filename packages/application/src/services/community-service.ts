@@ -129,6 +129,7 @@ export class CommunityService {
           name: candidate.displayName,
           teamId: candidate.teamId!,
           role: candidate.role,
+          ...(candidate.bio ? { bio: candidate.bio } : {}),
         })),
       conversations,
       reports,

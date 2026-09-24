@@ -315,7 +315,7 @@ function validatePublishedAwards(data, event, teams, settings, entitlements, rou
       check(
         record(entry.scores) &&
           Object.keys(entry.scores).length === settings.rubric.length &&
-          settings.rubric.every((criterion) => integer(entry.scores[criterion.id], 0, 10)),
+          settings.rubric.every((criterion) => integer(entry.scores[criterion.id], 0, 5)),
         'INVALID_RUBRIC_SCORES',
       );
       for (const criterion of settings.rubric)

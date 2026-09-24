@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import type { EventDetails, FundingSettings } from '@robinhacks/core';
+import { JUDGING_SCORE_MAX, type EventDetails, type FundingSettings } from '@robinhacks/core';
 import { Field } from '../ui/primitives';
 import { EventScheduleEditor } from './EventScheduleEditor';
+import { EventInfoEditor } from './EventInfoEditor';
 import { config, ErrorMessage, Panel, useCommand, type PageProps } from './shared';
 
 export function AdminSettings({ data, actions }: PageProps) {
@@ -103,6 +104,7 @@ export function AdminSettings({ data, actions }: PageProps) {
             />
           </Field>
         </div>
+        <EventInfoEditor details={details} onChange={setDetails} />
         <EventScheduleEditor details={details} onChange={setDetails} />
       </Panel>
       <Panel title="Funding rules and prizes">
@@ -271,7 +273,7 @@ export function AdminSettings({ data, actions }: PageProps) {
             </div>
           ))}
           <p className="muted">
-            Scores use a whole-number 0–10 scale. Rubric weights must total 100%.
+            Scores use a whole-number 0–{JUDGING_SCORE_MAX} scale. Rubric weights must total 100%.
           </p>
         </fieldset>
       </Panel>

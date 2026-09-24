@@ -79,7 +79,6 @@ export function createPlatformDemoDocuments(
     version: 1,
   };
   for (const team of teams) {
-    team.category = '';
     docs[`${root}/teams/${team.id}`] = team;
     for (let round = 1; round <= (open ? 2 : 1); round++) {
       const update: ProjectUpdate = {

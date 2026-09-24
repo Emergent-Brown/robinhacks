@@ -111,8 +111,22 @@ export function defaultEventDetails(): EventDetails {
     dateLabel: 'September 26–27, 2026',
     timeZone: 'America/New_York',
     eligibility: '',
-    registrationUrl: '',
+    registrationUrl:
+      'https://docs.google.com/forms/d/e/1FAIpQLScyI8GrI-PiBKOjzVI-OiU1Khvh_CnPf0Oem_U255Ql4-BMXA/viewform?usp=sharing&ouid=110862144563506505082',
     contactEmail: '',
+    logistics: {
+      gettingThere:
+        'The Nelson Center for Entrepreneurship is at 1 Euclid Ave, Providence, at the corner of Thayer St and Euclid Ave, near the Brown Bookstore on College Hill. From MacMillan Hall, it’s a short walk down Thayer St.',
+      meals: 'Lunch, dinner, and snacks are provided.',
+      overnight:
+        'Building runs from Saturday 11:30 a.m. to Sunday 10:45 a.m. The Nelson will be open for 24 hours, but we don’t expect you to sleep there.',
+      bring: 'Laptop and charger, student/photo ID, and whatever hardware your project needs.',
+    },
+    organization: {
+      about:
+        'We’re Emergent, a student-run organization at Brown that brings students together with founders and people building in tech. We also run the Emergent Tech Startup Conference.',
+      url: 'https://emergentconference.org',
+    },
     timing: {
       rounds: [
         window('2026-09-26T11:00:00-04:00', '2026-09-26T11:30:00-04:00'),
@@ -127,42 +141,47 @@ export function defaultEventDetails(): EventDetails {
       {
         time: '',
         window: 'round1',
-        title: 'First investments',
+        title: 'Round 1 · First investments',
         description: 'Back the initial pitches.',
       },
       {
-        time: 'Sat · 11:30 a.m.–9 p.m.',
+        time: 'Sat · 11:30 a.m.–noon',
         title: 'Building',
         description: 'Work on your project and meet other teams.',
       },
       { time: 'Sat · noon', title: 'Lunch', description: '' },
+      { time: 'Sat · 1–6 p.m.', title: 'Building', description: '' },
       {
         time: 'Sat · 6 p.m.',
         title: 'Funding reveal',
         description: 'See the first-round funding totals.',
       },
+      { time: 'Sat · 6–7 p.m.', title: 'Building', description: '' },
       { time: 'Sat · 7 p.m.', title: 'Dinner', description: '' },
+      { time: 'Sat · 8–9 p.m.', title: 'Building', description: '' },
       {
         time: '',
         window: 'round2',
-        title: 'Second investments',
+        title: 'Round 2 · Second investments',
         description: 'Back the working prototypes.',
       },
-      { time: 'Sat · 9:30 p.m.–Sun · 10:45 a.m.', title: 'Building continues', description: '' },
+      { time: 'Sat · 9:30 p.m.–midnight', title: 'Building', description: '' },
       { time: 'Sun · midnight', title: 'Ice cream social', description: '' },
+      { time: 'Sun · 1–8 a.m.', title: 'Overnight building', description: '' },
       { time: 'Sun · 8 a.m.', title: 'Breakfast', description: '' },
+      { time: 'Sun · 9–10 a.m.', title: 'Building', description: '' },
       {
         time: '',
         window: 'submissions',
         title: 'Final submissions',
-        description: 'Submit your project before pitches.',
+        description: 'Finish building and submit your project before the deadline.',
       },
       { time: 'Sun · 11 a.m.–noon', title: 'Pitches', description: 'Show what you built.' },
       {
         time: '',
         window: 'round3',
-        title: 'Final investments',
-        description: 'Make your final picks after the demos.',
+        title: 'Round 3 · Final investments',
+        description: 'Make your final picks after the hackathon-wide demos.',
       },
       { time: '', window: 'ballot', title: 'Community vote', description: '' },
       { time: 'Sun · 1:15 p.m.', title: 'Winners announced', description: '' },

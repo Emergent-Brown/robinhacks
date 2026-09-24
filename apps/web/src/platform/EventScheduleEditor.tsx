@@ -200,7 +200,7 @@ export function EventScheduleEditor({
       <button
         type="button"
         className="button secondary"
-        disabled={details.schedule.length >= 20}
+        disabled={details.schedule.length >= 32}
         onClick={() =>
           changeSchedule([...details.schedule, { time: '', title: '', description: '' }])
         }

@@ -35,6 +35,7 @@ import { MarketService } from './services/market-service';
 import { MembershipService } from './services/membership-service';
 import { OperationService } from './services/operation-service';
 import { Permissions } from './services/permissions';
+import { ProfileService } from './services/profile-service';
 
 interface AcceptedCommand {
   payloadKey: string;
@@ -71,6 +72,7 @@ export class GameService {
   private readonly paths: EventPaths;
   private readonly market = new MarketService();
   private readonly membership = new MembershipService();
+  private readonly profiles = new ProfileService();
   private readonly operations = new OperationService();
   private readonly funding = new FundingService();
   private readonly community = new CommunityService();
@@ -178,6 +180,9 @@ export class GameService {
           case 'updateTeam':
             result = await this.membership.profile(context, command);
             break;
+          case 'updateProfile':
+            result = this.profiles.update(context, command);
+            break;
           case 'setSeedCommitments':
             result = await this.market.commitments(context, command);
             break;
@@ -237,6 +242,7 @@ export class GameService {
             'saveJudgingSheet',
             'saveAllocation',
             'saveBallot',
+            'updateProfile',
           ].includes(command.type)) ||
         [
           'approveMembership',

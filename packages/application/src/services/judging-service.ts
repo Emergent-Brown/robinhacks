@@ -1,4 +1,4 @@
-import { SealedFunding } from '@robinhacks/core';
+import { isJudgingScore, JUDGING_SCORE_MAX, SealedFunding } from '@robinhacks/core';
 import type {
   AwardResults,
   CommunityBallot,
@@ -216,10 +216,10 @@ export class JudgingService {
     const rubricIds = new Set(settings.rubric.map((criterion) => criterion.id));
     requireState(
       Object.entries(entry.scores).every(
-        ([id, score]) => rubricIds.has(id) && Number.isInteger(score) && score >= 0 && score <= 10,
+        ([id, score]) => rubricIds.has(id) && isJudgingScore(score),
       ),
       'INVALID_SCORES',
-      'Use a whole-number score from 0 to 10 for each rubric criterion.',
+      `Use a whole-number score from 0 to ${JUDGING_SCORE_MAX} for each rubric criterion.`,
     );
     if (complete && entry.conflict)
       requireState(

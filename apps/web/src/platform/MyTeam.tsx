@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Team } from '@robinhacks/core';
 import { Dialog, ExternalLink, Field } from '../ui/primitives';
 import { useClock } from '../hooks/useApp';
+import './projects.css';
 import {
   Blank,
   config,
@@ -74,6 +75,7 @@ export function MyTeam({ data, actions }: PageProps) {
           </p>
         )}
         <p>{team.pitch || 'Add a one-sentence pitch.'}</p>
+        {team.category && <span className="p-project-sector">{team.category}</span>}
         <div className="p-actions">
           <ExternalLink href={team.demoUrl}>Demo</ExternalLink>
           <ExternalLink href={team.repoUrl}>Source code</ExternalLink>
@@ -84,38 +86,45 @@ export function MyTeam({ data, actions }: PageProps) {
           The captain and one designated investor manage the shared allocation. Each person uses
           their own sign-in.
         </p>
-        <ul className="p-roster">
+        <ul className="p-roster p-profile-roster">
           {roster.map((member) => (
             <li key={member.uid}>
-              <strong>{member.displayName}</strong>
-              {data.member?.role === 'captain' &&
-              member.uid !== data.member.uid &&
-              ['member', 'trader'].includes(member.role) &&
-              ['DRAFT', 'REGISTRATION'].includes(data.event!.phase) ? (
-                <select
-                  aria-label={`Role for ${member.displayName}`}
-                  value={member.role}
-                  disabled={cmd.pending}
-                  onChange={(event) =>
-                    void cmd.run({
-                      type: 'setMemberRole',
-                      uid: member.uid,
-                      role: event.target.value as 'member' | 'trader',
-                      status: 'approved',
-                    })
-                  }
-                >
-                  <option value="member">Member</option>
-                  <option value="trader">Designated investor</option>
-                </select>
-              ) : (
-                <span>
-                  {member.role === 'trader' ? 'Designated investor' : member.role} · {member.status}
-                </span>
-              )}
+              <div className="p-person-heading">
+                <strong>{member.displayName}</strong>
+                {data.member?.role === 'captain' &&
+                member.uid !== data.member.uid &&
+                ['member', 'trader'].includes(member.role) &&
+                ['DRAFT', 'REGISTRATION'].includes(data.event!.phase) ? (
+                  <select
+                    aria-label={`Role for ${member.displayName}`}
+                    value={member.role}
+                    disabled={cmd.pending}
+                    onChange={(event) =>
+                      void cmd.run({
+                        type: 'setMemberRole',
+                        uid: member.uid,
+                        role: event.target.value as 'member' | 'trader',
+                        status: 'approved',
+                      })
+                    }
+                  >
+                    <option value="member">Member</option>
+                    <option value="trader">Designated investor</option>
+                  </select>
+                ) : (
+                  <span>
+                    {member.role === 'trader' ? 'Designated investor' : member.role} ·{' '}
+                    {member.status}
+                  </span>
+                )}
+              </div>
+              {member.bio && <p className="p-person-bio">{member.bio}</p>}
             </li>
           ))}
         </ul>
+        {data.member?.status === 'approved' && (
+          <ProfileBioEditor key={data.member.uid} data={data} actions={actions} />
+        )}
         <ErrorMessage>{cmd.error}</ErrorMessage>
       </Panel>
       <Panel title="Final submission">
@@ -204,6 +213,7 @@ export function MyTeam({ data, actions }: PageProps) {
 function ProjectEditor({ team, actions, close }: PageProps & { team: Team; close: () => void }) {
   const [form, setForm] = useState({
     name: team.name,
+    category: team.category,
     pitch: team.pitch,
     problem: team.problem,
     building: team.building,
@@ -235,6 +245,16 @@ function ProjectEditor({ team, actions, close }: PageProps & { team: Team; close
             maxLength={90}
             value={form.pitch}
             onChange={(e) => setForm({ ...form, pitch: e.target.value })}
+          />
+        </Field>
+        <Field
+          label="Sector (optional)"
+          hint="For example: health, climate, education, or developer tools."
+        >
+          <input
+            maxLength={40}
+            value={form.category}
+            onChange={(event) => setForm({ ...form, category: event.target.value })}
           />
         </Field>
         <Field label="Problem">
@@ -282,6 +302,62 @@ function ProjectEditor({ team, actions, close }: PageProps & { team: Team; close
         </div>
       </form>
     </Dialog>
+  );
+}
+function ProfileBioEditor({ data, actions }: PageProps) {
+  const [editing, setEditing] = useState(false);
+  const [bio, setBio] = useState(data.member?.bio ?? '');
+  const cmd = useCommand(actions);
+  if (!editing)
+    return (
+      <div className="p-bio-editor">
+        <button
+          className="p-link"
+          onClick={() => {
+            setBio(data.member?.bio ?? '');
+            setEditing(true);
+          }}
+        >
+          {data.member?.bio ? 'Edit your bio' : 'Add a short bio'}
+        </button>
+        <p className="muted">Optional. Your bio appears next to your name on the project page.</p>
+      </div>
+    );
+  return (
+    <form
+      className="p-bio-editor"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void cmd.run({ type: 'updateProfile', bio }, () => setEditing(false));
+      }}
+    >
+      <Field
+        label="Your bio (optional)"
+        hint="Share what you like building or what you’re working on. Visible on your team’s project page."
+      >
+        <textarea
+          rows={3}
+          maxLength={280}
+          value={bio}
+          onChange={(event) => setBio(event.target.value)}
+        />
+      </Field>
+      <p className="p-bio-count">{bio.length}/280 characters</p>
+      <ErrorMessage>{cmd.error}</ErrorMessage>
+      <div className="p-actions">
+        <button className="button primary" disabled={cmd.pending}>
+          {cmd.pending ? 'Saving…' : 'Save bio'}
+        </button>
+        <button
+          className="button secondary"
+          type="button"
+          disabled={cmd.pending}
+          onClick={() => setEditing(false)}
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 function UpdateEditor({ data, actions }: PageProps) {

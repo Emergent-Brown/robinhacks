@@ -32,6 +32,8 @@ export interface EventConfig {
   tieSeed: string;
 }
 export interface Member {
+  /** Optional, self-authored plain text shared with the approved team roster. */
+  bio?: string;
   email?: string;
   emailVerified?: boolean;
   uid: string;
@@ -238,6 +240,7 @@ export type Command =
       teamName?: string;
     }
   | { type: 'setMemberRole'; commandId: string; uid: string; role: Role; status: Member['status'] }
+  | { type: 'updateProfile'; commandId: string; bio: string }
   | {
       type: 'updateTeam';
       commandId: string;

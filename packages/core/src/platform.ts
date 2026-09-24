@@ -19,6 +19,14 @@ export interface EventDetails {
   eligibility: string;
   registrationUrl: string;
   contactEmail: string;
+  /** Public attendee information; optional for older events. */
+  logistics?: {
+    gettingThere: string;
+    meals: string;
+    overnight: string;
+    bring: string;
+  };
+  organization?: { about: string; url: string };
   schedule: Array<{ time: string; title: string; description: string; window?: ScheduleWindow }>;
   /** Optional for events created before scheduled windows were introduced. */
   timing?: EventTiming;
@@ -199,7 +207,7 @@ export interface PlatformSnapshot {
   entitlements: RoundEntitlement[];
   updates: ProjectUpdate[];
   submissions: ProjectSubmission[];
-  roster: Array<{ uid: string; name: string; teamId: string; role: string }>;
+  roster: Array<{ uid: string; name: string; teamId: string; role: string; bio?: string }>;
   conversations: ConversationSummary[];
   reports: MessageReport[];
   assignments: JudgeAssignment[];

@@ -12,7 +12,8 @@ import {
 import type { AppSnapshot, Command } from '@robinhacks/core';
 import type { AppGateway, SessionUser } from '../app/gateway';
 import { MarketRefreshScheduler } from '../app/MarketRefreshScheduler';
-const STORE = 'emergent-hacks-demo-v2';
+// The 0–5 judging release starts fresh; old demo score sheets used a 0–10 scale.
+const STORE = 'emergent-hacks-demo-v3';
 export class DemoGateway implements AppGateway {
   readonly mode = 'demo' as const;
   user: SessionUser | null = PLATFORM_USERS.captain;

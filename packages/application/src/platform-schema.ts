@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { JUDGING_SCORE_MAX } from '@robinhacks/core';
 const id = z
   .string()
   .min(1)
@@ -52,6 +53,19 @@ const details = z
     eligibility: text(1000),
     registrationUrl: url,
     contactEmail: email,
+    logistics: z
+      .object({
+        gettingThere: text(1000),
+        meals: text(500),
+        overnight: text(1000),
+        bring: text(500),
+      })
+      .strict()
+      .optional(),
+    organization: z
+      .object({ about: text(1000), url })
+      .strict()
+      .optional(),
     schedule: z
       .array(
         z
@@ -63,7 +77,7 @@ const details = z
           })
           .strict(),
       )
-      .max(20),
+      .max(32),
     timing: z
       .object({
         rounds: z.array(plannedWindow).length(3),
@@ -98,7 +112,7 @@ const funding = z
   .strict();
 const entry = z
   .object({
-    scores: z.record(id, z.number().int().min(0).max(10)),
+    scores: z.record(id, z.number().int().min(0).max(JUDGING_SCORE_MAX)),
     note: text(1500),
     conflict: z.boolean(),
   })

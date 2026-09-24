@@ -1,0 +1,106 @@
+.p-project-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 230px);
+  gap: 16px;
+  margin: 22px 0 15px;
+}
+.p-project-filters > div {
+  min-width: 0;
+}
+.p-project-filters label {
+  display: block;
+  margin-bottom: 7px;
+  color: #506c82;
+  font-size: 12px;
+}
+.p-project-filters input,
+.p-project-filters select {
+  width: 100%;
+  min-height: 42px;
+}
+.p-project-results {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  color: #506c82;
+  font-size: 12px;
+}
+.p-project-sector {
+  display: block;
+  width: fit-content;
+  margin-top: 6px;
+  color: #516c82;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.p-project-directory .p-discovery .p-project-sector {
+  margin-top: 3px;
+}
+.p-project-directory .p-project-name .p-project-sector {
+  margin: 3px 0 5px;
+}
+.p-profile-roster.p-roster > li {
+  display: block;
+}
+.p-person-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+.p-person-bio {
+  margin: 8px 0 0;
+  color: #536b80;
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.p-bio-editor {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #d9e3ec;
+}
+.p-bio-editor > p {
+  margin: 7px 0 0;
+}
+.p-bio-count {
+  text-align: right;
+  font-size: 11px;
+  color: #5c7388;
+}
+@media (max-width: 600px) {
+  .p-project-filters {
+    grid-template-columns: 1fr;
+    gap: 13px;
+  }
+  .p-project-directory .p-projects .p-project-people {
+    font-size: 11px;
+    line-height: 1.6;
+    margin-top: 8px;
+    color: #536b80;
+  }
+  .p-project-directory .p-discovery {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .p-project-directory .p-discovery li + li {
+    border-left: 0;
+    border-top: 1px solid #d6e1eb;
+    padding: 10px 0 0;
+  }
+  .p-project-directory .p-discovery p {
+    display: block;
+    line-height: 1.6;
+  }
+  .p-project-directory .p-discovery .p-link {
+    font-size: 13px;
+  }
+  .p-project-directory .p-section-heading > .p-link {
+    margin-top: 0;
+    font-size: 12px;
+  }
+}

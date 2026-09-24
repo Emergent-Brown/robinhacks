@@ -1,0 +1,83 @@
+/* Round navigation stays usable on narrow screens and leaves room for event timing. */
+.p-investment-rounds {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  list-style: none;
+  margin: 0 0 24px;
+  padding: 0;
+}
+.p-investment-rounds li {
+  min-width: 0;
+}
+.p-investment-round {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  padding: 17px;
+  border: 1px solid #b0c4d8;
+  border-top: 3px solid transparent;
+  background: #fff;
+  color: #173f61;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.p-investment-round:hover {
+  background: #f0f7fb;
+  border-color: #7f9fb9;
+}
+.p-investment-round[aria-pressed='true'] {
+  border-color: #195587;
+  background: #e9f3fb;
+}
+.p-investment-round:focus-visible {
+  outline: 2px solid #195587;
+  outline-offset: 3px;
+}
+.p-investment-round-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+.p-investment-round-number {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.p-investment-round-status {
+  color: #4a657a;
+  font-size: 10px;
+}
+.p-investment-round strong {
+  font-size: 15px;
+  line-height: 1.3;
+}
+.p-investment-round-weight,
+.p-investment-round-time {
+  font-size: 11px;
+  line-height: 1.6;
+  color: #4a657a;
+}
+.p-investment-round-time {
+  margin-top: auto;
+}
+.p-investment-round-draft {
+  color: #855316;
+  font-size: 11px;
+}
+@media (max-width: 620px) {
+  .p-investment-rounds {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .p-investment-round {
+    padding: 12px 14px;
+    gap: 5px;
+  }
+}

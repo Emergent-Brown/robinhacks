@@ -153,7 +153,7 @@ beforeAll(async () => {
         team.id,
         {
           scores: Object.fromEntries(
-            rubric.map((criterion) => [criterion.id, team.id === 'team-2' ? 10 : 5]),
+            rubric.map((criterion) => [criterion.id, team.id === 'team-2' ? 5 : 3]),
           ),
           note: '',
           conflict: false,
@@ -337,6 +337,12 @@ describe('independent exported sealed-ledger reconciliation', () => {
         data.submissions = data.submissions.filter(
           (submission: any) => submission.teamId !== 'team-2',
         );
+      },
+    ],
+    [
+      'judging score exceeds the published 0–5 scale',
+      (data) => {
+        data.judgingSheets[0].entries['team-2'].scores.functionality = 6;
       },
     ],
     [
