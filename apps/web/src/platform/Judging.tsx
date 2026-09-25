@@ -30,6 +30,7 @@ export function Judging({ data, actions }: PageProps) {
       '',
   );
   const cmd = useCommand(actions);
+  const allProjects = (config(data).judgingMode ?? 'all') === 'all';
   const rubric = config(data).funding.rubric;
   const locked = !!sheet?.submittedAt;
   const judgingOpen = data.event!.phase === 'FROZEN' && !data.event!.paused;
@@ -63,10 +64,12 @@ export function Judging({ data, actions }: PageProps) {
   }
   async function save(submit: boolean) {
     const normalized = Object.fromEntries(
-      Object.entries(entries).map(([id, entry]) => [
-        id,
-        assignment?.conflictIds.includes(id) ? { ...entry, conflict: true } : entry,
-      ]),
+      Object.entries(entries)
+        .filter(([id]) => projects.includes(id))
+        .map(([id, entry]) => [
+          id,
+          assignment?.conflictIds.includes(id) ? { ...entry, conflict: true } : entry,
+        ]),
     );
     const okay = await cmd.run({
       type: 'saveJudgingSheet',
@@ -80,15 +83,14 @@ export function Judging({ data, actions }: PageProps) {
       setReview(false);
     }
   }
-  const complete =
-    projects.length > 0 &&
-    projects.every(
-      (id) =>
-        assignment?.conflictIds.includes(id) ||
-        (entries[id]?.conflict
-          ? entries[id]!.note.trim().length >= 3
-          : rubric.every((criterion) => isJudgingScore(entries[id]?.scores[criterion.id]))),
-    );
+  const completedCount = projects.filter(
+    (id) =>
+      assignment?.conflictIds.includes(id) ||
+      (entries[id]?.conflict
+        ? entries[id]!.note.trim().length >= 3
+        : rubric.every((criterion) => isJudgingScore(entries[id]?.scores[criterion.id]))),
+  ).length;
+  const complete = projects.length > 0 && completedCount === projects.length;
   const submission = state.submissions.find((item) => item.teamId === selected);
   const entry = entries[selected] || { scores: {}, note: '', conflict: false };
   const assignedConflict = assignment?.conflictIds.includes(selected);
@@ -101,9 +103,15 @@ export function Judging({ data, actions }: PageProps) {
         </span>
       </div>
       <p>
+        {allProjects ? 'Score every submitted project.' : 'Score the projects assigned to you.'}{' '}
         Score each criterion from 0 to {JUDGING_SCORE_MAX} using the published rubric. Funding
-        activity stays hidden. Submitted scores are shared after all judges finish scoring.
+        activity stays hidden. The full ranking and submitted notes appear after all judges finish.
       </p>
+      {!!projects.length && (
+        <p className="muted" role="status">
+          {completedCount} of {projects.length} projects reviewed, including declared conflicts.
+        </p>
+      )}
       <JudgingReview data={data} actions={actions} />
       {selected && (
         <p className="muted">
@@ -124,13 +132,17 @@ export function Judging({ data, actions }: PageProps) {
       )}
       {!projects.length ? (
         <Panel>
-          <Blank>No projects assigned yet. Contact the organizer.</Blank>
+          <Blank>
+            {allProjects
+              ? 'Submitted projects will appear here automatically.'
+              : 'No projects assigned yet. Contact the organizer.'}
+          </Blank>
         </Panel>
       ) : (
         <div className="p-judge-layout">
           <aside>
             <label className="field">
-              <span>Assigned project</span>
+              <span>{allProjects ? 'Project' : 'Assigned project'}</span>
               <select value={selected} onChange={(event) => setSelected(event.target.value)}>
                 {projects.map((id) => (
                   <option key={id} value={id}>

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { Team } from '@robinhacks/core';
 import { Dialog, ExternalLink, Field } from '../ui/primitives';
 import { useClock } from '../hooks/useApp';
+import { SectorPicker } from './SectorPicker';
+import { resolveProjectSector } from './project-discovery';
 import './projects.css';
 import {
   Blank,
@@ -12,6 +14,7 @@ import {
   Panel,
   platform,
   stamp,
+  teams,
   useCommand,
   type PageProps,
 } from './shared';
@@ -189,6 +192,7 @@ export function MyTeam({ data, actions }: PageProps) {
 
 export function ProjectEditor({
   team,
+  data,
   actions,
   close,
 }: PageProps & { team: Team; close: () => void }) {
@@ -208,7 +212,14 @@ export function ProjectEditor({
         className="p-form p-project-editor"
         onSubmit={(event) => {
           event.preventDefault();
-          void cmd.run({ type: 'updateTeam', expectedVersion: team.version, patch: form }, close);
+          void cmd.run(
+            {
+              type: 'updateTeam',
+              expectedVersion: team.version,
+              patch: { ...form, category: resolveProjectSector(form.category, teams(data)) },
+            },
+            close,
+          );
         }}
       >
         <Field label="Project name">
@@ -228,16 +239,12 @@ export function ProjectEditor({
             onChange={(e) => setForm({ ...form, pitch: e.target.value })}
           />
         </Field>
-        <Field
-          label="Sector (optional)"
-          hint="For example: health, climate, education, or developer tools."
-        >
-          <input
-            maxLength={40}
-            value={form.category}
-            onChange={(event) => setForm({ ...form, category: event.target.value })}
-          />
-        </Field>
+        <SectorPicker
+          projects={teams(data)}
+          value={form.category}
+          onChange={(category) => setForm((current) => ({ ...current, category }))}
+          disabled={cmd.pending}
+        />
         <Field label="Problem">
           <textarea
             required

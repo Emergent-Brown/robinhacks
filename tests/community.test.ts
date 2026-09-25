@@ -5,7 +5,9 @@ import type {
   CommunityCommand,
   EventConfig,
   FundingRound,
+  JudgeAssignment,
   JudgingEntry,
+  JudgingSheet,
   Member,
   ProjectSubmission,
   Team,
@@ -60,8 +62,14 @@ const entries = (value: number): Record<string, JudgingEntry> =>
     teamIds.map((id) => [id, { scores: scores(value), note: '', conflict: false }]),
   );
 
-function fixture(stage: 'setup' | 'submission' | 'judging' = 'setup') {
+function fixture(
+  stage: 'setup' | 'submission' | 'judging' = 'setup',
+  judgingMode: 'all' | 'assigned' | null = 'assigned',
+) {
   const config = defaultPlatformConfig();
+  // Existing cases exercise selected-project judging; null checks older events' default.
+  if (judgingMode === null) delete config.judgingMode;
+  else config.judgingMode = judgingMode;
   config.currentRound = stage === 'setup' ? 0 : stage === 'submission' ? 2 : 3;
   config.submissionsOpen = stage === 'submission';
   config.submissionClosesAt = stage === 'submission' ? NOW + 60_000 : null;
@@ -449,6 +457,7 @@ describe('independent judging and durable score sheets', () => {
     const h = fixture('judging');
     for (let index = 0; index < 49; index++) {
       const uid = `existing-judge-${index}`;
+      await h.set(paths.member(uid), member(uid, null, 'judge'));
       await h.set(paths.doc('judgeAssignments', uid), {
         uid,
         projectIds: ['alpha'],
@@ -745,6 +754,395 @@ describe('independent judging and durable score sheets', () => {
         expectedPhaseVersion: await phase(h),
       }),
     ).resolves.toBeDefined();
+  });
+});
+
+describe('all-project and selected-project judging modes', () => {
+  it.each(['all', 'assigned'] as const)(
+    'serializes the fiftieth sheet in %s mode, counting inactive history while preserving existing drafts',
+    async (mode) => {
+      const h = fixture('judging', mode);
+      if (mode === 'assigned') {
+        await assignAll(h);
+        await assignAll(h, 'judge-two');
+      }
+      for (let index = 0; index < 49; index++)
+        await h.set(paths.doc('judgingSheets', `former-judge-${index}`), {
+          uid: `former-judge-${index}`,
+          entries: {},
+          version: 1,
+          submittedAt: null,
+          updatedAt: NOW,
+        } satisfies JudgingSheet);
+      const attempts = await Promise.allSettled(
+        ['judge-one', 'judge-two'].map((uid) =>
+          h.run(uid, {
+            type: 'saveJudgingSheet',
+            entries: entries(3),
+            expectedVersion: 0,
+            submit: false,
+          }),
+        ),
+      );
+      expect(attempts.filter((attempt) => attempt.status === 'fulfilled')).toHaveLength(1);
+      expect(attempts.find((attempt) => attempt.status === 'rejected')).toMatchObject({
+        reason: { code: 'JUDGE_LIMIT' },
+      });
+      const admitted = attempts[0]?.status === 'fulfilled' ? 'judge-one' : 'judge-two';
+      await expect(
+        h.run(admitted, {
+          type: 'saveJudgingSheet',
+          entries: entries(4),
+          expectedVersion: 1,
+          submit: false,
+        }),
+      ).resolves.toBeDefined();
+      expect((await h.snapshot('organizer')).judgingSheets).toHaveLength(50);
+      expect(await h.get<JudgingSheet>(paths.doc('judgingSheets', admitted))).toMatchObject({
+        entries: entries(4),
+        version: 2,
+      });
+    },
+  );
+
+  it('rejects scoring in all mode when older data exceeds the approved-judge limit', async () => {
+    const h = fixture('judging', 'all');
+    for (let index = 0; index < 49; index++) {
+      const uid = `extra-judge-${index}`;
+      await h.set(paths.member(uid), member(uid, null, 'judge'));
+    }
+    await expect(
+      h.run('judge-one', {
+        type: 'saveJudgingSheet',
+        entries: entries(3),
+        expectedVersion: 0,
+        submit: false,
+      }),
+    ).rejects.toMatchObject({ code: 'JUDGE_LIMIT' });
+    expect(await h.get(paths.doc('judgingSheets', 'judge-one'))).toBeNull();
+  });
+
+  it.each(['all', null] as const)(
+    'automatically assigns eligible submitted projects to approved independent judges in %s mode',
+    async (mode) => {
+      const h = fixture('judging', mode);
+      await h.set(paths.member('pending-judge'), {
+        ...member('pending-judge', null, 'judge'),
+        status: 'pending',
+      });
+      await h.set(paths.member('suspended-judge'), {
+        ...member('suspended-judge', null, 'judge'),
+        status: 'suspended',
+      });
+      await h.set(paths.member('teamed-judge'), member('teamed-judge', 'alpha', 'judge'));
+      await h.set(paths.team('charlie'), {
+        ...project('charlie', 'captain-c'),
+        eligibility: 'withdrawn',
+      });
+      await h.set(paths.team('unsubmitted'), project('unsubmitted', 'captain-new'));
+
+      const snapshot = await h.snapshot('judge-one');
+      expect(snapshot.assignments.map((assignment) => assignment.uid).sort()).toEqual([
+        'judge-one',
+        'judge-two',
+      ]);
+      for (const assignment of snapshot.assignments) {
+        expect(assignment.projectIds.sort()).toEqual(['alpha', 'bravo']);
+        expect(assignment.conflictIds).toEqual([]);
+      }
+      expect(await h.get(paths.doc('judgeAssignments', 'judge-one'))).toBeNull();
+      await expect(
+        h.run('teamed-judge', {
+          type: 'saveJudgingSheet',
+          entries: {},
+          expectedVersion: 0,
+          submit: false,
+        }),
+      ).rejects.toMatchObject({ code: 'JUDGE_REQUIRED' });
+      await expect(
+        h.run('pending-judge', {
+          type: 'saveJudgingSheet',
+          entries: {},
+          expectedVersion: 0,
+          submit: false,
+        }),
+      ).rejects.toMatchObject({ code: 'MEMBERSHIP_REQUIRED' });
+    },
+  );
+
+  it('adds later submissions to every judge’s required sheet without losing saved draft scores', async () => {
+    const h = fixture('judging', 'all');
+    await h.repository.transaction(async (tx) => tx.delete(paths.doc('submissions', 'charlie')));
+    const draft = { alpha: entries(4).alpha, bravo: entries(3).bravo };
+    await h.run('judge-one', {
+      type: 'saveJudgingSheet',
+      entries: draft,
+      expectedVersion: 0,
+      submit: false,
+    });
+    expect((await h.snapshot('judge-one')).assignments[0]?.projectIds.sort()).toEqual([
+      'alpha',
+      'bravo',
+    ]);
+    const submission = (await h.get<ProjectSubmission>(paths.doc('submissions', 'alpha')))!;
+    await h.set(paths.doc('submissions', 'charlie'), {
+      ...submission,
+      id: 'charlie',
+      teamId: 'charlie',
+      submittedBy: 'captain-c',
+      submittedAt: NOW,
+    });
+    await expect(
+      h.run('judge-one', {
+        type: 'saveJudgingSheet',
+        entries: draft,
+        expectedVersion: 1,
+        submit: true,
+      }),
+    ).rejects.toMatchObject({ code: 'SCORES_INCOMPLETE' });
+    const snapshot = await h.snapshot('judge-one');
+    expect(
+      snapshot.assignments.every((assignment) => assignment.projectIds.includes('charlie')),
+    ).toBe(true);
+    expect(snapshot.judgingSheets[0]).toMatchObject({ entries: draft, version: 1 });
+    await expect(
+      h.run('judge-one', {
+        type: 'saveJudgingSheet',
+        entries: { ...draft, charlie: entries(5).charlie },
+        expectedVersion: 1,
+        submit: true,
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it('retains organizer-declared conflicts without allowing a manual subset to narrow all-project judging', async () => {
+    const h = fixture('judging', 'all');
+    await h.run('organizer', {
+      type: 'assignJudge',
+      uid: 'judge-one',
+      projectIds: ['alpha'],
+      conflictIds: ['alpha'],
+      expectedVersion: 0,
+    });
+    const assignment = (await h.snapshot('judge-one')).assignments.find(
+      (item) => item.uid === 'judge-one',
+    )!;
+    expect(assignment.projectIds.sort()).toEqual([...teamIds]);
+    expect(assignment.conflictIds).toEqual(['alpha']);
+    await expect(
+      h.run('judge-one', {
+        type: 'saveJudgingSheet',
+        entries: entries(4),
+        expectedVersion: 0,
+        submit: true,
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT_REQUIRED' });
+    await h.run('judge-one', {
+      type: 'saveJudgingSheet',
+      entries: { bravo: entries(4).bravo, charlie: entries(3).charlie },
+      expectedVersion: 0,
+      submit: true,
+    });
+    expect((await h.snapshot('judge-one')).deliberationReady).toBe(false);
+    await h.run('judge-two', {
+      type: 'saveJudgingSheet',
+      entries: { ...entries(3), alpha: entries(5).alpha },
+      expectedVersion: 0,
+      submit: true,
+    });
+    await decide(h);
+    await h.run('organizer', {
+      type: 'prepareAwards',
+      winnerId: 'alpha',
+      tiebreakReason: '',
+      expectedPhaseVersion: await phase(h),
+    });
+    const awards = (await h.snapshot('organizer')).awards!;
+    expect(awards.projects.map((item) => item.teamId)).toEqual(['alpha', 'bravo', 'charlie']);
+    expect(awards.projects[0]).toMatchObject({ score: 5, judgeCount: 1 });
+    expect(awards.projects[1]).toMatchObject({ score: 3.5, judgeCount: 2 });
+  });
+
+  it('withdraws deliberation readiness and a prior decision when a newly eligible submission is not scored', async () => {
+    const h = fixture('judging', 'all');
+    const laterSubmission = (await h.get<ProjectSubmission>(paths.doc('submissions', 'charlie')))!;
+    await h.repository.transaction(async (tx) => tx.delete(paths.doc('submissions', 'charlie')));
+    for (const uid of ['judge-one', 'judge-two'])
+      await h.run(uid, {
+        type: 'saveJudgingSheet',
+        entries: { alpha: entries(5).alpha, bravo: entries(4).bravo },
+        expectedVersion: 0,
+        submit: true,
+      });
+    await decide(h);
+    expect((await h.snapshot('judge-one')).deliberationReady).toBe(true);
+    await h.set(paths.doc('submissions', 'charlie'), laterSubmission);
+    const changed = await h.snapshot('judge-one');
+    expect(changed.deliberationReady).toBe(false);
+    expect(changed.judgeDecision).toBeNull();
+    expect(changed.judgingSheets.map((sheet) => sheet.uid)).toEqual(['judge-one']);
+    await expect(decide(h)).rejects.toMatchObject({ code: 'JUDGING_INCOMPLETE' });
+  });
+
+  it('keeps shared scores private until every all-project judge submits, then permits deliberation and approval', async () => {
+    const h = fixture('judging', 'all');
+    const sheet = { ...entries(3), alpha: entries(5).alpha, bravo: entries(4).bravo };
+    await h.run('judge-one', {
+      type: 'saveJudgingSheet',
+      entries: sheet,
+      expectedVersion: 0,
+      submit: true,
+    });
+    await h.run('judge-two', {
+      type: 'saveJudgingSheet',
+      entries: sheet,
+      expectedVersion: 0,
+      submit: false,
+    });
+    const waiting = await h.snapshot('judge-one');
+    expect(waiting.deliberationReady).toBe(false);
+    expect(waiting.judgingSheets.map((item) => item.uid)).toEqual(['judge-one']);
+    await expect(decide(h)).rejects.toMatchObject({ code: 'JUDGING_INCOMPLETE' });
+    await h.run('judge-two', {
+      type: 'saveJudgingSheet',
+      entries: sheet,
+      expectedVersion: 1,
+      submit: true,
+    });
+    const completed = await h.snapshot('judge-one');
+    expect(completed.deliberationReady).toBe(true);
+    expect(completed.judgingSheets.map((item) => item.uid).sort()).toEqual([
+      'judge-one',
+      'judge-two',
+    ]);
+    expect((await h.snapshot('captain-a')).judgingSheets).toEqual([]);
+    await h.run('judge-two', {
+      type: 'submitJudgeDecision',
+      winnerId: 'alpha',
+      reason: 'We agreed after comparing every pitch and working demo.',
+      expectedPhaseVersion: await phase(h),
+    });
+    await h.run('organizer', {
+      type: 'prepareAwards',
+      winnerId: 'alpha',
+      tiebreakReason: '',
+      expectedPhaseVersion: await phase(h),
+    });
+    const awards = (await h.snapshot('organizer')).awards!;
+    expect(awards.projects.map((item) => [item.teamId, item.score, item.judgeCount])).toEqual([
+      ['alpha', 5, 2],
+      ['bravo', 4, 2],
+      ['charlie', 3, 2],
+    ]);
+    expect(awards.judgeDecision?.submittedBy).toBe('judge-two');
+    expect((await h.snapshot('judge-two')).awards).toBeNull();
+  });
+
+  it('switches modes using saved manual assignments and preserves only compatible draft work', async () => {
+    const h = fixture('judging', 'assigned');
+    await h.run('organizer', {
+      type: 'assignJudge',
+      uid: 'judge-one',
+      projectIds: ['alpha'],
+      conflictIds: [],
+      expectedVersion: 0,
+    });
+    const draft = { alpha: { ...entries(4).alpha, note: 'A useful working demo.' } };
+    await h.run('judge-one', {
+      type: 'saveJudgingSheet',
+      entries: draft,
+      expectedVersion: 0,
+      submit: false,
+    });
+    const before = (await h.get<EventConfig>(root))!;
+    await h.run('organizer', {
+      type: 'setJudgingMode',
+      mode: 'all',
+      expectedPhaseVersion: before.phaseVersion,
+    });
+    expect(await h.get<EventConfig>(root)).toMatchObject({
+      phaseVersion: before.phaseVersion + 1,
+      judgingRevision: (before.judgingRevision ?? 0) + 1,
+      platform: { judgingMode: 'all' },
+    });
+    expect(await h.get<JudgingSheet>(paths.doc('judgingSheets', 'judge-one'))).toMatchObject({
+      entries: draft,
+      version: 2,
+    });
+    await expect(
+      h.run('judge-one', {
+        type: 'saveJudgingSheet',
+        entries: draft,
+        expectedVersion: 1,
+        submit: false,
+      }),
+    ).rejects.toMatchObject({ code: 'SHEET_CHANGED' });
+    await h.run('judge-one', {
+      type: 'saveJudgingSheet',
+      entries: { ...entries(3), ...draft },
+      expectedVersion: 2,
+      submit: false,
+    });
+    await h.run('judge-two', {
+      type: 'saveJudgingSheet',
+      entries: entries(4),
+      expectedVersion: 0,
+      submit: false,
+    });
+    await h.run('organizer', {
+      type: 'setJudgingMode',
+      mode: 'assigned',
+      expectedPhaseVersion: await phase(h),
+    });
+    expect(await h.get<JudgeAssignment>(paths.doc('judgeAssignments', 'judge-one'))).toMatchObject({
+      projectIds: ['alpha'],
+    });
+    expect(await h.get<JudgingSheet>(paths.doc('judgingSheets', 'judge-one'))).toMatchObject({
+      entries: draft,
+      version: 4,
+    });
+    expect(await h.get<JudgingSheet>(paths.doc('judgingSheets', 'judge-two'))).toMatchObject({
+      entries: {},
+      version: 2,
+    });
+    expect((await h.snapshot('judge-two')).assignments.map((item) => item.uid)).toEqual([
+      'judge-one',
+    ]);
+  });
+
+  it('limits mode changes to organizers with a current version and locks the mode once scores are submitted', async () => {
+    const h = fixture('judging', 'all');
+    await expect(
+      h.run('judge-one', {
+        type: 'setJudgingMode',
+        mode: 'assigned',
+        expectedPhaseVersion: await phase(h),
+      }),
+    ).rejects.toMatchObject({ code: 'ORGANIZER_REQUIRED' });
+    await expect(
+      h.run('organizer', {
+        type: 'setJudgingMode',
+        mode: 'assigned',
+        expectedPhaseVersion: 0,
+      }),
+    ).rejects.toMatchObject({ code: 'PHASE_CHANGED' });
+    await h.run('judge-one', {
+      type: 'saveJudgingSheet',
+      entries: entries(4),
+      expectedVersion: 0,
+      submit: true,
+    });
+    await expect(
+      h.run('organizer', {
+        type: 'setJudgingMode',
+        mode: 'assigned',
+        expectedPhaseVersion: await phase(h),
+      }),
+    ).rejects.toMatchObject({ code: 'JUDGING_MODE_LOCKED' });
+    expect((await h.get<EventConfig>(root))?.platform?.judgingMode).toBe('all');
+    expect((await h.get<JudgingSheet>(paths.doc('judgingSheets', 'judge-one')))?.submittedAt).toBe(
+      NOW,
+    );
   });
 });
 

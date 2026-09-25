@@ -257,6 +257,14 @@ export const platformCommandSchema = z.discriminatedUnion('type', [
     .strict(),
   z
     .object({
+      type: z.literal('setJudgingMode'),
+      commandId,
+      mode: z.enum(['all', 'assigned']),
+      expectedPhaseVersion: version,
+    })
+    .strict(),
+  z
+    .object({
       type: z.literal('assignJudge'),
       commandId,
       uid: id,

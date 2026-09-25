@@ -58,13 +58,21 @@ const normalize = (value: string) =>
     .trim()
     .toLowerCase();
 
-export function projectSectors(projects: Team[]): string[] {
+export function projectSectors(projects: Pick<Team, 'category'>[]): string[] {
   const sectors = new Map<string, string>();
   for (const team of projects) {
     const sector = team.category.trim();
     if (sector && !sectors.has(normalize(sector))) sectors.set(normalize(sector), sector);
   }
   return [...sectors.values()].sort((a, b) => a.localeCompare(b));
+}
+
+/** Reuse an existing sector's spelling when someone types its name in the new-sector field. */
+export function resolveProjectSector(value: string, projects: Pick<Team, 'category'>[]): string {
+  return (
+    projectSectors(projects).find((sector) => normalize(sector) === normalize(value)) ??
+    value.trim()
+  );
 }
 
 export function filterProjects(

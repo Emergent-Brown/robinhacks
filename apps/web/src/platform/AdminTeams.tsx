@@ -3,6 +3,8 @@ import type { ProjectSubmission, Team, TeamProfilePatch } from '@robinhacks/core
 import { Dialog, Field } from '../ui/primitives';
 import { Blank, ErrorMessage, Panel, platform, teams, useCommand, type PageProps } from './shared';
 import { managementLockReason } from './admin-management';
+import { SectorPicker } from './SectorPicker';
+import { resolveProjectSector } from './project-discovery';
 import './admin-management.css';
 
 type TeamDialog = { kind: 'profile' | 'submission' | 'delete'; team: Team } | { kind: 'create' };
@@ -230,7 +232,7 @@ function EditTeam({
               type: 'adminUpdateTeam',
               teamId: team.id,
               expectedVersion: team.version,
-              patch: form,
+              patch: { ...form, category: resolveProjectSector(form.category ?? '', teams(data)) },
             },
             onClose,
           );
@@ -253,13 +255,12 @@ function EditTeam({
           onChange={(key, value) => setForm({ ...form, [key]: value })}
         />
         <div className="p-admin-form-grid">
-          <Field label="Sector">
-            <input
-              maxLength={40}
-              value={form.category}
-              onChange={(event) => setForm({ ...form, category: event.target.value })}
-            />
-          </Field>
+          <SectorPicker
+            projects={teams(data)}
+            value={form.category ?? ''}
+            onChange={(category) => setForm((current) => ({ ...current, category }))}
+            disabled={cmd.pending}
+          />
           <Field label="Short label">
             <input
               required

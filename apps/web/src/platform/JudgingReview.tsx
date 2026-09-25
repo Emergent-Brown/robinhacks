@@ -49,8 +49,8 @@ export function JudgingReview({ data, actions }: PageProps) {
     <Panel title="Judge deliberation">
       {!state.deliberationReady ? (
         <p>
-          Once every assigned judge submits and every project has a non-conflicted score, the ranked
-          projects and submitted notes appear here for all judges.
+          Once every judge finishes their projects and submits, the full ranking and submitted notes
+          appear here. Every eligible project needs at least one non-conflicted score.
         </p>
       ) : (
         <>
@@ -164,7 +164,7 @@ export function PitchOrderEditor({ data, actions }: PageProps) {
     });
   return (
     <Panel title="Pitch order">
-      <p>Judges browse assigned projects in this order. New teams appear at the end.</p>
+      <p>Judges browse projects in this order. New teams appear at the end.</p>
       <ol className="p-pitch-order">
         {order.map((id, i) => (
           <li key={id}>

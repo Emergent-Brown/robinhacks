@@ -416,8 +416,9 @@ function Operations({ data, actions }: PageProps) {
       </div>
       <Panel title="Judging and awards">
         <p>
-          Finish funding and close submissions before judging starts. Assign judges in the Judging
-          tab. Every eligible submission needs a completed, non-conflicted score.
+          Finish funding and close submissions before judging starts. Choose all projects or
+          assigned projects in the Judging tab. Every eligible submission needs a completed,
+          non-conflicted score.
         </p>
         <button
           className="button secondary"

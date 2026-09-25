@@ -309,10 +309,24 @@ function validatePublishedAwards(data, event, teams, settings, entitlements, rou
     'DUPLICATE_JUDGE_ASSIGNMENT',
   );
   const sheets = indexed(rows(data, 'judgingSheets', 50), 'uid', 'DUPLICATE_JUDGING_SHEET');
-  const activeJudges = [...assignments.values()].filter((assignment) => {
-    const judge = members.get(assignment.uid);
-    return judge?.status === 'approved' && judge.role === 'judge' && judge.teamId === null;
-  });
+  const judgingMode = awards.judgingMode ?? 'assigned';
+  check(['all', 'assigned'].includes(judgingMode), 'INVALID_JUDGING_MODE');
+  const judges = [...members.values()].filter(
+    (m) => m.status === 'approved' && m.role === 'judge' && m.teamId === null,
+  );
+  const activeJudges =
+    judgingMode === 'all'
+      ? judges.map((judge) => {
+          const stored = assignments.get(judge.uid);
+          const projectIds = eligible.map((t) => t.id).sort();
+          return {
+            uid: judge.uid,
+            projectIds,
+            conflictIds: (stored?.conflictIds ?? []).filter((id) => projectIds.includes(id)),
+            version: stored?.version ?? 0,
+          };
+        })
+      : [...assignments.values()].filter((a) => judges.some((m) => m.uid === a.uid));
   const scored = eligible.map((team) => {
     let total = 0n;
     let count = 0;
@@ -373,6 +387,7 @@ function validatePublishedAwards(data, event, teams, settings, entitlements, rou
       'INVALID_WINNER',
     );
     const evidenceKey = JSON.stringify({
+      ...(judgingMode === 'all' ? { judgingMode } : {}),
       teams: eligible.map((t) => [t.id, t.version]).sort(),
       submissions: [...submissions.values()].map((s) => [s.teamId, s.submittedAt]).sort(),
       assignments: activeJudges.map((a) => [a.uid, a.version]).sort(),

@@ -179,6 +179,76 @@ describe('voluntary member biographies', () => {
   });
 });
 
+describe('judge access capacity', () => {
+  it.each([
+    ['pending approval', 'member', 'pending'],
+    ['member promotion', 'member', 'approved'],
+    ['suspended judge restoration', 'judge', 'suspended'],
+  ] as const)(
+    'admits the fiftieth judge by %s and rejects the next approval',
+    async (_label, role, status) => {
+      const h = fixture('registration');
+      const existing = Object.entries(h.repository.dump()).filter(
+        ([key, value]) =>
+          key.startsWith(`${root}/members/`) &&
+          (value as Member).role === 'judge' &&
+          (value as Member).status === 'approved' &&
+          (value as Member).teamId === null,
+      ).length;
+      const judge = (uid: string): Member => ({
+        uid,
+        displayName: uid,
+        email: `${uid}@example.test`,
+        emailVerified: true,
+        teamId: null,
+        role: 'judge',
+        status: 'approved',
+        version: 1,
+      });
+      await h.repository.transaction(async (tx) => {
+        for (let index = existing; index < 49; index++) {
+          const uid = `capacity-judge-${index}`;
+          tx.set(`${root}/members/${uid}`, judge(uid));
+        }
+        tx.set(`${root}/members/fiftieth-judge`, { ...judge('fiftieth-judge'), role, status });
+        tx.set(`${root}/members/next-judge`, {
+          ...judge('next-judge'),
+          role: 'member',
+          status: 'pending',
+        });
+      });
+      const setAccess = (uid: string, nextStatus: 'approved' | 'suspended', commandId: string) =>
+        h.service.execute(PLATFORM_USERS.organizer, {
+          type: 'setMemberRole',
+          commandId,
+          uid,
+          role: 'judge',
+          status: nextStatus,
+        });
+      await setAccess('fiftieth-judge', 'approved', 'approve-fiftieth-judge');
+      await expect(
+        setAccess('next-judge', 'approved', 'approve-fifty-first-judge'),
+      ).rejects.toMatchObject({ code: 'JUDGE_LIMIT' });
+      // Editing an existing approved judge consumes no additional slot.
+      await expect(
+        setAccess('fiftieth-judge', 'approved', 'keep-fiftieth-judge'),
+      ).resolves.toBeDefined();
+      await setAccess('fiftieth-judge', 'suspended', 'suspend-fiftieth-judge');
+      await setAccess('next-judge', 'approved', 'approve-replacement-judge');
+      await expect(
+        setAccess('fiftieth-judge', 'approved', 'restore-extra-judge'),
+      ).rejects.toMatchObject({ code: 'JUDGE_LIMIT' });
+      expect(h.repository.dump()[`${root}/members/fiftieth-judge`]).toMatchObject({
+        status: 'suspended',
+      });
+      expect(h.repository.dump()[`${root}/members/next-judge`]).toMatchObject({
+        role: 'judge',
+        status: 'approved',
+      });
+    },
+  );
+});
+
 describe('project sectors', () => {
   it('keeps demo sectors and lets a captain change their sector before funding', async () => {
     const h = fixture('registration');

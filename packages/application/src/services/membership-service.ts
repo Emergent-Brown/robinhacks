@@ -195,6 +195,18 @@ export class MembershipService {
         'ORGANIZER_CANNOT_COMPETE',
         'Organizer identities must be separate from competing team identities.',
       );
+    if (command.role === 'judge' && command.status === 'approved')
+      requireState(
+        members.filter(
+          (entry) =>
+            entry.uid !== target.uid &&
+            entry.status === 'approved' &&
+            entry.role === 'judge' &&
+            entry.teamId === null,
+        ).length < 50,
+        'JUDGE_LIMIT',
+        'This event supports at most 50 approved judges. Suspend another judge before approving one more.',
+      );
     if (
       target.role === 'organizer' &&
       (command.role !== 'organizer' || command.status !== 'approved')

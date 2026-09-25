@@ -1,0 +1,8 @@
+.p-sector-picker {
+  min-width: 0;
+}
+.p-sector-picker .field select,
+.p-sector-picker .field input {
+  width: 100%;
+  min-height: 44px;
+}

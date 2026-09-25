@@ -4,6 +4,7 @@ import {
   discoverProjects,
   filterProjects,
   projectSectors,
+  resolveProjectSector,
   ProjectVisits,
 } from '../apps/web/src/platform/project-discovery';
 
@@ -127,5 +128,12 @@ describe('Project directory filters', () => {
     expect(
       projectSectors([...projects, project('other', { category: ' climate ' }), project('blank')]),
     ).toEqual(['Climate', 'Design tools']);
+  });
+
+  it('reuses existing sector spelling while allowing a new sector or no sector', () => {
+    expect(resolveProjectSector('  CLIMATE ', projects)).toBe('Climate');
+    expect(resolveProjectSector(' design tools ', projects)).toBe('Design tools');
+    expect(resolveProjectSector('  Robotics  ', projects)).toBe('Robotics');
+    expect(resolveProjectSector('   ', projects)).toBe('');
   });
 });

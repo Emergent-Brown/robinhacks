@@ -1,3 +1,4 @@
+import { effectiveJudgeAssignments } from '@robinhacks/core';
 import type {
   AwardResults,
   JudgeDecision,
@@ -63,6 +64,7 @@ export class CommunityService {
         return this.ballots.execute(context, command);
       case 'submitJudgeDecision':
       case 'setPitchOrder':
+      case 'setJudgingMode':
       case 'assignJudge':
       case 'saveJudgingSheet':
       case 'beginJudging':
@@ -112,7 +114,7 @@ export class CommunityService {
       conversations,
       general,
       reports,
-      assignments,
+      storedAssignments,
       judgingSheets,
       ballot,
       awards,
@@ -136,15 +138,25 @@ export class CommunityService {
         : Promise.resolve(null),
       tx.get<AwardResults>(paths.doc('awardResults', 'current')),
     ]);
+    const teams = organizer || judge ? await tx.list<Team>(paths.collection('teams'), 31) : [];
+    const mode = event.platform!.judgingMode ?? 'all';
+    const assignments = effectiveJudgeAssignments(
+      mode,
+      members,
+      teams,
+      submissions,
+      storedAssignments,
+    );
     const review =
       organizer || judge
         ? judgingReview(
-            await tx.list<Team>(paths.collection('teams'), 31),
+            teams,
             submissions,
             members,
             assignments,
             judgingSheets,
             event.platform!.funding,
+            mode,
           )
         : null;
     const decision =
@@ -180,7 +192,8 @@ export class CommunityService {
       conversations,
       general,
       reports,
-      assignments,
+      assignments:
+        organizer || judge ? (mode === 'assigned' ? storedAssignments : assignments) : [],
       judgingSheets: organizer
         ? judgingSheets
         : judgingSheets.filter(
