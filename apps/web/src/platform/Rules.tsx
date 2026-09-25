@@ -16,9 +16,9 @@ export function Rules({ data }: { data: AppSnapshot }) {
       </p>
       <h2>One private allocation per team</h2>
       <p>
-        The captain and designated investor can edit the same allocation until the deadline. Valid
-        changes save automatically. Unused credits expire. Current-round allocations and totals stay
-        private until the round closes. There is no selling or carryover.
+        The captain can edit the team’s allocation until the deadline. Valid changes save
+        automatically. Unused credits expire. Current-round allocations and totals stay private
+        until the round closes. There is no selling or carryover.
       </p>
       <h2>Each round stands on its own</h2>
       <p>
@@ -37,37 +37,31 @@ export function Rules({ data }: { data: AppSnapshot }) {
       <h2>Judging and prizes</h2>
       <p>
         Independent judges choose the grand-prize winner without seeing funding totals. Only
-        investments in that winner earn investor rewards. Builder prizes and the community award are
-        separate.
+        investments in that winner earn investor rewards. There is one prize: half goes to the
+        winning team and half goes to its eligible investors.
       </p>
       <p>
         {rewardCopy(funding)}.{' '}
         {funding.investorPoolMinor > 0
-          ? 'This is a maximum payout; some funds may remain unallocated.'
+          ? 'The investor half is a maximum pool. Each backer receives its weighted share; unallocated shares and rounding cents remain in reserve.'
           : 'Credits and entitlement percentages are game records, not money or company ownership.'}{' '}
         {funding.reservePolicy}
       </p>
       <p>
-        Builder prizes:{' '}
-        {funding.builderPrizesMinor.some((amount) => amount > 0)
-          ? funding.builderPrizesMinor.map(money).join(' / ')
-          : 'not announced'}
-        . Community prize:{' '}
-        {funding.communityPrizeMinor > 0 ? money(funding.communityPrizeMinor) : 'not announced'}.
+        Total prize:{' '}
+        {funding.investorPoolMinor > 0 ? money(funding.investorPoolMinor * 2) : 'not announced'}.
       </p>
       <JudgingRubric funding={funding} />
       <h2>Fair play and final review</h2>
       <p>
         No reciprocal-backing deals, extra team accounts, false project claims, or deliberate
-        outcome manipulation. Publish honest evidence, including what is incomplete. Withdrawn,
-        disqualified, or unsubmitted projects earn no investor reward. Unused allocations are not
-        refunded.
+        outcome manipulation. Withdrawn, disqualified, or unsubmitted projects earn no investor
+        reward. Unused allocations are not refunded.
       </p>
       <p>
         Judges resolve ties before a single winner is confirmed. Results remain under review for at
-        least {funding.reviewMinutes} minutes before publication. A technical incident can pause a
-        round; revealed rounds cannot reopen. A formally voided round awards no entitlement and is
-        not replayed.
+        least {funding.reviewMinutes} minutes before publication. A formally voided round awards no
+        entitlement and is not replayed.
       </p>
     </div>
   );

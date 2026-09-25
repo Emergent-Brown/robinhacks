@@ -66,7 +66,7 @@ function fixture(stage: 'setup' | 'submission' | 'judging' = 'setup') {
   config.submissionsOpen = stage === 'submission';
   config.submissionClosesAt = stage === 'submission' ? NOW + 60_000 : null;
   config.funding.investorPoolMinor = 30_000;
-  config.funding.builderPrizesMinor = [100_000, 50_000, 25_000];
+  config.funding.builderPrizesMinor = [30_000, 0, 0];
   const event: EventConfig = {
     id: paths.eventId,
     name: 'Emergent Hacks',
@@ -181,6 +181,22 @@ function fixture(stage: 'setup' | 'submission' | 'judging' = 'setup') {
   };
 }
 
+async function decide(
+  h: ReturnType<typeof fixture>,
+  winnerId = 'alpha',
+  reason = 'The judges agreed after reviewing the demos.',
+) {
+  await h.run('judge-one', {
+    type: 'submitJudgeDecision',
+    winnerId,
+    reason,
+    expectedPhaseVersion: (await h.get<EventConfig>(root))!.phaseVersion,
+  });
+}
+async function phase(h: ReturnType<typeof fixture>) {
+  return (await h.get<EventConfig>(root))!.phaseVersion;
+}
+
 describe('append-only checkpoints and final project evidence', () => {
   const update = {
     type: 'publishUpdate',
@@ -205,9 +221,9 @@ describe('append-only checkpoints and final project evidence', () => {
     });
     expect(snapshot.updates[1]?.changed).toBe('Added offline mode.');
   });
-  it('rejects member updates, elapsed checkpoints, empty fields and unsafe links', async () => {
+  it('allows member updates and rejects elapsed checkpoints, empty fields and unsafe links', async () => {
     const h = fixture();
-    await expect(h.run('teammate', update)).rejects.toMatchObject({ code: 'TRADER_REQUIRED' });
+    await expect(h.run('teammate', update)).resolves.toBeDefined();
     await expect(h.run('captain-a', { ...update, works: '' })).rejects.toMatchObject({
       code: 'INVALID_UPDATE',
     });
@@ -290,7 +306,7 @@ describe('append-only checkpoints and final project evidence', () => {
         type: 'setSubmissionWindow',
         open: true,
         closesAt: NOW + 60000,
-        expectedPhaseVersion: 1,
+        expectedPhaseVersion: await phase(h),
       }),
     ).rejects.toMatchObject({ code: 'SUBMISSIONS_LOCKED' });
   });
@@ -464,7 +480,9 @@ describe('independent judging and durable score sheets', () => {
       conflictIds: [],
       expectedVersion: 1,
     });
-    expect((await h.snapshot('judge-one')).assignments[0]?.projectIds).toEqual(['alpha', 'bravo']);
+    expect(
+      (await h.snapshot('judge-one')).assignments.find((a) => a.uid === 'judge-one')?.projectIds,
+    ).toEqual(['alpha', 'bravo']);
   });
 
   it.each([0, 5])('accepts the published score boundary %i', async (value) => {
@@ -551,16 +569,19 @@ describe('independent judging and durable score sheets', () => {
       submit: false,
     });
     const snapshot = await h.snapshot('judge-one');
-    expect(snapshot.submissions.map((submission) => submission.teamId)).toEqual(['alpha']);
-    expect(snapshot.assignments.map((assignment) => assignment.uid)).toEqual(['judge-one']);
+    expect(snapshot.submissions.map((submission) => submission.teamId)).toEqual([
+      'alpha',
+      'bravo',
+      'charlie',
+    ]);
+    expect(snapshot.assignments.map((assignment) => assignment.uid)).toEqual([
+      'judge-one',
+      'judge-two',
+    ]);
     expect(snapshot.judgingSheets).toEqual([]);
     expect(snapshot.ballot).toBeNull();
     expect(snapshot.awards).toBeNull();
-    expect(
-      snapshot.roster.every(
-        (person) => person.teamId === 'alpha' && !Object.hasOwn(person, 'email'),
-      ),
-    ).toBe(true);
+    expect(snapshot.roster.every((person) => !Object.hasOwn(person, 'email'))).toBe(true);
   });
   it('saves partial drafts and rejects stale concurrent changes and premature final submission', async () => {
     const h = fixture('judging');
@@ -699,7 +720,7 @@ describe('independent judging and durable score sheets', () => {
         type: 'prepareAwards',
         winnerId: 'bravo',
         tiebreakReason: 'Published criterion applied.',
-        expectedPhaseVersion: 1,
+        expectedPhaseVersion: await phase(h),
       }),
     ).rejects.toMatchObject({ code: 'PROJECT_UNJUDGED' });
     await h.run('organizer', {
@@ -715,12 +736,80 @@ describe('independent judging and durable score sheets', () => {
       expectedVersion: 0,
       submit: true,
     });
+    await decide(h);
     await expect(
       h.run('organizer', {
         type: 'prepareAwards',
         winnerId: 'alpha',
         tiebreakReason: '',
-        expectedPhaseVersion: 1,
+        expectedPhaseVersion: await phase(h),
+      }),
+    ).resolves.toBeDefined();
+  });
+});
+
+describe('deliberation decision concurrency', () => {
+  it('lets any assigned judge submit but rejects competing stale decisions and non-judges', async () => {
+    const h = fixture('judging');
+    await assignAll(h);
+    await assignAll(h, 'judge-two');
+    for (const uid of ['judge-one', 'judge-two'])
+      await h.run(uid, {
+        type: 'saveJudgingSheet',
+        entries: entries(4),
+        expectedVersion: 0,
+        submit: true,
+      });
+    const version = await phase(h);
+    await expect(
+      h.run('captain-a', {
+        type: 'submitJudgeDecision',
+        winnerId: 'alpha',
+        reason: 'Team attempts to choose the winner.',
+        expectedPhaseVersion: version,
+      }),
+    ).rejects.toMatchObject({ code: 'JUDGE_REQUIRED' });
+    const decisions = await Promise.allSettled(
+      ['judge-two', 'judge-one'].map((uid, i) =>
+        h.run(uid, {
+          type: 'submitJudgeDecision',
+          winnerId: i ? 'alpha' : 'bravo',
+          reason: 'The judges agreed after deliberation.',
+          expectedPhaseVersion: version,
+        }),
+      ),
+    );
+    expect(decisions.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect((await h.snapshot('organizer')).judgeDecision?.submittedBy).toBe('judge-two');
+    expect((await h.snapshot('captain-a')).judgeDecision).toBeNull();
+  });
+  it('invalidates a decision after evidence changes and requires a fresh judge submission', async () => {
+    const h = fixture('judging');
+    await assignAll(h);
+    await h.run('judge-one', {
+      type: 'saveJudgingSheet',
+      entries: entries(4),
+      expectedVersion: 0,
+      submit: true,
+    });
+    await decide(h);
+    await h.set(paths.team('alpha'), { ...project('alpha', 'captain-a'), version: 2 });
+    expect((await h.snapshot('organizer')).judgeDecision).toBeNull();
+    await expect(
+      h.run('organizer', {
+        type: 'prepareAwards',
+        winnerId: 'alpha',
+        tiebreakReason: '',
+        expectedPhaseVersion: await phase(h),
+      }),
+    ).rejects.toMatchObject({ code: 'DECISION_REQUIRED' });
+    await decide(h);
+    await expect(
+      h.run('organizer', {
+        type: 'prepareAwards',
+        winnerId: 'alpha',
+        tiebreakReason: '',
+        expectedPhaseVersion: await phase(h),
       }),
     ).resolves.toBeDefined();
   });
@@ -733,7 +822,7 @@ describe('community ballots and reviewed awards', () => {
       type: 'setBallotWindow',
       open: true,
       closesAt: NOW + 60_000,
-      expectedPhaseVersion: 1,
+      expectedPhaseVersion: await phase(h),
     });
     await h.run('captain-a', {
       type: 'saveBallot',
@@ -785,13 +874,13 @@ describe('community ballots and reviewed awards', () => {
       type: 'setBallotWindow',
       open: true,
       closesAt: NOW + 60_000,
-      expectedPhaseVersion: 1,
+      expectedPhaseVersion: await phase(h),
     });
     await expect(
       h.run('captain-a', { type: 'saveBallot', rankedProjectIds: ['bravo'], expectedVersion: 0 }),
     ).resolves.toBeDefined();
   });
-  it('refuses awards until all assigned judges submit and selects only a highest-scoring winner', async () => {
+  it('requires submitted independent scores, an assigned judge decision, and organizer approval', async () => {
     const h = fixture('judging');
     await assignAll(h);
     await assignAll(h, 'judge-two');
@@ -803,28 +892,52 @@ describe('community ballots and reviewed awards', () => {
       expectedVersion: 0,
       submit: true,
     });
-    const prepare = {
-      type: 'prepareAwards',
-      winnerId: 'alpha',
-      tiebreakReason: '',
-      expectedPhaseVersion: 1,
-    };
-    await expect(h.run('organizer', prepare)).rejects.toMatchObject({ code: 'JUDGING_INCOMPLETE' });
+    await expect(decide(h)).rejects.toMatchObject({ code: 'JUDGING_INCOMPLETE' });
+    expect((await h.snapshot('judge-one')).judgingSheets).toHaveLength(1);
     await h.run('judge-two', {
       type: 'saveJudgingSheet',
       entries: sheet,
       expectedVersion: 0,
       submit: true,
     });
-    await expect(h.run('organizer', { ...prepare, winnerId: 'bravo' })).rejects.toMatchObject({
-      code: 'INVALID_WINNER',
+    expect((await h.snapshot('judge-one')).judgingSheets).toHaveLength(2);
+    await h.set(paths.doc('judgingSheets', 'unassigned-draft'), {
+      uid: 'unassigned-draft',
+      entries: entries(1),
+      version: 1,
+      updatedAt: NOW,
+      submittedAt: null,
     });
-    await h.run('organizer', prepare);
-    expect((await h.snapshot('organizer')).awards?.winnerId).toBe('alpha');
+    expect((await h.snapshot('judge-one')).judgingSheets).toHaveLength(2);
+    expect((await h.snapshot('organizer')).judgingSheets).toHaveLength(3);
+    await expect(
+      h.run('organizer', {
+        type: 'prepareAwards',
+        winnerId: 'alpha',
+        tiebreakReason: '',
+        expectedPhaseVersion: await phase(h),
+      }),
+    ).rejects.toMatchObject({ code: 'DECISION_REQUIRED' });
+    await decide(h, 'bravo'); // Deliberation can select a project other than the score leader.
+    await expect(
+      h.run('organizer', {
+        type: 'prepareAwards',
+        winnerId: 'alpha',
+        tiebreakReason: '',
+        expectedPhaseVersion: await phase(h),
+      }),
+    ).rejects.toMatchObject({ code: 'DECISION_CHANGED' });
+    await h.run('organizer', {
+      type: 'prepareAwards',
+      winnerId: 'bravo',
+      tiebreakReason: '',
+      expectedPhaseVersion: await phase(h),
+    });
+    expect((await h.snapshot('organizer')).awards?.winnerId).toBe('bravo');
     expect((await h.snapshot('judge-one')).awards).toBeNull();
     expect((await h.snapshot('captain-a')).awards).toBeNull();
   });
-  it('requires an explicit reason for a judging tie and preserves unused investor reserves', async () => {
+  it('requires a decision explanation and reserves the investor half when nobody backed the winner', async () => {
     const h = fixture('judging');
     await assignAll(h);
     await h.run('judge-one', {
@@ -833,19 +946,16 @@ describe('community ballots and reviewed awards', () => {
       expectedVersion: 0,
       submit: true,
     });
-    const prepare = {
+    await expect(decide(h, 'bravo', '')).rejects.toMatchObject({ code: 'REASON_REQUIRED' });
+    await decide(h, 'bravo');
+    await h.run('organizer', {
       type: 'prepareAwards',
       winnerId: 'bravo',
       tiebreakReason: '',
-      expectedPhaseVersion: 1,
-    };
-    await expect(h.run('organizer', prepare)).rejects.toMatchObject({ code: 'TIEBREAK_REQUIRED' });
-    await h.run('organizer', {
-      ...prepare,
-      tiebreakReason: 'Higher technical execution after the live tie review.',
+      expectedPhaseVersion: await phase(h),
     });
     const result = (await h.snapshot('organizer')).awards!;
-    expect(result.projects[0]).toMatchObject({ teamId: 'bravo', builderPrizeMinor: 100000 });
+    expect(result.projects[0]).toMatchObject({ teamId: 'bravo', builderPrizeMinor: 30000 });
     expect(result.investorPaidMinor).toBe(0);
     expect(result.reserveMinor).toBe(30000);
     expect(result.communityWinnerId).toBeNull();
@@ -893,11 +1003,12 @@ describe('community ballots and reviewed awards', () => {
       version: 1,
       updatedAt: NOW,
     });
+    await decide(h);
     await h.run('organizer', {
       type: 'prepareAwards',
       winnerId: 'alpha',
       tiebreakReason: '',
-      expectedPhaseVersion: 1,
+      expectedPhaseVersion: await phase(h),
     });
     const result = (await h.snapshot('organizer')).awards!;
     expect(result.investors.find((investor) => investor.teamId === 'bravo')).toMatchObject({
@@ -906,7 +1017,7 @@ describe('community ballots and reviewed awards', () => {
     });
     expect(result.investorPaidMinor).toBe(1800);
     expect(result.reserveMinor).toBe(28200);
-    expect(result.communityWinnerId).toBe('charlie');
+    expect(result.communityWinnerId).toBeNull();
     expect(result.winnerId).toBe('alpha');
   });
   it('requires the review delay, keeps the result immutable and detects changed eligibility', async () => {
@@ -920,14 +1031,15 @@ describe('community ballots and reviewed awards', () => {
       expectedVersion: 0,
       submit: true,
     });
+    await decide(h);
     await h.run('organizer', {
       type: 'prepareAwards',
       winnerId: 'alpha',
       tiebreakReason: '',
-      expectedPhaseVersion: 1,
+      expectedPhaseVersion: await phase(h),
     });
     await expect(
-      h.run('organizer', { type: 'publishAwards', expectedPhaseVersion: 2 }),
+      h.run('organizer', { type: 'publishAwards', expectedPhaseVersion: await phase(h) }),
     ).rejects.toMatchObject({ code: 'REVIEW_PENDING' });
     h.advance(30 * 60000);
     await h.set(paths.team('charlie'), {
@@ -935,15 +1047,15 @@ describe('community ballots and reviewed awards', () => {
       eligibility: 'disqualified',
     });
     await expect(
-      h.run('organizer', { type: 'publishAwards', expectedPhaseVersion: 2 }),
+      h.run('organizer', { type: 'publishAwards', expectedPhaseVersion: await phase(h) }),
     ).rejects.toMatchObject({ code: 'ELIGIBILITY_CHANGED' });
     await h.set(paths.team('charlie'), project('charlie', 'captain-c'));
-    await h.run('organizer', { type: 'publishAwards', expectedPhaseVersion: 2 });
+    await h.run('organizer', { type: 'publishAwards', expectedPhaseVersion: await phase(h) });
     expect((await h.snapshot('captain-a')).awards?.publishedAt).toBe(NOW + 30 * 60000);
     await expect(
       h.run('organizer', {
         type: 'discardAwards',
-        expectedPhaseVersion: 3,
+        expectedPhaseVersion: await phase(h),
         reason: 'Trying to remove published awards.',
       }),
     ).rejects.toMatchObject({ code: 'AWARDS_LOCKED' });
@@ -959,16 +1071,17 @@ describe('community ballots and reviewed awards', () => {
       expectedVersion: 0,
       submit: true,
     });
+    await decide(h);
     await h.run('organizer', {
       type: 'prepareAwards',
       winnerId: 'alpha',
       tiebreakReason: '',
-      expectedPhaseVersion: 1,
+      expectedPhaseVersion: await phase(h),
     });
     const preview = (await h.snapshot('organizer')).awards!;
     await h.run('organizer', {
       type: 'discardAwards',
-      expectedPhaseVersion: 2,
+      expectedPhaseVersion: await phase(h),
       reason: 'Check the eligibility decision again.',
     });
     expect((await h.snapshot('organizer')).awards).toBeNull();
@@ -986,22 +1099,33 @@ describe('community ballots and reviewed awards', () => {
       expectedVersion: 0,
       submit: true,
     });
+    await decide(h);
     await h.run(
       'organizer',
-      { type: 'prepareAwards', winnerId: 'alpha', tiebreakReason: '', expectedPhaseVersion: 1 },
+      {
+        type: 'prepareAwards',
+        winnerId: 'alpha',
+        tiebreakReason: '',
+        expectedPhaseVersion: await phase(h),
+      },
       'shared-preview-id',
     );
     const archived = await h.get<AwardResults>(paths.doc('awardResults', 'shared-preview-id'));
     await h.run('organizer', {
       type: 'discardAwards',
       reason: 'A second organizer will check the preview.',
-      expectedPhaseVersion: 2,
+      expectedPhaseVersion: await phase(h),
     });
     await h.set(paths.member('organizer-two'), member('organizer-two', null, 'organizer'));
     await expect(
       h.run(
         'organizer-two',
-        { type: 'prepareAwards', winnerId: 'alpha', tiebreakReason: '', expectedPhaseVersion: 3 },
+        {
+          type: 'prepareAwards',
+          winnerId: 'alpha',
+          tiebreakReason: '',
+          expectedPhaseVersion: await phase(h),
+        },
         'shared-preview-id',
       ),
     ).rejects.toMatchObject({ code: 'COMMAND_CONFLICT' });
@@ -1012,7 +1136,12 @@ describe('community ballots and reviewed awards', () => {
     await expect(
       h.run(
         'organizer-two',
-        { type: 'prepareAwards', winnerId: 'alpha', tiebreakReason: '', expectedPhaseVersion: 3 },
+        {
+          type: 'prepareAwards',
+          winnerId: 'alpha',
+          tiebreakReason: '',
+          expectedPhaseVersion: await phase(h),
+        },
         'current',
       ),
     ).rejects.toMatchObject({ code: 'COMMAND_CONFLICT' });

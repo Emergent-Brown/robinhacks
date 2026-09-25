@@ -11,6 +11,7 @@ export type Phase =
   | 'ARCHIVED';
 export type Role = 'organizer' | 'judge' | 'captain' | 'trader' | 'member';
 export interface EventConfig {
+  judgingRevision?: number;
   maintenance?: boolean;
   platform?: PlatformConfig;
   pausedAt?: number | null;
@@ -97,7 +98,7 @@ export interface AuditEntry {
   detail: string;
   createdAt: number;
 }
-export type FormationRole = 'captain' | 'trader' | 'member';
+export type FormationRole = 'captain' | 'member';
 export interface FormationTeam {
   id: string;
   name: string;
@@ -203,6 +204,12 @@ export type Command =
     }
   | { type: 'setMemberRole'; commandId: string; uid: string; role: Role; status: Member['status'] }
   | { type: 'updateProfile'; commandId: string; bio: string }
+  | {
+      type: 'setSignupPolicy';
+      commandId: string;
+      autoApprove: boolean;
+      expectedPhaseVersion: number;
+    }
   | { type: 'setTeamFormation'; commandId: string; open: boolean; expectedPhaseVersion: number }
   | { type: 'createFormationTeam'; commandId: string; name: string; role: FormationRole }
   | { type: 'joinFormationTeam'; commandId: string; teamId: string; role: FormationRole }

@@ -19,7 +19,7 @@ const url = z.union([
     .url()
     .refine((value) => /^https?:\/\//i.test(value), 'Use an HTTP or HTTPS URL.'),
 ]);
-const role = z.enum(['organizer', 'judge', 'captain', 'trader', 'member']);
+const role = z.enum(['organizer', 'judge', 'captain', 'member']);
 const status = z.enum(['approved', 'pending', 'suspended']);
 const teamProfile = {
   name: name.optional(),
@@ -58,7 +58,7 @@ const eventCommandSchema = z.discriminatedUnion('type', [
       commandId,
       uid: identifier,
       teamId: identifier.nullable(),
-      role: z.enum(['captain', 'trader', 'member']),
+      role: z.enum(['captain', 'member']),
       expectedVersion: version,
     })
     .strict(),
@@ -127,7 +127,7 @@ const eventCommandSchema = z.discriminatedUnion('type', [
       type: z.literal('createFormationTeam'),
       commandId,
       name,
-      role: z.enum(['captain', 'trader', 'member']),
+      role: z.enum(['captain', 'member']),
     })
     .strict(),
   z
@@ -135,7 +135,15 @@ const eventCommandSchema = z.discriminatedUnion('type', [
       type: z.literal('joinFormationTeam'),
       commandId,
       teamId: identifier,
-      role: z.enum(['captain', 'trader', 'member']),
+      role: z.enum(['captain', 'member']),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('setSignupPolicy'),
+      commandId,
+      autoApprove: z.boolean(),
+      expectedPhaseVersion: version,
     })
     .strict(),
   z.object({ type: z.literal('removeMember'), commandId, uid: identifier }).strict(),

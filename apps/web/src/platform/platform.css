@@ -1387,3 +1387,35 @@
     animation: none !important;
   }
 }
+
+.p-notification-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+}
+.p-notification-dot {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #cc3131;
+  outline: 2px solid white;
+}
+.p-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+.p-avatar-large {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 10px;
+}

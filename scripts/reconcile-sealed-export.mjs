@@ -278,6 +278,13 @@ function validatePublishedAwards(data, event, teams, settings, entitlements, rou
   );
   const awards = published[0];
   check(
+    settings.prizeModel !== 'shared-grand-prize' ||
+      (settings.builderPrizesMinor[0] === settings.investorPoolMinor &&
+        settings.builderPrizesMinor.slice(1).every((n) => n === 0) &&
+        settings.communityPrizeMinor === 0),
+    'INVALID_PRIZE_SPLIT',
+  );
+  check(
     integer(awards.createdAt) &&
       awards.publishAfter === awards.createdAt + settings.reviewMinutes * 60_000 &&
       integer(awards.publishedAt, awards.publishAfter),
@@ -346,16 +353,53 @@ function validatePublishedAwards(data, event, teams, settings, entitlements, rou
     return difference > 0n ? 1 : difference < 0n ? -1 : 0;
   };
   scored.sort((a, b) => compare(a, b) || a.teamId.localeCompare(b.teamId));
-  const tied = scored.filter((project) => compare(project, scored[0]) === 0);
-  check(
-    tied.some((project) => project.teamId === awards.winnerId),
-    'WINNER_NOT_HIGHEST_JUDGED_SCORE',
-  );
-  check(
-    tied.length === 1 ||
-      (typeof awards.tiebreakReason === 'string' && awards.tiebreakReason.trim().length >= 10),
-    'TIEBREAK_REASON_MISSING',
-  );
+  if (awards.judgeDecision) {
+    const decision = awards.judgeDecision;
+    check(
+      decision.winnerId === awards.winnerId &&
+        decision.reason === awards.tiebreakReason &&
+        typeof decision.reason === 'string' &&
+        decision.reason.trim().length >= 10 &&
+        integer(decision.submittedAt) &&
+        decision.submittedAt <= awards.createdAt,
+      'INVALID_JUDGE_DECISION',
+    );
+    check(
+      activeJudges.some((a) => a.uid === decision.submittedBy && a.projectIds.length),
+      'DECISION_JUDGE_NOT_ASSIGNED',
+    );
+    check(
+      scored.some((p) => p.teamId === decision.winnerId),
+      'INVALID_WINNER',
+    );
+    const evidenceKey = JSON.stringify({
+      teams: eligible.map((t) => [t.id, t.version]).sort(),
+      submissions: [...submissions.values()].map((s) => [s.teamId, s.submittedAt]).sort(),
+      assignments: activeJudges.map((a) => [a.uid, a.version]).sort(),
+      sheets: [...sheets.values()]
+        .filter((s) => activeJudges.some((a) => a.uid === s.uid))
+        .map((s) => [s.uid, s.version, s.submittedAt])
+        .sort(),
+      rubric: settings.rubric,
+    });
+    check(decision.evidenceKey === evidenceKey, 'STALE_JUDGE_DECISION');
+    check(
+      rows(data, 'judgeDecisions', 1000).some((d) => canonical(d) === canonical(decision)),
+      'JUDGE_DECISION_HISTORY_MISSING',
+    );
+  } else {
+    check(!settings.prizeModel, 'JUDGE_DECISION_MISSING');
+    const tied = scored.filter((project) => compare(project, scored[0]) === 0);
+    check(
+      tied.some((project) => project.teamId === awards.winnerId),
+      'WINNER_NOT_HIGHEST_JUDGED_SCORE',
+    );
+    check(
+      tied.length === 1 ||
+        (typeof awards.tiebreakReason === 'string' && awards.tiebreakReason.trim().length >= 10),
+      'TIEBREAK_REASON_MISSING',
+    );
+  }
   const ordered = [
     scored.find((project) => project.teamId === awards.winnerId),
     ...scored.filter((project) => project.teamId !== awards.winnerId),
@@ -371,7 +415,7 @@ function validatePublishedAwards(data, event, teams, settings, entitlements, rou
         actual.score === Number(project.n) / Number(project.d) &&
         actual.judgeCount === project.judgeCount &&
         actual.rank === index + 1 &&
-        actual.builderPrizeMinor === (settings.builderPrizesMinor[index] ?? 0),
+        actual.builderPrizeMinor === (index === 0 ? (settings.builderPrizesMinor[0] ?? 0) : 0),
       'JUDGED_BUILDER_RESULTS_MISMATCH',
     );
   }
@@ -414,40 +458,10 @@ function validatePublishedAwards(data, event, teams, settings, entitlements, rou
       awards.reserveMinor === settings.investorPoolMinor - Number(paid),
     'INVESTOR_RESERVE_MISMATCH',
   );
-  const ballots = indexed(
-    rows(data, 'communityBallots', 30),
-    'teamId',
-    'DUPLICATE_COMMUNITY_BALLOT',
-  );
-  const tallies = new Map(
-    eligible.map((team) => [team.id, { teamId: team.id, points: 0, firstChoices: 0, rank: 0 }]),
-  );
-  for (const ballot of ballots.values()) {
-    check(
-      teams.has(ballot.teamId) &&
-        Array.isArray(ballot.rankedProjectIds) &&
-        ballot.rankedProjectIds.length <= 3 &&
-        new Set(ballot.rankedProjectIds).size === ballot.rankedProjectIds.length &&
-        ballot.rankedProjectIds.every((id) => teams.has(id) && id !== ballot.teamId),
-      'INVALID_COMMUNITY_BALLOT',
-    );
-    if (teams.get(ballot.teamId).eligibility === 'disqualified') continue;
-    ballot.rankedProjectIds.forEach((id, index) => {
-      const tally = tallies.get(id);
-      if (!tally) return;
-      tally.points += 3 - index;
-      if (index === 0) tally.firstChoices++;
-    });
-  }
-  const community = [...tallies.values()]
-    .sort(
-      (a, b) =>
-        b.points - a.points || b.firstChoices - a.firstChoices || a.teamId.localeCompare(b.teamId),
-    )
-    .map((row, index) => ({ ...row, rank: index + 1 }));
   check(
-    canonical(awards.community) === canonical(community) &&
-      awards.communityWinnerId === (community.find((row) => row.points > 0)?.teamId ?? null),
+    Array.isArray(awards.community) &&
+      awards.community.length === 0 &&
+      awards.communityWinnerId === null,
     'COMMUNITY_RESULTS_MISMATCH',
   );
   return {

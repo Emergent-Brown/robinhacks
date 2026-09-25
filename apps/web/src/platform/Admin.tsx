@@ -1,3 +1,4 @@
+import { JudgingReview } from './JudgingReview';
 import { useState } from 'react';
 import { Dialog, Field } from '../ui/primitives';
 import { useClock } from '../hooks/useApp';
@@ -17,6 +18,7 @@ import {
   Panel,
   platform,
   stamp,
+  teams,
   teamName,
   useCommand,
   type CommandInput,
@@ -150,8 +152,6 @@ function Operations({ data, actions }: PageProps) {
   const now = useClock();
   const [pauseReason, setPauseReason] = useState('');
   const [voidReason, setVoidReason] = useState('');
-  const [winnerId, setWinnerId] = useState('');
-  const [tiebreak, setTiebreak] = useState('');
   const [discardReason, setDiscardReason] = useState('');
   const [confirm, setConfirm] = useState<{
     title: string;
@@ -217,6 +217,51 @@ function Operations({ data, actions }: PageProps) {
         </form>
       </Panel>
       <Panel title="Funding rounds">
+        <p className="muted">
+          Schedule times are planned times. An organizer opens and closes each round here.
+          Allocations stop at the deadline even if the round has not been closed yet.
+        </p>
+        {!active && settings.currentRound < 3 && (
+          <div className="p-note">
+            <strong>Round readiness</strong>
+            <ul>
+              {(teams(data) ?? [])
+                .filter((t) => t.eligibility === 'active')
+                .flatMap((t) => {
+                  const issues = [
+                    !data.members.some(
+                      (m) =>
+                        m.uid === t.captainUid &&
+                        m.teamId === t.id &&
+                        m.role === 'captain' &&
+                        m.status === 'approved',
+                    )
+                      ? 'needs a captain'
+                      : '',
+                    !state.updates.some(
+                      (u) => u.teamId === t.id && u.round === settings.currentRound + 1,
+                    )
+                      ? 'needs a checkpoint update'
+                      : '',
+                    settings.currentRound === 2 && !state.submissions.some((s) => s.teamId === t.id)
+                      ? 'needs a final submission'
+                      : '',
+                  ].filter(Boolean);
+                  return issues.length
+                    ? [
+                        <li key={t.id}>
+                          {t.name}: {issues.join('; ')}
+                        </li>,
+                      ]
+                    : [];
+                })}
+            </ul>
+            <span>
+              Every active team needs a captain and a checkpoint; round 3 also needs final
+              submissions. Missing items block opening, including at the scheduled time.
+            </span>
+          </div>
+        )}
         {active ? (
           <>
             <p>
@@ -368,47 +413,6 @@ function Operations({ data, actions }: PageProps) {
             />
           )}
         </Panel>
-        <Panel title="Community ballot">
-          <p>
-            {settings.ballotOpen
-              ? `Open until ${stamp(settings.ballotClosesAt, settings.details.timeZone)}`
-              : 'Closed'}
-            . Ballot results stay private until awards.
-          </p>
-          {settings.ballotOpen ? (
-            <button
-              className="button secondary"
-              disabled={terminal || event.paused || cmd.pending}
-              onClick={() =>
-                review('Close ballots', 'Lock all community ballots?', {
-                  type: 'setBallotWindow',
-                  open: false,
-                  closesAt: null,
-                  ...phaseVersion,
-                })
-              }
-            >
-              Close ballots
-            </button>
-          ) : (
-            <WindowOpener
-              plan={settings.details.timing?.ballot}
-              zone={settings.details.timeZone}
-              now={now}
-              label="Open ballots"
-              fallbackMinutes={20}
-              maxMinutes={240}
-              disabled={terminal || event.paused || cmd.pending || event.phase !== 'FROZEN'}
-              onOpen={({ closesAt }) =>
-                review(
-                  'Open ballots',
-                  `Accept private team ballots until ${stamp(closesAt, settings.details.timeZone)}?`,
-                  { type: 'setBallotWindow', open: true, closesAt, ...phaseVersion },
-                )
-              }
-            />
-          )}
-        </Panel>
       </div>
       <Panel title="Judging and awards">
         <p>
@@ -435,40 +439,29 @@ function Operations({ data, actions }: PageProps) {
           Begin judging
         </button>
         {!awards && (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              review(
-                'Prepare award review',
-                'Calculate results from submitted judging sheets and frozen funding entitlements? Nothing will be published yet.',
-                { type: 'prepareAwards', winnerId, tiebreakReason: tiebreak, ...phaseVersion },
-              );
-            }}
-          >
-            <Field label="Tiebreak winner (only if top scores tie)">
-              <select value={winnerId} onChange={(e) => setWinnerId(e.target.value)}>
-                <option value="">Use the highest judge score</option>
-                {state.submissions.map((project) => (
-                  <option value={project.teamId} key={project.teamId}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Tiebreak explanation">
-              <textarea
-                maxLength={1000}
-                value={tiebreak}
-                onChange={(e) => setTiebreak(e.target.value)}
-              />
-            </Field>
+          <>
+            <JudgingReview data={data} actions={actions} />
             <button
               className="button primary"
-              disabled={event.phase !== 'FROZEN' || event.paused || cmd.pending}
+              disabled={
+                !state.judgeDecision || event.phase !== 'FROZEN' || event.paused || cmd.pending
+              }
+              onClick={() =>
+                review(
+                  'Approve judge decision',
+                  `Prepare the prize review for ${teamName(data, state.judgeDecision!.winnerId)}?`,
+                  {
+                    type: 'prepareAwards',
+                    winnerId: state.judgeDecision!.winnerId,
+                    tiebreakReason: state.judgeDecision!.reason,
+                    ...phaseVersion,
+                  },
+                )
+              }
             >
-              Prepare awards
+              Approve winner and prepare awards
             </button>
-          </form>
+          </>
         )}
         {awards && (
           <>
@@ -476,7 +469,7 @@ function Operations({ data, actions }: PageProps) {
               <strong>{awards.publishedAt ? 'Published awards' : 'Private award review'}</strong>
               <p>
                 Winner: {teamName(data, awards.winnerId)}.{' '}
-                {awards.tiebreakReason && `Tiebreak: ${awards.tiebreakReason}`}
+                {awards.tiebreakReason && `Decision: ${awards.tiebreakReason}`}
               </p>
               <p>Earliest publication: {stamp(awards.publishAfter, settings.details.timeZone)}.</p>
             </div>
@@ -508,10 +501,7 @@ function Operations({ data, actions }: PageProps) {
               Investor payouts: {money(awards.investorPaidMinor)} · Reserve:{' '}
               {money(awards.reserveMinor)}.
             </p>
-            <p>
-              Community winner:{' '}
-              {awards.communityWinnerId ? teamName(data, awards.communityWinnerId) : 'None'}.
-            </p>
+
             {!awards.publishedAt && (
               <>
                 <button

@@ -7,6 +7,7 @@ import {
   projectVisits,
 } from './project-discovery';
 import './projects.css';
+import { ProjectEditor } from './MyTeam';
 import {
   Blank,
   config,
@@ -36,6 +37,14 @@ export function Projects({ data }: PageProps) {
   );
   const sectors = projectSectors(all);
   const visible = filterProjects(all, platform(data).roster, search, sector);
+  if (data.member?.role === 'judge') {
+    const order = config(data).pitchOrder ?? [];
+    visible.sort(
+      (a, b) =>
+        (order.includes(a.id) ? order.indexOf(a.id) : 999) -
+        (order.includes(b.id) ? order.indexOf(b.id) : 999),
+    );
+  }
   return (
     <div className="p-project-directory">
       <div className="p-page-heading">
@@ -173,7 +182,8 @@ export function Projects({ data }: PageProps) {
   );
 }
 
-export function ProjectDetail({ data, id }: PageProps & { id: string }) {
+export function ProjectDetail({ data, actions, id }: PageProps & { id: string }) {
+  const [editing, setEditing] = useState(false);
   const team = teams(data).find((t) => t.id === id);
   const key = visitedKey(data);
   const teamId = team?.id;
@@ -195,6 +205,17 @@ export function ProjectDetail({ data, id }: PageProps & { id: string }) {
   const roster = platform(data).roster.filter((person) => person.teamId === id);
   return (
     <>
+      {editing && (
+        <ProjectEditor team={team} data={data} actions={actions} close={() => setEditing(false)} />
+      )}
+      {data.member?.teamId === team.id &&
+        !data.event?.paused &&
+        ['REGISTRATION', 'INTERMISSION'].includes(data.event?.phase || '') &&
+        !platform(data).submissions.some((s) => s.teamId === team.id) && (
+          <button className="button secondary" onClick={() => setEditing(true)}>
+            Edit your project
+          </button>
+        )}
       <button className="p-link p-back" onClick={() => navigate('projects')}>
         ← All projects
       </button>
@@ -234,7 +255,7 @@ export function ProjectDetail({ data, id }: PageProps & { id: string }) {
               <li key={person.uid}>
                 <div className="p-person-heading">
                   <strong>{person.name}</strong>
-                  <span>{person.role === 'trader' ? 'Designated investor' : person.role}</span>
+                  <span>{person.role === 'trader' ? 'Member' : person.role}</span>
                 </div>
                 {person.bio && <p className="p-person-bio">{person.bio}</p>}
               </li>

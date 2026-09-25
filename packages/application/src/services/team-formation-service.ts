@@ -8,9 +8,9 @@ import { Permissions } from './permissions';
 
 type FormationCommand = Extract<
   Command,
-  { type: 'setTeamFormation' | 'createFormationTeam' | 'joinFormationTeam' }
+  { type: 'setSignupPolicy' | 'setTeamFormation' | 'createFormationTeam' | 'joinFormationTeam' }
 >;
-const roles: FormationRole[] = ['captain', 'trader', 'member'];
+const roles: FormationRole[] = ['captain', 'member'];
 const normalizedName = (name: string) =>
   name.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
 
@@ -21,14 +21,15 @@ export class TeamFormationService {
     Permissions.member(member);
     requireState(event.platform, 'PLATFORM_REQUIRED', 'This event needs funding-round settings.');
     requireState(
-      event.phase === 'REGISTRATION' &&
+      (event.phase === 'REGISTRATION' ||
+        (command.type === 'setSignupPolicy' && event.phase === 'DRAFT')) &&
         event.platform.rulesLockedAt === null &&
         !event.paused &&
         !event.activeOperationId,
       'FORMATION_UNAVAILABLE',
       'Team formation is available during unpaused registration, before funding starts.',
     );
-    if (command.type === 'setTeamFormation') {
+    if (command.type === 'setTeamFormation' || command.type === 'setSignupPolicy') {
       Permissions.organizer(member);
       requireState(
         event.phaseVersion === command.expectedPhaseVersion,
@@ -38,9 +39,21 @@ export class TeamFormationService {
       tx.set(paths.root, {
         ...event,
         phaseVersion: event.phaseVersion + 1,
-        platform: { ...event.platform, teamFormationOpen: command.open },
+        platform: {
+          ...event.platform,
+          ...(command.type === 'setTeamFormation'
+            ? { teamFormationOpen: command.open }
+            : { autoApproveParticipants: command.autoApprove }),
+        },
       });
-      return { message: command.open ? 'Team formation opened.' : 'Team formation closed.' };
+      return {
+        message:
+          command.type === 'setSignupPolicy'
+            ? 'Signup approval policy saved. Existing requests still need review.'
+            : command.open
+              ? 'Team formation opened.'
+              : 'Team formation closed.',
+      };
     }
     requireState(
       event.platform.teamFormationOpen === true,
@@ -100,6 +113,11 @@ export class TeamFormationService {
       const selected = teams.find((entry) => entry.id === command.teamId);
       requireState(selected?.eligibility === 'active', 'TEAM_INACTIVE', 'Choose an active team.');
       requireState(
+        members.filter((entry) => entry.teamId === selected.id).length < 4,
+        'TEAM_FULL',
+        'This team already has four people. Choose another team or contact an organizer.',
+      );
+      requireState(
         this.availableRoles(members, selected.id).includes(command.role),
         'ROLE_LIMIT',
         'That role was just taken. Choose another available role.',
@@ -150,6 +168,7 @@ export class TeamFormationService {
   }
 
   private availableRoles(members: Member[], teamId: string): FormationRole[] {
+    if (members.filter((entry) => entry.teamId === teamId).length >= 4) return [];
     return roles.filter(
       (role) =>
         role === 'member' ||

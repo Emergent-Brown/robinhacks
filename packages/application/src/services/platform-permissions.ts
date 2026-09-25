@@ -28,7 +28,7 @@ export class PlatformPermissions {
     const teamId = this.team(context.member);
     const team = await context.tx.get<Team>(context.paths.team(teamId));
     requireState(team, 'NOT_FOUND', 'Your team does not exist.');
-    Permissions.trader(context.member, team);
+    requireState(team.eligibility === 'active', 'TEAM_INACTIVE', 'Your team is not active.');
     return team;
   }
 

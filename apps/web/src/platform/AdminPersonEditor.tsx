@@ -15,14 +15,14 @@ export function AdminPersonEditor({
   const [bio, setBio] = useState(member.bio || '');
   const [teamId, setTeamId] = useState(member.teamId || '');
   const [role, setRole] = useState<FormationRole>(
-    ['captain', 'trader'].includes(member.role) ? (member.role as FormationRole) : 'member',
+    member.role === 'captain' ? (member.role as FormationRole) : 'member',
   );
   const cmd = useCommand(actions);
   const locked = managementLockReason(data);
   const live = data.members.find((person) => person.uid === member.uid) || member;
   const changed = live.version !== member.version;
   const canAssign = member.status === 'approved' && !['organizer', 'judge'].includes(member.role);
-  const available = (['captain', 'trader', 'member'] as const).filter(
+  const available = (['captain', 'member'] as const).filter(
     (choice) =>
       choice === 'member' ||
       (teamId &&
@@ -140,8 +140,8 @@ export function AdminPersonEditor({
                 </select>
               </Field>
               <p className="muted">
-                One captain and one designated investor per team. To transfer a filled role, change
-                its current holder to member first.
+                Up to four people per team. To transfer the captain role, change its current holder
+                to member first.
               </p>
               {!!data.event!.platform?.rulesLockedAt && (
                 <p className="p-note">

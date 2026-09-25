@@ -138,9 +138,6 @@ export function PlatformApp({
     ...(settings.submissionsOpen && settings.submissionClosesAt
       ? [{ label: 'Final submissions', time: settings.submissionClosesAt }]
       : []),
-    ...(settings.ballotOpen && settings.ballotClosesAt
-      ? [{ label: 'Community ballots', time: settings.ballotClosesAt }]
-      : []),
   ]
     .filter((item) => item.time > now)
     .sort((a, b) => a.time - b.time)[0];
@@ -192,11 +189,43 @@ export function PlatformApp({
             </nav>
           )}
           <div className="p-header-actions">
+            {approved && (
+              <button
+                className="p-notification-button"
+                aria-label={
+                  unread
+                    ? `${unread} unread conversations. Open messages`
+                    : 'Open messages: no unread conversations'
+                }
+                onClick={() => navigate('messages', 'general')}
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  aria-hidden="true"
+                >
+                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
+                </svg>
+                {unread > 0 && <span className="p-notification-dot" />}
+              </button>
+            )}
             {actions.gateway.mode === 'demo' && (
               <button onClick={() => setModal('demo')}>Demo ▾</button>
             )}
             {user ? (
               <button onClick={() => setModal('account')}>
+                {user.photoURL && (
+                  <img
+                    className="p-avatar"
+                    src={user.photoURL}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                  />
+                )}{' '}
                 {user.displayName?.split(' ')[0] || 'Account'} ▾
               </button>
             ) : (
@@ -394,11 +423,19 @@ export function PlatformApp({
       )}
       {modal === 'account' && (
         <Dialog title="Your account" onClose={() => setModal(null)}>
+          {user?.photoURL && (
+            <img
+              className="p-avatar p-avatar-large"
+              src={user.photoURL}
+              alt="Your Google profile"
+              referrerPolicy="no-referrer"
+            />
+          )}
           <h2>{user?.displayName || 'Participant'}</h2>
           <p className="p-break">{user?.email}</p>
           <p>
             {data.member?.role === 'trader'
-              ? 'Designated investor'
+              ? 'Member'
               : data.member?.role || 'Awaiting event access'}
           </p>
           <button

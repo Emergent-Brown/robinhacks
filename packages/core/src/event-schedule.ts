@@ -34,11 +34,6 @@ export class EventSchedule {
       'INVALID_SCHEDULE',
       'Final submissions must close before the last funding round.',
     );
-    invariant(
-      timing.ballot.startsAt >= timing.rounds[2].closesAt,
-      'INVALID_SCHEDULE',
-      'Community voting must start after the last funding round closes.',
-    );
   }
 
   static resolve(
@@ -106,7 +101,7 @@ export class EventSchedule {
 
 export function defaultEventDetails(): EventDetails {
   return {
-    theme: 'Silicon Valley',
+    theme: '',
     about: 'Build a project, share your progress, and back the teams you believe in.',
     dateLabel: 'September 26–27, 2026',
     timeZone: 'America/New_York',
@@ -183,7 +178,6 @@ export function defaultEventDetails(): EventDetails {
         title: 'Round 3 · Final investments',
         description: 'Make your final picks after the hackathon-wide demos.',
       },
-      { time: '', window: 'ballot', title: 'Community vote', description: '' },
       { time: 'Sun · 1:15 p.m.', title: 'Winners announced', description: '' },
       { time: 'Sun · 2 p.m.', title: 'Closing ceremony', description: '' },
     ],

@@ -39,8 +39,8 @@ beforeAll(async () => {
   const root = `events/${DEMO_EVENT_ID}`;
   const sourceEvent = documents[root] as EventConfig;
   sourceEvent.platform!.funding.investorPoolMinor = 10_001;
-  sourceEvent.platform!.funding.builderPrizesMinor = [50_000, 20_000, 10_000];
-  sourceEvent.platform!.funding.communityPrizeMinor = 5_000;
+  sourceEvent.platform!.funding.builderPrizesMinor = [10_001, 0, 0];
+  sourceEvent.platform!.funding.communityPrizeMinor = 0;
   sourceEvent.platform!.funding.reviewMinutes = 1;
   const repository = new MemoryRepository(documents);
   const service = new GameService(repository, DEMO_EVENT_ID, { now: () => now });
@@ -161,6 +161,12 @@ beforeAll(async () => {
     ),
   });
   now += 60_000;
+  await run(PLATFORM_USERS.judge, {
+    type: 'submitJudgeDecision',
+    winnerId: 'team-2',
+    reason: 'The judges agreed this is the most useful working project.',
+    expectedPhaseVersion: event().phaseVersion,
+  });
   await run(PLATFORM_USERS.organizer, {
     type: 'prepareAwards',
     expectedPhaseVersion: event().phaseVersion,
@@ -185,7 +191,7 @@ describe('independent exported sealed-ledger reconciliation', () => {
       reserveMinor: 7_001,
     });
     expect(published.awardResults[0].winnerId).toBe('team-2');
-    expect(published.awardResults[0].communityWinnerId).toBe('team-3');
+    expect(published.awardResults[0].communityWinnerId).toBeNull();
   });
 
   it('keeps a removed investor’s recorded allocations verifiable without restoring event access', () => {
@@ -258,8 +264,11 @@ describe('independent exported sealed-ledger reconciliation', () => {
     expect(reconcile(voided).valid).toBe(true);
     const zero = structuredClone(published);
     zero.event.platform.funding.investorPoolMinor = 0;
+    zero.event.platform.funding.builderPrizesMinor = [0, 0, 0];
     for (const awards of zero.awardResults) {
       awards.settings.investorPoolMinor = 0;
+      awards.settings.builderPrizesMinor = [0, 0, 0];
+      for (const project of awards.projects) project.builderPrizeMinor = 0;
       awards.investorPaidMinor = 0;
       awards.reserveMinor = 0;
       for (const investor of awards.investors) investor.rewardMinor = 0;
@@ -426,7 +435,8 @@ describe('independent exported sealed-ledger reconciliation', () => {
     [
       'community tally changed',
       (data) => {
-        for (const result of data.awardResults) result.community[0].points += 1;
+        for (const result of data.awardResults)
+          result.community.push({ teamId: 'team-3', points: 1, firstChoices: 1, rank: 1 });
       },
     ],
     [

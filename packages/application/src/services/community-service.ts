@@ -1,5 +1,7 @@
 import type {
   AwardResults,
+  JudgeDecision,
+  Team,
   CommunityBallot,
   CommunityCommand,
   CommandResult,
@@ -16,6 +18,7 @@ import type {
 import type { EventPaths } from '../paths';
 import type { Transaction } from '../repository';
 import type { CommandContext } from './context';
+import { judgingReview } from './judging-review';
 import { BallotService } from './ballot-service';
 import { JudgingService } from './judging-service';
 import { MessagingService } from './messaging-service';
@@ -58,6 +61,8 @@ export class CommunityService {
       case 'setBallotWindow':
       case 'saveBallot':
         return this.ballots.execute(context, command);
+      case 'submitJudgeDecision':
+      case 'setPitchOrder':
       case 'assignJudge':
       case 'saveJudgingSheet':
       case 'beginJudging':
@@ -120,38 +125,50 @@ export class CommunityService {
       organizer
         ? tx.list<MessageReport>(paths.collection('messageReports'), 101)
         : Promise.resolve([]),
-      organizer
+      organizer || judge
         ? tx.list<JudgeAssignment>(paths.collection('judgeAssignments'), 51)
-        : judge
-          ? tx
-              .get<JudgeAssignment>(paths.doc('judgeAssignments', member.uid))
-              .then((assignment) => (assignment ? [assignment] : []))
-          : Promise.resolve([]),
-      organizer
+        : Promise.resolve([]),
+      organizer || judge
         ? tx.list<JudgingSheet>(paths.collection('judgingSheets'), 51)
-        : judge
-          ? tx
-              .get<JudgingSheet>(paths.doc('judgingSheets', member.uid))
-              .then((sheet) => (sheet ? [sheet] : []))
-          : Promise.resolve([]),
+        : Promise.resolve([]),
       competitor
         ? tx.get<CommunityBallot>(paths.doc('communityBallots', member.teamId!))
         : Promise.resolve(null),
       tx.get<AwardResults>(paths.doc('awardResults', 'current')),
     ]);
-    const assignedIds = new Set(assignments.flatMap((assignment) => assignment.projectIds));
+    const review =
+      organizer || judge
+        ? judgingReview(
+            await tx.list<Team>(paths.collection('teams'), 31),
+            submissions,
+            members,
+            assignments,
+            judgingSheets,
+            event.platform!.funding,
+          )
+        : null;
+    const decision =
+      organizer || judge
+        ? await tx.get<JudgeDecision>(paths.doc('judgeDecisions', 'current'))
+        : null;
     return {
+      judgeDecision:
+        decision &&
+        review?.ready &&
+        decision.evidenceKey === review.evidenceKey &&
+        review.activeJudgeIds.includes(decision.submittedBy)
+          ? decision
+          : null,
+      deliberationReady: review?.ready ?? false,
+      deliberationJudgeIds: review?.activeJudgeIds ?? [],
       updates: updates.sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id)),
-      submissions: judge
-        ? submissions.filter((submission) => assignedIds.has(submission.teamId))
-        : submissions,
+      submissions,
       roster: members
         .filter(
           (candidate) =>
             candidate.status === 'approved' &&
             candidate.teamId !== null &&
-            !['organizer', 'judge'].includes(candidate.role) &&
-            (!judge || assignedIds.has(candidate.teamId)),
+            !['organizer', 'judge'].includes(candidate.role),
         )
         .map((candidate) => ({
           uid: candidate.uid,
@@ -164,7 +181,15 @@ export class CommunityService {
       general,
       reports,
       assignments,
-      judgingSheets,
+      judgingSheets: organizer
+        ? judgingSheets
+        : judgingSheets.filter(
+            (sheet) =>
+              sheet.uid === member.uid ||
+              (review?.ready &&
+                sheet.submittedAt !== null &&
+                review.activeJudgeIds.includes(sheet.uid)),
+          ),
       ballot,
       awards: organizer || awards?.publishedAt != null ? awards : null,
     };

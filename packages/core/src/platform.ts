@@ -32,6 +32,7 @@ export interface EventDetails {
   timing?: EventTiming;
 }
 export interface FundingSettings {
+  prizeModel?: 'shared-grand-prize';
   budget: number;
   increment: number;
   maxPerProject: number;
@@ -48,6 +49,8 @@ export interface FundingSettings {
 }
 export interface PlatformConfig {
   teamFormationOpen?: boolean;
+  autoApproveParticipants?: boolean;
+  pitchOrder?: string[];
   version: 2;
   details: EventDetails;
   funding: FundingSettings;
@@ -231,6 +234,7 @@ export interface CommunityBallot {
   updatedAt: number;
 }
 export interface AwardResults {
+  judgeDecision?: JudgeDecision;
   id: string;
   createdAt: number;
   publishAfter: number;
@@ -251,7 +255,17 @@ export interface AwardResults {
   reserveMinor: number;
   settings: FundingSettings;
 }
+export interface JudgeDecision {
+  winnerId: string;
+  reason: string;
+  submittedBy: string;
+  submittedAt: number;
+  evidenceKey: string;
+}
 export interface PlatformSnapshot {
+  judgeDecision?: JudgeDecision | null;
+  deliberationReady?: boolean;
+  deliberationJudgeIds?: string[];
   rounds: FundingRound[];
   allocation: RoundAllocation | null;
   entitlements: RoundEntitlement[];
@@ -291,6 +305,8 @@ export type FundingCommand = WithId<
   | { type: 'voidFundingRound'; roundId: string; reason: string; expectedPhaseVersion: number }
 >;
 export type CommunityCommand = WithId<
+  | { type: 'setPitchOrder'; projectIds: string[]; expectedPhaseVersion: number }
+  | { type: 'submitJudgeDecision'; winnerId: string; reason: string; expectedPhaseVersion: number }
   | {
       type: 'publishUpdate';
       round: number;
@@ -362,6 +378,7 @@ export const defaultPlatformConfig = (): PlatformConfig => ({
     minimumDenominator: 200,
     roundNames: ['Initial pitch', 'Working prototype', 'Final demo'],
     roundWeightsBps: [4000, 3500, 2500],
+    prizeModel: 'shared-grand-prize',
     investorPoolMinor: 0,
     builderPrizesMinor: [0, 0, 0],
     communityPrizeMinor: 0,

@@ -96,6 +96,7 @@ const funding = z
     minimumDenominator: z.number().int().min(1).max(1_000_000),
     roundNames: z.array(text(60).min(1)).length(3),
     roundWeightsBps: z.array(z.number().int().min(1).max(10000)).length(3),
+    prizeModel: z.literal('shared-grand-prize').optional(),
     investorPoolMinor: money,
     builderPrizesMinor: z.array(money).length(3),
     communityPrizeMinor: money,
@@ -118,6 +119,23 @@ const entry = z
   })
   .strict();
 export const platformCommandSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      type: z.literal('setPitchOrder'),
+      commandId,
+      projectIds: z.array(id).max(30),
+      expectedPhaseVersion: version,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('submitJudgeDecision'),
+      commandId,
+      winnerId: id,
+      reason: text(1000).min(10),
+      expectedPhaseVersion: version,
+    })
+    .strict(),
   z
     .object({
       type: z.literal('configurePlatform'),

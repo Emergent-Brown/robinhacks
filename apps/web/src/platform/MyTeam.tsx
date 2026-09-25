@@ -38,7 +38,7 @@ export function MyTeam({ data, actions }: PageProps) {
   const state = platform(data);
   const submission = state.submissions.find((s) => s.teamId === team.id);
   const canEdit =
-    ['captain', 'trader'].includes(data.member!.role) &&
+    ['captain', 'member'].includes(data.member!.role) &&
     !submission &&
     data.event!.phase !== 'SEED_OPEN' &&
     !data.event!.paused &&
@@ -83,40 +83,17 @@ export function MyTeam({ data, actions }: PageProps) {
       </Panel>
       <Panel title="Team members">
         <p className="muted">
-          The captain and one designated investor manage the shared allocation. Each person uses
-          their own sign-in.
+          The captain manages investments. Everyone can edit the project. Each person uses their own
+          sign-in.
         </p>
         <ul className="p-roster p-profile-roster">
           {roster.map((member) => (
             <li key={member.uid}>
               <div className="p-person-heading">
                 <strong>{member.displayName}</strong>
-                {data.member?.role === 'captain' &&
-                member.uid !== data.member.uid &&
-                ['member', 'trader'].includes(member.role) &&
-                ['DRAFT', 'REGISTRATION'].includes(data.event!.phase) ? (
-                  <select
-                    aria-label={`Role for ${member.displayName}`}
-                    value={member.role}
-                    disabled={cmd.pending}
-                    onChange={(event) =>
-                      void cmd.run({
-                        type: 'setMemberRole',
-                        uid: member.uid,
-                        role: event.target.value as 'member' | 'trader',
-                        status: 'approved',
-                      })
-                    }
-                  >
-                    <option value="member">Member</option>
-                    <option value="trader">Designated investor</option>
-                  </select>
-                ) : (
-                  <span>
-                    {member.role === 'trader' ? 'Designated investor' : member.role} ·{' '}
-                    {member.status}
-                  </span>
-                )}
+                <span>
+                  {member.role} · {member.status}
+                </span>
               </div>
               {member.bio && <p className="p-person-bio">{member.bio}</p>}
             </li>
@@ -156,7 +133,7 @@ export function MyTeam({ data, actions }: PageProps) {
             </p>
             <button
               className="button primary"
-              disabled={!submissionOpen || !['captain', 'trader'].includes(data.member!.role)}
+              disabled={!submissionOpen || !['captain', 'member'].includes(data.member!.role)}
               onClick={() => setSubmit(true)}
             >
               Review final submission
@@ -164,7 +141,7 @@ export function MyTeam({ data, actions }: PageProps) {
           </>
         )}
       </Panel>
-      {['captain', 'trader'].includes(data.member!.role) &&
+      {['captain', 'member'].includes(data.member!.role) &&
         !data.event!.paused &&
         !['FINALIZING', 'FINALIZED', 'CANCELLED', 'ARCHIVED'].includes(data.event!.phase) &&
         config(data).currentRound < 3 && <UpdateEditor data={data} actions={actions} />}
@@ -210,7 +187,11 @@ export function MyTeam({ data, actions }: PageProps) {
   );
 }
 
-function ProjectEditor({ team, actions, close }: PageProps & { team: Team; close: () => void }) {
+export function ProjectEditor({
+  team,
+  actions,
+  close,
+}: PageProps & { team: Team; close: () => void }) {
   const [form, setForm] = useState({
     name: team.name,
     category: team.category,

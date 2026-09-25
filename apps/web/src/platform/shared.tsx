@@ -19,8 +19,7 @@ export const teams = (data: AppSnapshot) => data.market.entries.map(({ team }) =
 export const ownTeam = (data: AppSnapshot) => teams(data).find((t) => t.id === data.member?.teamId);
 export const teamName = (data: AppSnapshot, id: string) =>
   teams(data).find((t) => t.id === id)?.name || 'Project';
-export const canAllocate = (data: AppSnapshot) =>
-  ['captain', 'trader'].includes(data.member?.role || '');
+export const canAllocate = (data: AppSnapshot) => data.member?.role === 'captain';
 export const navigate = (page: string, id = '') => {
   location.hash = `/platform${page}${id ? `/${encodeURIComponent(id)}` : ''}`;
 };
@@ -44,7 +43,7 @@ export const percent = (fraction: number) =>
   `${(fraction * 100).toLocaleString(undefined, { maximumFractionDigits: 3 })}%`;
 export function rewardCopy(settings: FundingSettings) {
   return settings.investorPoolMinor > 0
-    ? `${money(settings.investorPoolMinor)} maximum investor rewards`
+    ? `${money(settings.investorPoolMinor)} in investor rewards`
     : 'Investor cash prizes have not been announced';
 }
 export function useCommand(actions: AppActions) {

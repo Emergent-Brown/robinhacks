@@ -20,6 +20,13 @@ function fixture(preset: 'registration' | 'funding' = 'funding') {
   const repository = new MemoryRepository(createPlatformDemoDocuments(preset, start));
   let now = start;
   let number = 0;
+  // These scenarios start with one available seat in each existing team.
+  const seeded = repository.dump();
+  for (const [path, value] of Object.entries(seeded)) {
+    const person = value as Member;
+    if (path.includes('/members/') && person.uid?.match(/^demo-member-\d+-3$/)) delete seeded[path];
+  }
+  repository.replace(seeded);
   const service = new GameService(repository, DEMO_EVENT_ID, { now: () => now });
   const event = () => repository.dump()[root] as EventConfig;
   async function patch(path: string, values: Record<string, unknown>) {
@@ -390,7 +397,7 @@ describe('v2 verified identity and frozen rosters', () => {
       h.execute(PLATFORM_USERS.organizer, {
         type: 'setMemberRole',
         uid: PLATFORM_USERS.captain.uid,
-        role: 'trader',
+        role: 'member',
         status: 'approved',
       }),
     ).rejects.toMatchObject({ code: 'ROSTER_LOCKED' });

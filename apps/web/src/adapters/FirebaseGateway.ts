@@ -1,3 +1,4 @@
+import { ReadQueue } from '../app/read-queue';
 import { initializeApp } from 'firebase/app';
 import {
   getAuth,
@@ -49,6 +50,7 @@ export class FirebaseGateway implements AppGateway {
   private cache: AppSnapshot | null = null;
   private pendingSnapshot: Promise<AppSnapshot> | null = null;
   private generation = 0;
+  private messageReads = new ReadQueue();
   constructor(mode: 'firebase' | 'emulator') {
     this.mode = mode;
     const emulator = mode === 'emulator';
@@ -89,6 +91,7 @@ export class FirebaseGateway implements AppGateway {
             displayName: user.displayName || user.email?.split('@')[0] || 'Participant',
             email: user.email || '',
             emailVerified: user.emailVerified,
+            ...(user.photoURL ? { photoURL: user.photoURL } : {}),
           }
         : null;
       if (user)
@@ -269,7 +272,11 @@ export class FirebaseGateway implements AppGateway {
       )({ eventId: this.eventId, ...data });
       return result.data;
     } catch (error) {
-      const e = error as { message?: string; code?: string; details?: { code?: string } };
+      const e = error as {
+        message?: string;
+        code?: string;
+        details?: { code?: string; retryAfterMs?: number };
+      };
       const expired =
         ['SIGN_IN_REQUIRED', 'GOOGLE_SIGN_IN_REQUIRED'].includes(e.details?.code ?? '') ||
         [
@@ -285,7 +292,10 @@ export class FirebaseGateway implements AppGateway {
       const result = new Error(
         e.message || 'Unable to reach the event server. Your request has not been confirmed.',
       );
-      Object.assign(result, { code: e.details?.code || e.code });
+      Object.assign(result, {
+        code: e.details?.code || e.code,
+        retryAfterMs: e.details?.retryAfterMs,
+      });
       throw result;
     }
   }
@@ -336,7 +346,12 @@ export class FirebaseGateway implements AppGateway {
     return this.call('posterStats', { after });
   }
   async messages(request: MessageRequest): Promise<MessagePage> {
-    return this.call('gameMessages', { request });
+    const uid = this.auth.currentUser?.uid;
+    return this.messageReads.run(`${uid}:${JSON.stringify(request)}`, () => {
+      if (this.auth.currentUser?.uid !== uid)
+        throw new Error('Account changed. Reopen the conversation.');
+      return this.call('gameMessages', { request });
+    });
   }
   async conversationDirectory(): Promise<ConversationDirectoryEntry[]> {
     return this.call('gameConversationDirectory', {});

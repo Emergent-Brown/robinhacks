@@ -97,3 +97,41 @@
     align-items: stretch;
   }
 }
+
+.p-table select {
+  padding: 10px 34px 10px 12px;
+  min-height: 42px;
+  max-width: 100%;
+  border: 1px solid #c9d5e0;
+  border-radius: 6px;
+  background-color: white;
+  font: inherit;
+}
+.p-pitch-order {
+  padding-left: 24px;
+}
+.p-pitch-order li {
+  padding: 10px 0;
+  border-bottom: 1px solid #d9e3ec;
+}
+.p-pitch-order li > span {
+  display: inline-block;
+  min-width: 180px;
+}
+.p-pitch-order .p-actions {
+  display: inline-flex;
+  margin-left: 12px;
+}
+.p-deliberation-list {
+  padding-left: 24px;
+}
+.p-deliberation-list > li {
+  padding: 16px 0;
+  border-bottom: 1px solid #d9e3ec;
+}
+.p-deliberation-list strong {
+  margin: 0 12px;
+}
+.p-deliberation-list details {
+  margin-top: 8px;
+}

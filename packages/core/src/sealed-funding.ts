@@ -62,6 +62,14 @@ export class SealedFunding {
     settings.builderPrizesMinor.forEach((amount) => safeInteger(amount, 'Builder prize'));
     safeInteger(settings.communityPrizeMinor, 'Community prize');
     invariant(
+      settings.prizeModel !== 'shared-grand-prize' ||
+        (settings.builderPrizesMinor[0] === settings.investorPoolMinor &&
+          settings.builderPrizesMinor.slice(1).every((amount) => amount === 0) &&
+          settings.communityPrizeMinor === 0),
+      'INVALID_PRIZE_SPLIT',
+      'Use one grand prize split equally between the winning team and the investor pool.',
+    );
+    invariant(
       settings.currency === 'USD' && settings.reservePolicy.trim().length > 0,
       'INVALID_RULES',
       'Specify the currency and unused reward policy.',

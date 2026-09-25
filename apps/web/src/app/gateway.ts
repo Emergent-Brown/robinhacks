@@ -12,6 +12,7 @@ export interface SessionUser {
   displayName: string;
   email: string;
   emailVerified?: boolean;
+  photoURL?: string;
 }
 export interface AppGateway {
   readonly mode: 'demo' | 'firebase' | 'emulator';

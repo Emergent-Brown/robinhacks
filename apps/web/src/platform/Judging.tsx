@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { JudgingReview } from './JudgingReview';
 import { isJudgingScore, JUDGING_SCORE_MAX, type JudgingEntry } from '@robinhacks/core';
 import { Dialog, ExternalLink, Field } from '../ui/primitives';
 import {
@@ -23,7 +24,11 @@ export function Judging({ data, actions }: PageProps) {
   const [dirty, setDirty] = useState(false);
   const [review, setReview] = useState(false);
   const [conflict, setConflict] = useState(false);
-  const [selected, setSelected] = useState(assignment?.projectIds[0] || '');
+  const [selected, setSelected] = useState(
+    config(data).pitchOrder?.find((id) => assignment?.projectIds.includes(id)) ||
+      assignment?.projectIds[0] ||
+      '',
+  );
   const cmd = useCommand(actions);
   const rubric = config(data).funding.rubric;
   const locked = !!sheet?.submittedAt;
@@ -38,7 +43,11 @@ export function Judging({ data, actions }: PageProps) {
       setVersion(sheet?.version || 0);
     }
   }, [sheet?.version, cmd.pending]);
-  const projects = assignment?.projectIds || [];
+  const order = config(data).pitchOrder ?? [];
+  const projects = [...(assignment?.projectIds || [])].sort(
+    (a, b) =>
+      (order.includes(a) ? order.indexOf(a) : 999) - (order.includes(b) ? order.indexOf(b) : 999),
+  );
   useEffect(() => {
     if (!projects.includes(selected)) setSelected(projects[0] || '');
   }, [projects.join('|'), selected]);
@@ -93,8 +102,18 @@ export function Judging({ data, actions }: PageProps) {
       </div>
       <p>
         Score each criterion from 0 to {JUDGING_SCORE_MAX} using the published rubric. Funding
-        activity and other judges’ scores are hidden.
+        activity stays hidden. Submitted scores are shared after all judges finish scoring.
       </p>
+      <JudgingReview data={data} actions={actions} />
+      {selected && (
+        <p className="muted">
+          Team:{' '}
+          {state.roster
+            .filter((p) => p.teamId === selected)
+            .map((p) => p.name)
+            .join(', ') || 'No current members'}
+        </p>
+      )}
       {locked && (
         <p className="p-note">
           Submitted {stamp(sheet!.submittedAt)}. Your judging sheet is locked.

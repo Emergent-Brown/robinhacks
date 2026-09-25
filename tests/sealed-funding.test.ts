@@ -409,7 +409,7 @@ describe('sealed funding application boundaries', () => {
     });
   });
 
-  it('requires a captain or designated trader, an organizer for round controls, and the reviewed phase version', async () => {
+  it('requires a captain, an organizer for round controls, and the reviewed phase version', async () => {
     const h = fixture();
     await expect(
       h.command('captain-a', {
@@ -485,7 +485,11 @@ describe('sealed funding application boundaries', () => {
     await expect(
       h.command('organizer', {
         ...command,
-        funding: { ...config.funding, builderPrizesMinor: [10_000, 0, 0] },
+        funding: {
+          ...config.funding,
+          investorPoolMinor: 10_000,
+          builderPrizesMinor: [10_000, 0, 0],
+        },
       }),
     ).rejects.toMatchObject({ code: 'RULES_LOCKED' });
   });

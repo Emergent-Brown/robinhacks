@@ -368,8 +368,8 @@ function AllocationSheet({
       }
     >
       <p>
-        Invest by {stamp(active.closesAt, config(data).details.timeZone)}. Your captain and
-        designated investor share this allocation. Individual investments stay private to your team.
+        Invest by {stamp(active.closesAt, config(data).details.timeZone)}. Your captain manages this
+        allocation. Individual investments stay private to your team.
       </p>
       {data.event!.paused && (
         <p className="p-note">
@@ -381,9 +381,7 @@ function AllocationSheet({
           The deadline has passed. Allocations are locked while the organizer closes the round.
         </p>
       )}
-      {!canAllocate(data) && (
-        <p className="p-note">Only your captain and designated investor can change allocations.</p>
-      )}
+      {!canAllocate(data) && <p className="p-note">Only your captain can change allocations.</p>}
       <div className="p-budget">
         <strong>
           {total} / {funding.budget} credits

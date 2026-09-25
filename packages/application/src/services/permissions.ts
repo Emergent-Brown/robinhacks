@@ -26,11 +26,7 @@ export class Permissions {
   }
   static trader(member: Member, team: Team): void {
     this.team(member);
-    requireState(
-      member.role === 'captain' || member.role === 'trader',
-      'TRADER_REQUIRED',
-      'Only your captain or designated trader can invest.',
-    );
+    requireState(member.role === 'captain', 'TRADER_REQUIRED', 'Only your captain can invest.');
     requireState(
       team.eligibility === 'active',
       'TEAM_INACTIVE',

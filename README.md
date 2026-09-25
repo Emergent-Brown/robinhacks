@@ -137,3 +137,5 @@ Environment files, local Auth configuration, production exports, credentials, de
 - [Architecture](docs/architecture.md): current service boundaries, authorization and data flow.
 
 Owner-only maintenance: [fresh event reset](docs/16-fresh-event-reset.md).
+
+Current organizer workflow and September walkthrough changes: [walkthrough feedback guide](docs/18-walkthrough-feedback.md).

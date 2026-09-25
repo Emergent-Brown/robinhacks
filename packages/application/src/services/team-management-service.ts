@@ -209,6 +209,13 @@ export class TeamManagementService {
       'TEAM_INACTIVE',
       'Choose an active team.',
     );
+    requireState(
+      !command.teamId ||
+        members.filter((entry) => entry.uid !== member.uid && entry.teamId === command.teamId)
+          .length < 4,
+      'TEAM_FULL',
+      'Teams can have at most four people, including suspended members. Move someone out first.',
+    );
     if (command.teamId && command.role !== 'member')
       requireState(
         !members.some(
@@ -219,7 +226,7 @@ export class TeamManagementService {
             entry.role === command.role,
         ),
         'ROLE_LIMIT',
-        `This team already has a ${command.role === 'trader' ? 'designated investor' : 'captain'}. Change their role first.`,
+        `This team already has a ${'captain'}. Change their role first.`,
       );
     requireState(
       member.teamId !== command.teamId || member.role !== command.role,
@@ -260,7 +267,7 @@ export class TeamManagementService {
     this.audit(context, command, member, updated);
     this.touch(context);
     return {
-      message: `${member.displayName} ${destination ? `assigned to ${destination.name} as ${command.role === 'trader' ? 'designated investor' : command.role}` : 'is now waiting for a team'}. Existing investments and submitted rosters stay with their original team.`,
+      message: `${member.displayName} ${destination ? `assigned to ${destination.name} as ${command.role}` : 'is now waiting for a team'}. Existing investments and submitted rosters stay with their original team.`,
     };
   }
 

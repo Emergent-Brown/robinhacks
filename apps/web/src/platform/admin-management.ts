@@ -1,7 +1,7 @@
 import type { AppSnapshot, Member } from '@robinhacks/core';
 
 export const roleLabel = (role: Member['role']) =>
-  role === 'trader' ? 'Designated investor' : role[0]!.toUpperCase() + role.slice(1);
+  role === 'trader' ? 'Member' : role[0]!.toUpperCase() + role.slice(1);
 
 export function managementLockReason(data: AppSnapshot): string {
   const event = data.event!;

@@ -21,6 +21,13 @@ const attendee = PLATFORM_USERS.attendee;
 function fixture(preset: 'registration' | 'funding' = 'registration') {
   const repository = new MemoryRepository(createPlatformDemoDocuments(preset, 10_000_000));
   let now = 10_000_000;
+  // These scenarios start with one available seat in each existing team.
+  const seeded = repository.dump();
+  for (const [path, value] of Object.entries(seeded)) {
+    const person = value as Member;
+    if (path.includes('/members/') && person.uid?.match(/^demo-member-\d+-3$/)) delete seeded[path];
+  }
+  repository.replace(seeded);
   const service = new GameService(repository, DEMO_EVENT_ID, { now: () => now });
   let id = 0;
   const execute = (
@@ -143,7 +150,7 @@ describe('approval before organizer-controlled team formation', () => {
     ).rejects.toMatchObject({ code: 'MEMBERSHIP_REQUIRED' });
   });
 
-  it.each(['captain', 'trader', 'member'] as const)(
+  it.each(['captain', 'member'] as const)(
     'lets a creator choose %s and opens the app only after joining',
     async (role) => {
       const h = fixture();
@@ -162,7 +169,7 @@ describe('approval before organizer-controlled team formation', () => {
     },
   );
 
-  it.each(['captain', 'trader'] as const)(
+  it.each(['captain'] as const)(
     'serializes competing claims for the %s slot and permits multiple ordinary members',
     async (exclusiveRole) => {
       const h = fixture();
@@ -218,7 +225,7 @@ describe('approval before organizer-controlled team formation', () => {
     await h.execute(attendee, {
       type: 'createFormationTeam',
       name: 'Orbit Builders',
-      role: 'trader',
+      role: 'member',
     });
     await h.patch(`${root}/members/${applicant.uid}`, {
       ...applicant,
@@ -530,12 +537,7 @@ describe('organizer recovery of vacant team roles', () => {
       const h = fixture();
       const replacement = PLATFORM_USERS.member;
       if (priorRole === 'trader')
-        await h.execute(organizer, {
-          type: 'setMemberRole',
-          uid: replacement.uid,
-          role: 'trader',
-          status: 'approved',
-        });
+        await h.patch(`${root}/members/${replacement.uid}`, { role: 'trader' }); // Historical record; new requests cannot assign this role.
       await h.execute(organizer, {
         type: 'openFundingRound',
         durationMinutes: 30,
@@ -607,38 +609,23 @@ describe('organizer recovery of vacant team roles', () => {
     },
   );
 
-  it('requires pause, forbids occupied-role swaps and demotions, and closes recovery after finalization', async () => {
+  it('requires pause and an unoccupied captain slot, and closes recovery after finalization', async () => {
     const h = fixture('funding');
     const command = {
       type: 'setMemberRole',
       uid: PLATFORM_USERS.member.uid,
-      role: 'trader',
+      role: 'captain',
       status: 'approved',
     };
     await expect(h.execute(organizer, command)).rejects.toMatchObject({ code: 'ROSTER_LOCKED' });
     await h.patch(root, { paused: true });
+    await expect(h.execute(organizer, command)).rejects.toMatchObject({ code: 'ROSTER_LOCKED' });
+    await h.execute(organizer, { type: 'removeMember', uid: PLATFORM_USERS.captain.uid });
     await h.execute(organizer, command);
     await expect(h.execute(organizer, { ...command, role: 'member' })).rejects.toMatchObject({
       code: 'ROSTER_LOCKED',
     });
-    await expect(h.execute(organizer, { ...command, role: 'captain' })).rejects.toMatchObject({
-      code: 'ROSTER_LOCKED',
-    });
-    await expect(
-      h.execute(PLATFORM_USERS.captain, { ...command, role: 'member' }),
-    ).rejects.toMatchObject({ code: 'ROSTER_LOCKED' });
-    await h.execute(organizer, {
-      type: 'setMemberRole',
-      uid: PLATFORM_USERS.captain.uid,
-      role: 'captain',
-      status: 'suspended',
-    });
     await h.patch(root, { phase: 'FINALIZED' });
-    await expect(h.execute(organizer, { ...command, role: 'captain' })).rejects.toMatchObject({
-      code: 'ROSTER_LOCKED',
-    });
-    expect(
-      (h.repository.dump()[`${root}/members/${PLATFORM_USERS.member.uid}`] as Member).role,
-    ).toBe('trader');
+    await expect(h.execute(organizer, command)).rejects.toMatchObject({ code: 'ROSTER_LOCKED' });
   });
 });

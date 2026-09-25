@@ -118,6 +118,14 @@ export class FundingService {
       'RULES_LOCKED',
       'Funding and judging rules are fixed once the first round opens.',
     );
+    requireState(
+      command.funding.prizeModel === 'shared-grand-prize' &&
+        command.funding.builderPrizesMinor[0] === command.funding.investorPoolMinor &&
+        command.funding.builderPrizesMinor.slice(1).every((amount) => amount === 0) &&
+        command.funding.communityPrizeMinor === 0,
+      'INVALID_PRIZE_SPLIT',
+      'Use one grand prize, split equally between the winning team and its investors.',
+    );
     requireState(command.name.trim().length > 0, 'INVALID_EVENT', 'Enter an event name.');
     context.tx.set(context.paths.root, {
       ...context.event,
@@ -223,7 +231,20 @@ export class FundingService {
         ),
       ),
       'CHECKPOINT_REQUIRED',
-      'Every active team must publish its checkpoint update before this round opens.',
+      `Checkpoint updates missing: ${active
+        .filter(
+          (team) =>
+            !updates.some(
+              (update) =>
+                update.teamId === team.id &&
+                update.round === number &&
+                update.works.trim() &&
+                (number === 1 || update.changed.trim()) &&
+                update.incomplete.trim(),
+            ),
+        )
+        .map((team) => team.name)
+        .join(', ')}. Publish those updates, then open the round.`,
     );
     requireState(
       number !== 3 ||

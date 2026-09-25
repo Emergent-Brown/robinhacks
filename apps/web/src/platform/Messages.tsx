@@ -396,7 +396,17 @@ function ConversationView({
       if (!older) await markRead(next);
     } catch (error) {
       if (mounted.current && sequence === loadSequence.current) {
-        setPage(null);
+        // Keep already loaded history during a transient failure. Access changes remount this view.
+        const failure = error as { code?: string };
+        if (
+          ![
+            'RATE_LIMITED',
+            'functions/resource-exhausted',
+            'functions/unavailable',
+            'functions/internal',
+          ].includes(failure.code || '')
+        )
+          setPage(null);
         setLoadError(error instanceof Error ? error.message : 'Could not load messages.');
       }
     } finally {
@@ -415,7 +425,7 @@ function ConversationView({
   }, []);
   useEffect(() => {
     // Coalesce busy-channel updates without delaying the first load or polling when hidden.
-    const delay = general ? Math.max(0, 2000 - (Date.now() - lastFetchAt.current)) : 0;
+    const delay = Math.max(0, 3000 - (Date.now() - lastFetchAt.current));
     const timer = setTimeout(() => {
       if (document.visibilityState === 'visible') void load();
     }, delay);
@@ -510,7 +520,7 @@ function ConversationView({
                 {message.authorRole === 'organizer' && (
                   <small className="p-organizer-badge">Organizer</small>
                 )}
-                {review && (
+                {!!message.fromTeamId && (
                   <small className="p-message-team">
                     {teamName(data, message.fromTeamId || '')}
                   </small>

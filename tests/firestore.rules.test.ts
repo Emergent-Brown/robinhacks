@@ -88,6 +88,7 @@ const privatePaths = [
   'conversations/team-a__team-b',
   'teamInboxes/team-b',
   'judgingSheets/judge',
+  'judgeDecisions/current',
   'communityBallots/team-a',
   'awardResults/current',
   'messageReports/report-one',
@@ -237,6 +238,7 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
       'fundingRounds/funding-1',
       'communityBallots/team-a',
       'judgingSheets/judge',
+      'judgeDecisions/current',
       'awardResults/current',
     ])
       await assertFails(getDoc(doc(databases.judge!, `${eventRoot}/${path}`)));
@@ -465,7 +467,7 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
         type: 'createFormationTeam',
         commandId: 'formation-create-0001',
         name: 'Emulator Works',
-        role: 'captain',
+        role: 'member',
       });
       const created = await service.snapshot(newcomers[0]!.uid);
       const teamId = created.member!.teamId!;
@@ -475,13 +477,13 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
             type: 'joinFormationTeam',
             commandId: `join-${actor.uid}`,
             teamId,
-            role: 'trader',
+            role: 'captain',
           }),
         ),
       );
       expect(claims.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
       const roster = await admin.collection(`${root}/members`).where('teamId', '==', teamId).get();
-      expect(roster.docs.filter((doc) => doc.data().role === 'trader')).toHaveLength(1);
+      expect(roster.docs.filter((doc) => doc.data().role === 'captain')).toHaveLength(1);
       // Organizer moves use the same real transaction adapter as participant formation.
       const losingJoin = newcomers
         .slice(1)

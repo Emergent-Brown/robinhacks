@@ -3,7 +3,7 @@ import { Field } from '../ui/primitives';
 import { config, ErrorMessage, navigate, Panel, useCommand, type PageProps } from './shared';
 import './team-formation.css';
 
-type TeamRole = 'captain' | 'trader' | 'member';
+type TeamRole = 'captain' | 'member';
 const roles: { value: TeamRole; label: string; description: string }[] = [
   {
     value: 'captain',
@@ -11,14 +11,10 @@ const roles: { value: TeamRole; label: string; description: string }[] = [
     description: 'Manage the project, team roles, and investments. One per team.',
   },
   {
-    value: 'trader',
-    label: 'Designated investor',
-    description: 'Manage investments and edit the project alongside the captain. One per team.',
-  },
-  {
     value: 'member',
     label: 'Member',
-    description: 'Build with the team and view its shared investments. Multiple people can join.',
+    description:
+      'Edit the project, publish updates, and submit your work. Teams have up to four people.',
   },
 ];
 
@@ -186,9 +182,14 @@ export function TeamFormation({ data, actions }: PageProps) {
                           Choose a team
                         </option>
                         {teams.map((team) => (
-                          <option key={team.id} value={team.id}>
+                          <option
+                            key={team.id}
+                            value={team.id}
+                            disabled={!team.availableRoles.length}
+                          >
                             {team.name} · {team.members.length}{' '}
                             {team.members.length === 1 ? 'person' : 'people'}
+                            {!team.availableRoles.length ? ' · Full' : ''}
                           </option>
                         ))}
                       </select>

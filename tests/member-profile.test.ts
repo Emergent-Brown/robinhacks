@@ -116,15 +116,20 @@ describe('voluntary member biographies', () => {
     )![1] as Member;
     await h.service.execute({ uid: member.uid, emailVerified: true }, command);
     await h.service.execute(PLATFORM_USERS.organizer, {
+      type: 'removeMember',
+      commandId: 'remove-captain-for-bio',
+      uid: 'demo-captain-2',
+    });
+    await h.service.execute(PLATFORM_USERS.organizer, {
       type: 'setMemberRole',
       commandId: 'promote-member-with-bio',
       uid: member.uid,
-      role: 'trader',
+      role: 'captain',
       status: 'approved',
     });
     expect((await h.service.snapshot(member.uid)).member).toMatchObject({
       bio: command.bio.trim(),
-      role: 'trader',
+      role: 'captain',
     });
   });
 
@@ -163,7 +168,7 @@ describe('voluntary member biographies', () => {
     ).not.toHaveProperty('bio');
     const judge = await h.service.snapshot(PLATFORM_USERS.judge.uid);
     expect(judge.platform!.roster).toContainEqual(rosterEntry);
-    expect(judge.platform!.roster.every((person) => person.teamId === 'team-1')).toBe(true);
+    expect(judge.platform!.roster.some((person) => person.teamId === 'team-2')).toBe(true);
     expect(judge.members).toEqual([]);
     expect(judge.platform!.allocation).toBeNull();
     expect(judge.platform!.entitlements).toEqual([]);

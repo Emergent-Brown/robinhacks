@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PitchOrderEditor } from './JudgingReview';
 import { Field } from '../ui/primitives';
 import {
   Blank,
@@ -8,6 +9,7 @@ import {
   platform,
   stamp,
   teamName,
+  teams,
   useCommand,
   type PageProps,
 } from './shared';
@@ -21,6 +23,13 @@ export function AdminJudging({ data, actions }: PageProps) {
   const assignment = state.assignments.find((item) => item.uid === uid);
   return (
     <>
+      <PitchOrderEditor
+        key={`${teams(data)
+          .map((t) => t.id)
+          .join(',')}:${config(data).pitchOrder?.join(',')}`}
+        data={data}
+        actions={actions}
+      />
       <Panel title="Judge assignments">
         <p>
           Assign submitted projects to independent judges. Every eligible project needs completed,

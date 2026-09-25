@@ -153,6 +153,7 @@ export class GameService {
           case 'approveMembership':
             result = await this.membership.approve(context, command);
             break;
+          case 'setSignupPolicy':
           case 'setTeamFormation':
           case 'createFormationTeam':
           case 'joinFormationTeam':
@@ -471,6 +472,7 @@ export class GameService {
         'submissions',
         'judgeAssignments',
         'judgingSheets',
+        'judgeDecisions',
         'communityBallots',
         'awardResults',
         'adminAudit',

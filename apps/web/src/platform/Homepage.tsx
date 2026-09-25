@@ -36,7 +36,6 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
     <div className="p-home">
       <div className="p-page-heading">
         <div>
-          <p className="p-kicker">{details.theme}</p>
           <h1>{data.event!.name}</h1>
         </div>
         <div className="p-actions">
@@ -150,23 +149,25 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
           </div>
           {details.schedule.length ? (
             <ol className="p-schedule">
-              {details.schedule.map((item, index) => {
-                const planned = EventSchedule.resolve(details.timing, item.window);
-                return (
-                  <li
-                    key={index}
-                    className={item.window?.startsWith('round') ? 'p-schedule-round' : undefined}
-                  >
-                    <time>
-                      {planned ? EventSchedule.label(planned, details.timeZone) : item.time}
-                    </time>
-                    <div>
-                      <strong>{item.title}</strong>
-                      {item.description && <p>{item.description}</p>}
-                    </div>
-                  </li>
-                );
-              })}
+              {details.schedule
+                .filter((item) => item.window !== 'ballot')
+                .map((item, index) => {
+                  const planned = EventSchedule.resolve(details.timing, item.window);
+                  return (
+                    <li
+                      key={index}
+                      className={item.window?.startsWith('round') ? 'p-schedule-round' : undefined}
+                    >
+                      <time>
+                        {planned ? EventSchedule.label(planned, details.timeZone) : item.time}
+                      </time>
+                      <div>
+                        <strong>{item.title}</strong>
+                        {item.description && <p>{item.description}</p>}
+                      </div>
+                    </li>
+                  );
+                })}
             </ol>
           ) : (
             <p>The organizer will publish the schedule here.</p>

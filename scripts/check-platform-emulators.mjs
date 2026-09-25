@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 for (const [cmd, args] of [
-  ['npx', ['vitest', 'run', 'tests/firestore.rules.test.ts']],
+  ['npx', ['vitest', 'run', 'tests/firestore.rules.test.ts', 'tests/firestore-stress.test.ts']],
   ['node', ['scripts/seed-emulator.mjs', '--registration']],
   ['node', ['scripts/smoke-platform.mjs']],
 ]) {

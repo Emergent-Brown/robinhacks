@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultEventDetails, EventSchedule } from '@robinhacks/core';
 
 describe('event schedule', () => {
-  it('fits three windows, final submissions, voting and a 30-minute review before Sunday awards', () => {
+  it('fits three short funding windows and final submissions before Sunday awards', () => {
     const timing = defaultEventDetails().timing!;
     EventSchedule.validate(timing);
     expect(timing.rounds.map(EventSchedule.minutes)).toEqual([30, 30, 30]);
@@ -28,7 +28,7 @@ describe('event schedule', () => {
     );
   });
 
-  it('rejects overlapping rounds and voting or submissions that conflict with the final round', () => {
+  it('rejects overlapping rounds and submissions that conflict with the final round', () => {
     const timing = defaultEventDetails().timing!;
     timing.rounds[1].startsAt = timing.rounds[0].closesAt - 60_000;
     expect(() => EventSchedule.validate(timing)).toThrow('overlap');
@@ -37,7 +37,7 @@ describe('event schedule', () => {
     expect(() => EventSchedule.validate(lateSubmission)).toThrow('submissions');
     const earlyBallot = defaultEventDetails().timing!;
     earlyBallot.ballot.startsAt = earlyBallot.rounds[2].closesAt - 60_000;
-    expect(() => EventSchedule.validate(earlyBallot)).toThrow('Community voting');
+    expect(() => EventSchedule.validate(earlyBallot)).not.toThrow(); // Retired ballot metadata cannot block funding.
   });
 
   it('links public times to editable windows and accepts legacy unlinked schedules', () => {

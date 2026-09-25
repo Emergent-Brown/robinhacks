@@ -179,49 +179,29 @@ export function AdminSettings({ data, actions }: PageProps) {
           ))}
           <p className="muted">Weights must total 100%.</p>
           <div className="p-form-grid">
-            <Field label="Maximum investor reward pool (USD)">
+            <Field
+              label="Total grand prize (USD)"
+              hint="Split equally between the winner and its eligible investors. Use 0 until announced."
+            >
               <input
                 type="number"
                 min="0"
-                step="0.01"
+                max="2000000"
+                step="0.02"
                 required
-                value={funding.investorPoolMinor / 100}
-                onChange={(event) =>
-                  financial('investorPoolMinor', Math.round(Number(event.target.value) * 100))
-                }
+                value={(funding.investorPoolMinor + (funding.builderPrizesMinor[0] ?? 0)) / 100}
+                onChange={(event) => {
+                  const half = Math.round(Number(event.target.value) * 50);
+                  setFunding({
+                    ...funding,
+                    prizeModel: 'shared-grand-prize',
+                    investorPoolMinor: half,
+                    builderPrizesMinor: [half, 0, 0],
+                    communityPrizeMinor: 0,
+                  });
+                }}
               />
             </Field>
-            <Field label="Community prize (USD)">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                required
-                value={funding.communityPrizeMinor / 100}
-                onChange={(event) =>
-                  financial('communityPrizeMinor', Math.round(Number(event.target.value) * 100))
-                }
-              />
-            </Field>
-            {funding.builderPrizesMinor.map((prize, index) => (
-              <Field key={index} label={`Builder place ${index + 1} (USD)`}>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  required
-                  value={prize / 100}
-                  onChange={(event) =>
-                    financial(
-                      'builderPrizesMinor',
-                      funding.builderPrizesMinor.map((old, i) =>
-                        i === index ? Math.round(Number(event.target.value) * 100) : old,
-                      ),
-                    )
-                  }
-                />
-              </Field>
-            ))}
           </div>
           <p className="muted">
             Use 0 for prizes that have not been funded or announced. Credits never become spendable

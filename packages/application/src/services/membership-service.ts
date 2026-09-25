@@ -46,11 +46,21 @@ export class MembershipService {
       'RATE_LIMITED',
       'Wait 30 seconds before changing your access request.',
     );
+    const automatic = event.platform.autoApproveParticipants === true && !command.staffRole;
+    requireState(
+      !automatic ||
+        members.filter(
+          (entry) => entry.status === 'approved' && !['organizer', 'judge'].includes(entry.role),
+        ).length < 150,
+      'MEMBER_LIMIT',
+      'This event is limited to 150 approved participants.',
+    );
+    const status = automatic ? ('approved' as const) : ('pending' as const);
     const request: AccessRequest = {
       uid: actor.uid,
       displayName: command.displayName,
       requestedAt: now,
-      status: 'pending',
+      status,
       ...(command.staffRole ? { requestedRole: command.staffRole } : {}),
       email: actor.email,
       emailVerified: true,
@@ -61,13 +71,17 @@ export class MembershipService {
       displayName: command.displayName,
       teamId: null,
       role: 'member',
-      status: 'pending',
+      status,
       version: (member?.version ?? 0) + 1,
       email: actor.email,
       emailVerified: true,
     });
     tx.set(paths.root, { ...event, phaseVersion: event.phaseVersion + 1 });
-    return { message: 'Request sent. An organizer will review your name and verified email.' };
+    return {
+      message: automatic
+        ? 'You’re approved. Choose a team when formation opens.'
+        : 'Request sent. An organizer will review your name and verified email.',
+    };
   }
 
   async approve(context: CommandContext, command: Extract<Command, { type: 'approveMembership' }>) {
@@ -266,9 +280,9 @@ export class MembershipService {
     requireState(team, 'NOT_FOUND', 'Your team does not exist.');
     if (event.platform) {
       requireState(
-        member.role === 'captain' || member.role === 'trader',
+        member.role === 'captain' || member.role === 'member',
         'CAPTAIN_REQUIRED',
-        'Your captain or designated investor can edit the project.',
+        'Team members can edit their project.',
       );
       requireState(
         !(await tx.get(paths.doc('submissions', teamId))),

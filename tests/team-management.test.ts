@@ -26,6 +26,13 @@ const teammate = PLATFORM_USERS.member;
 const attendee = PLATFORM_USERS.attendee;
 function fixture(preset: DemoPreset = 'registration') {
   const repository = new MemoryRepository(createPlatformDemoDocuments(preset, NOW));
+  // These scenarios start with one available seat in each existing team.
+  const seeded = repository.dump();
+  for (const [path, value] of Object.entries(seeded)) {
+    const person = value as Member;
+    if (path.includes('/members/') && person.uid?.match(/^demo-member-\d+-3$/)) delete seeded[path];
+  }
+  repository.replace(seeded);
   const service = new GameService(repository, DEMO_EVENT_ID, { now: () => NOW });
   let sequence = 0;
   const execute = (command: Record<string, unknown>, actor = organizer) =>
@@ -117,12 +124,12 @@ describe('organizer team and person management', () => {
       type: 'adminAssignMember',
       uid: attendee.uid,
       teamId: 'team-1',
-      role: 'trader',
+      role: 'member',
       expectedVersion: 0,
     });
     expect(h.get<Member>(`members/${attendee.uid}`)).toMatchObject({
       teamId: 'team-1',
-      role: 'trader',
+      role: 'member',
       status: 'approved',
       version: 1,
     });
@@ -162,19 +169,20 @@ describe('organizer team and person management', () => {
 
   it('serializes competing role assignments and rejects stale versions', async () => {
     const h = fixture();
+    await h.patch(`${root}/members/${captain.uid}`, { role: 'member', teamId: null });
     const results = await Promise.allSettled([
       h.execute({
         type: 'adminAssignMember',
         uid: attendee.uid,
         teamId: 'team-1',
-        role: 'trader',
+        role: 'captain',
         expectedVersion: 0,
       }),
       h.execute({
         type: 'adminAssignMember',
         uid: teammate.uid,
         teamId: 'team-1',
-        role: 'trader',
+        role: 'captain',
         expectedVersion: 0,
       }),
     ]);

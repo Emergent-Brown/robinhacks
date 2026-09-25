@@ -1,7 +1,7 @@
 import { isJudgingScore, JUDGING_SCORE_MAX, SealedFunding } from '@robinhacks/core';
 import type {
   AwardResults,
-  CommunityBallot,
+  JudgeDecision,
   CommunityCommand,
   FundingRound,
   FundingSettings,
@@ -13,6 +13,7 @@ import type {
   RoundEntitlement,
   Team,
 } from '@robinhacks/core';
+import { judgingReview } from './judging-review';
 import { requireState } from '../errors';
 import { receipt, type CommandContext } from './context';
 import { PlatformPermissions as Guard } from './platform-permissions';
@@ -21,6 +22,8 @@ type JudgingCommand = Extract<
   CommunityCommand,
   {
     type:
+      | 'setPitchOrder'
+      | 'submitJudgeDecision'
       | 'assignJudge'
       | 'saveJudgingSheet'
       | 'beginJudging'
@@ -40,6 +43,10 @@ interface ScoredProject {
 export class JudgingService {
   async execute(context: CommandContext, command: JudgingCommand) {
     switch (command.type) {
+      case 'setPitchOrder':
+        return this.pitchOrder(context, command);
+      case 'submitJudgeDecision':
+        return this.decide(context, command);
       case 'assignJudge':
         return this.assign(context, command);
       case 'saveJudgingSheet':
@@ -53,6 +60,84 @@ export class JudgingService {
       case 'publishAwards':
         return this.publish(context, command);
     }
+  }
+
+  private async pitchOrder(
+    context: CommandContext,
+    command: Extract<JudgingCommand, { type: 'setPitchOrder' }>,
+  ) {
+    const config = Guard.organizer(context, command.expectedPhaseVersion);
+    Guard.writable(context);
+    const teams = await context.tx.list<Team>(context.paths.collection('teams'), 31);
+    requireState(
+      new Set(command.projectIds).size === command.projectIds.length &&
+        command.projectIds.every((id) => teams.some((t) => t.id === id)),
+      'INVALID_ORDER',
+      'Choose each existing team at most once.',
+    );
+    context.tx.set(context.paths.root, {
+      ...context.event,
+      phaseVersion: context.event.phaseVersion + 1,
+      platform: { ...config, pitchOrder: command.projectIds },
+    });
+    return { message: 'Pitch order saved.' };
+  }
+
+  private async decide(
+    context: CommandContext,
+    command: Extract<JudgingCommand, { type: 'submitJudgeDecision' }>,
+  ) {
+    const { tx, paths, event, member, now } = context;
+    const config = Guard.writable(context);
+    requireState(
+      member.role === 'judge' && member.teamId === null,
+      'JUDGE_REQUIRED',
+      'An assigned judge must submit the deliberation decision.',
+    );
+    requireState(
+      event.phase === 'FROZEN' && event.phaseVersion === command.expectedPhaseVersion,
+      'PHASE_CHANGED',
+      'Refresh the judging review before submitting.',
+    );
+    const [teams, submissions, members, assignments, sheets] = await Promise.all([
+      tx.list<Team>(paths.collection('teams'), 31),
+      tx.list<ProjectSubmission>(paths.collection('submissions'), 31),
+      tx.list<Member>(paths.collection('members'), 501),
+      tx.list<JudgeAssignment>(paths.collection('judgeAssignments'), 51),
+      tx.list<JudgingSheet>(paths.collection('judgingSheets'), 51),
+    ]);
+    const review = judgingReview(teams, submissions, members, assignments, sheets, config.funding);
+    requireState(
+      review.ready,
+      'JUDGING_INCOMPLETE',
+      'All assigned judges must submit, and every eligible project needs a non-conflicted score.',
+    );
+    requireState(
+      review.activeJudgeIds.includes(member.uid),
+      'JUDGE_REQUIRED',
+      'Only an assigned judge may submit the decision.',
+    );
+    requireState(
+      review.projects.some((p) => p.teamId === command.winnerId),
+      'INVALID_WINNER',
+      'Choose an eligible submitted project.',
+    );
+    requireState(
+      command.reason.trim().length >= 10,
+      'REASON_REQUIRED',
+      'Record the judges’ deliberation reason.',
+    );
+    const decision: JudgeDecision = {
+      winnerId: command.winnerId,
+      reason: command.reason.trim(),
+      submittedBy: member.uid,
+      submittedAt: now,
+      evidenceKey: review.evidenceKey,
+    };
+    tx.set(paths.doc('judgeDecisions', 'current'), decision);
+    tx.set(paths.doc('judgeDecisions', `${member.uid}__${command.commandId}`), decision);
+    tx.set(paths.root, { ...event, phaseVersion: event.phaseVersion + 1 });
+    return { message: 'Winner submitted for organizer approval.' };
   }
 
   private async assign(
@@ -118,6 +203,10 @@ export class JudgingService {
         version: sheet.version + 1,
         updatedAt: context.now,
       });
+    tx.set(paths.root, {
+      ...context.event,
+      judgingRevision: (context.event.judgingRevision ?? 0) + 1,
+    });
     return { receipt: receipt(context, command, 'Judge assignments saved.') };
   }
 
@@ -198,6 +287,11 @@ export class JudgingService {
       submittedAt: command.submit ? now : null,
     };
     tx.set(paths.doc('judgingSheets', member.uid), sheet);
+    if (command.submit)
+      tx.set(paths.root, {
+        ...context.event,
+        judgingRevision: (context.event.judgingRevision ?? 0) + 1,
+      });
     return {
       receipt: receipt(
         context,
@@ -275,33 +369,18 @@ export class JudgingService {
       'COMMAND_CONFLICT',
       'This command identifier is reserved. Use a new request identifier.',
     );
-    requireState(
-      !config.ballotOpen || (config.ballotClosesAt !== null && now >= config.ballotClosesAt),
-      'BALLOT_OPEN',
-      'Close community voting before preparing awards.',
-    );
     await this.assertFundingFinished(context);
-    const [
-      teams,
-      members,
-      submissions,
-      assignments,
-      sheets,
-      ballots,
-      entitlements,
-      current,
-      archived,
-    ] = await Promise.all([
-      tx.list<Team>(paths.collection('teams'), 31),
-      tx.list<Member>(paths.collection('members'), 501),
-      tx.list<ProjectSubmission>(paths.collection('submissions'), 31),
-      tx.list<JudgeAssignment>(paths.collection('judgeAssignments'), 51),
-      tx.list<JudgingSheet>(paths.collection('judgingSheets'), 51),
-      tx.list<CommunityBallot>(paths.collection('communityBallots'), 31),
-      tx.list<RoundEntitlement>(paths.collection('roundEntitlements'), 91),
-      tx.get<AwardResults>(paths.doc('awardResults', 'current')),
-      tx.get<AwardResults>(paths.doc('awardResults', command.commandId)),
-    ]);
+    const [teams, members, submissions, assignments, sheets, entitlements, current, archived] =
+      await Promise.all([
+        tx.list<Team>(paths.collection('teams'), 31),
+        tx.list<Member>(paths.collection('members'), 501),
+        tx.list<ProjectSubmission>(paths.collection('submissions'), 31),
+        tx.list<JudgeAssignment>(paths.collection('judgeAssignments'), 51),
+        tx.list<JudgingSheet>(paths.collection('judgingSheets'), 51),
+        tx.list<RoundEntitlement>(paths.collection('roundEntitlements'), 91),
+        tx.get<AwardResults>(paths.doc('awardResults', 'current')),
+        tx.get<AwardResults>(paths.doc('awardResults', command.commandId)),
+      ]);
     requireState(
       !current,
       'AWARDS_EXIST',
@@ -380,21 +459,30 @@ export class JudgingService {
       return difference > 0n ? 1 : difference < 0n ? -1 : 0;
     };
     scored.sort((a, b) => compare(a, b) || a.teamId.localeCompare(b.teamId));
-    const tied = scored.filter((project) => compare(project, scored[0]!) === 0);
-    const winnerId = command.winnerId || (tied.length === 1 ? tied[0]!.teamId : '');
+    const decision = await tx.get<JudgeDecision>(paths.doc('judgeDecisions', 'current'));
+    const review = judgingReview(teams, submissions, members, assignments, sheets, config.funding);
     requireState(
-      tied.some((project) => project.teamId === winnerId),
-      'INVALID_WINNER',
-      'The winner must be one of the projects with the highest judge score.',
+      decision &&
+        review.ready &&
+        review.evidenceKey === decision.evidenceKey &&
+        review.activeJudgeIds.includes(decision.submittedBy),
+      'DECISION_REQUIRED',
+      'An assigned judge must submit a current deliberation decision before organizer approval.',
     );
     requireState(
-      tied.length === 1 || command.tiebreakReason.trim().length >= 10,
-      'TIEBREAK_REQUIRED',
-      'Choose a tied winner and record the published judging tiebreaker used.',
+      command.winnerId === decision.winnerId,
+      'DECISION_CHANGED',
+      'The judge decision changed. Refresh and review it.',
+    );
+    const winnerId = decision.winnerId;
+    requireState(
+      scored.some((p) => p.teamId === winnerId),
+      'INVALID_WINNER',
+      'Choose an eligible submitted project.',
     );
     const winner = scored.find((project) => project.teamId === winnerId)!;
     const ranking = [winner, ...scored.filter((project) => project !== winner)];
-    const community = this.communityRanking(eligible, teams, ballots);
+    const community: AwardResults['community'] = [];
     const payableEntitlements = entitlements.filter((entitlement) =>
       teams.some((team) => team.id === entitlement.teamId && team.eligibility !== 'disqualified'),
     );
@@ -405,17 +493,18 @@ export class JudgingService {
     );
     const awards: AwardResults = {
       id: command.commandId,
+      judgeDecision: decision,
       createdAt: now,
       publishAfter: now + config.funding.reviewMinutes * 60_000,
       publishedAt: null,
       winnerId,
-      tiebreakReason: tied.length > 1 ? command.tiebreakReason.trim() : '',
+      tiebreakReason: decision.reason,
       projects: ranking.map((project, index) => ({
         teamId: project.teamId,
         score: Number(project.numerator) / Number(project.denominator),
         judgeCount: project.judgeCount,
         rank: index + 1,
-        builderPrizeMinor: config.funding.builderPrizesMinor[index] ?? 0,
+        builderPrizeMinor: index === 0 ? (config.funding.builderPrizesMinor[0] ?? 0) : 0,
       })),
       ...payout,
       community,
@@ -444,36 +533,6 @@ export class JudgingService {
         'Awards prepared for review. Nothing has been paid or published.',
       ),
     };
-  }
-
-  private communityRanking(
-    eligible: Team[],
-    teams: Team[],
-    ballots: CommunityBallot[],
-  ): AwardResults['community'] {
-    const totals = new Map(
-      eligible.map((team) => [team.id, { teamId: team.id, points: 0, firstChoices: 0, rank: 0 }]),
-    );
-    for (const ballot of ballots) {
-      if (!teams.some((team) => team.id === ballot.teamId && team.eligibility !== 'disqualified'))
-        continue;
-      const unique = new Set<string>();
-      ballot.rankedProjectIds.forEach((id, index) => {
-        const total = totals.get(id);
-        if (!total || id === ballot.teamId || unique.has(id) || index > 2) return;
-        unique.add(id);
-        total.points += 3 - index;
-        if (index === 0) total.firstChoices++;
-      });
-    }
-    return [...totals.values()]
-      .sort(
-        (a, b) =>
-          b.points - a.points ||
-          b.firstChoices - a.firstChoices ||
-          a.teamId.localeCompare(b.teamId),
-      )
-      .map((project, index) => ({ ...project, rank: index + 1 }));
   }
 
   private async assertFundingFinished(context: CommandContext): Promise<void> {
@@ -561,7 +620,7 @@ export class JudgingService {
       receipt: receipt(
         context,
         command,
-        'Final judging, investor and community results published. Prize distribution is handled by the organizers.',
+        'Final judging and investor results published. Prize distribution is handled by the organizers.',
       ),
     };
   }

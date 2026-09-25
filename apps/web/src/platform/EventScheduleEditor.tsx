@@ -14,7 +14,6 @@ const windowLabels: Array<[ScheduleWindow, string]> = [
   ['round2', 'Round 2'],
   ['round3', 'Round 3'],
   ['submissions', 'Final submissions'],
-  ['ballot', 'Community ballot'],
 ];
 
 function TimeInput({
@@ -248,8 +247,8 @@ export function EventScheduleEditor({
         })
       )}
       <p className="muted">
-        Finish submissions before round 3. Community voting follows round 3; leave time for scoring
-        and the results review before announcing winners.
+        Finish submissions before round 3; leave time for scoring and the results review before
+        announcing winners.
       </p>
     </>
   );

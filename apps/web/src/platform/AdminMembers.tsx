@@ -18,7 +18,7 @@ import './team-formation.css';
 import './admin-management.css';
 
 const isStaff = (role: Member['role']) => role === 'organizer' || role === 'judge';
-const roleLabel = (role: string) => (role === 'trader' ? 'Designated investor' : role);
+const roleLabel = (role: string) => (role === 'trader' ? 'Member' : role);
 
 export function AdminMembers({ data, actions }: PageProps) {
   const [email, setEmail] = useState('');
@@ -107,6 +107,28 @@ export function AdminMembers({ data, actions }: PageProps) {
 
   return (
     <>
+      <Panel title="Signup approval">
+        <label className="p-check">
+          <input
+            type="checkbox"
+            checked={!!settings.autoApproveParticipants}
+            disabled={!canApprove || cmd.pending}
+            onChange={(event) =>
+              void cmd.run({
+                type: 'setSignupPolicy',
+                autoApprove: event.target.checked,
+                expectedPhaseVersion: data.event!.phaseVersion,
+              })
+            }
+          />
+          <span>Automatically approve new participants</span>
+        </label>
+        <p className="muted">
+          Applies to new verified Google signups. Existing requests and judge requests still need
+          review. Limit: 150 participants; four people per team.
+        </p>
+        <ErrorMessage>{cmd.error}</ErrorMessage>
+      </Panel>
       <Panel
         title={`Pending approvals (${pending.length})`}
         aside={
@@ -217,8 +239,8 @@ export function AdminMembers({ data, actions }: PageProps) {
       </Panel>
       <Panel title="Members and staff">
         <p className="muted">
-          Each team has one captain and up to one designated investor. Other teammates join as
-          members. Pause the event before removing access after registration.
+          Each team has up to four people: one captain and the remaining teammates join as members.
+          Pause the event before removing access after registration.
         </p>
         {settings.rulesLockedAt && data.event!.paused && (
           <p className="p-note">
