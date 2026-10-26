@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { defaultEventDetails, EventSchedule } from '@robinhacks/core';
 
 describe('event schedule', () => {
-  it('fits three short funding windows and final submissions before Sunday awards', () => {
+  it('fits three short funding windows and final submissions before Saturday awards', () => {
     const timing = defaultEventDetails().timing!;
     EventSchedule.validate(timing);
     expect(timing.rounds.map(EventSchedule.minutes)).toEqual([30, 30, 30]);
     expect(EventSchedule.inputValue(timing.rounds[1].closesAt, 'America/New_York')).toBe(
-      '2026-09-26T21:30',
+      '2026-11-06T21:30',
     );
-    expect(timing.submissions.closesAt).toBeLessThan(Date.parse('2026-09-27T11:00:00-04:00'));
-    expect(timing.ballot.closesAt + 30 * 60_000).toBe(Date.parse('2026-09-27T13:15:00-04:00'));
+    expect(timing.submissions.closesAt).toBeLessThan(Date.parse('2026-11-07T11:00:00-05:00'));
+    expect(timing.ballot.closesAt + 30 * 60_000).toBe(Date.parse('2026-11-07T13:15:00-05:00'));
   });
 
   it('uses the event zone rather than the browser zone across UTC midnight', () => {
@@ -21,7 +21,7 @@ describe('event schedule', () => {
       EventSchedule.inputValue(Date.parse('2026-09-27T01:00:00Z'), 'America/Los_Angeles'),
     ).toBe('2026-09-26T18:00');
     expect(EventSchedule.label(defaultEventDetails().timing!.rounds[1], 'America/New_York')).toBe(
-      'Sat, Sep 26, 9:00 PM – 9:30 PM',
+      'Fri, Nov 6, 9:00 PM – 9:30 PM',
     );
     expect(() => EventSchedule.parseInput('2027-03-14T02:30', 'America/New_York')).toThrow(
       'does not exist',
