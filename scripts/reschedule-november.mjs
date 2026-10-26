@@ -1,4 +1,4 @@
-/** Move the planned event to November 6 without changing live funding or participant records. */
+/** Move the planned event to November 7 without changing live funding or participant records. */
 import { build } from 'esbuild';
 import { Firestore } from 'firebase-admin/firestore';
 import { OAuth2Client } from 'google-auth-library';
@@ -23,7 +23,7 @@ const { EventSchedule, defaultEventDetails } = await import(
 try {
   const result = await db.runTransaction(async (tx) => {
     const root = db.doc('events/robinhacks-2026');
-    const marker = root.collection('migrations').doc('november-2026-date-and-registration');
+    const marker = root.collection('migrations').doc('november-7-2026-luma-date-correction');
     const [snapshot, prior] = await Promise.all([tx.get(root), tx.get(marker)]);
     const event = snapshot.data();
     if (!event?.platform?.details) throw new Error('Event details missing.');
@@ -54,11 +54,15 @@ try {
     }
     EventSchedule.validate(timing);
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const fullDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const shiftDays = (text) =>
-      text.replace(/\b(Sun|Mon|Tue|Wed|Thu|Fri|Sat)(day)?\b/g, (name, short, suffix) => {
-        // Handle short schedule labels; full logistics weekdays are updated separately below.
-        return dayNames[(dayNames.indexOf(short) + (days % 7) + 7) % 7] + (suffix || '');
-      });
+      text.replace(
+        /\b(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sun|Mon|Tue|Wed|Thu|Fri|Sat)\b/g,
+        (name) => {
+          const names = fullDays.includes(name) ? fullDays : dayNames;
+          return names[(names.indexOf(name) + (days % 7) + 7) % 7];
+        },
+      );
     const details = {
       ...old,
       dateLabel: plan.dateLabel,
@@ -69,9 +73,7 @@ try {
         ? {
             logistics: {
               ...old.logistics,
-              overnight: old.logistics.overnight.replace(/Saturday|Sunday/g, (day) =>
-                day === 'Saturday' ? 'Friday' : 'Saturday',
-              ),
+              overnight: shiftDays(old.logistics.overnight),
             },
           }
         : {}),

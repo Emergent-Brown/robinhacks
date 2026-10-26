@@ -58,7 +58,7 @@ describe('safe bootstrap and reset entry points', () => {
       builderPrizesMinor: [0, 0, 0],
       communityPrizeMinor: 0,
     });
-    expect(event.platform.details.dateLabel).toBe('November 6–7, 2026');
+    expect(event.platform.details.dateLabel).toBe('November 7–8, 2026');
   });
 
   it('accepts only current events without modifying them', () => {
