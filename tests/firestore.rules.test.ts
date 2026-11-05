@@ -624,6 +624,44 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
     }
   }, 60_000);
 
+  it('serves snapshots from a read-only view that never blocks a writer', async () => {
+    const adminApp = initializeApp({ projectId: environment.projectId }, 'read-only-views');
+    const db = getFirestore(adminApp);
+    try {
+      const repository = new FirestoreRepository(db);
+      const path = 'readOnlyViews/doc';
+      await db.doc(path).set({ value: 1 });
+      await db.doc('readOnlyViews/other').set({ value: 2 });
+      let reads = 0;
+      const result = await repository.read(async (tx) => {
+        const seen = await tx.get<{ value: number }>(path);
+        // A write that lands during the view must commit promptly and must not change it.
+        await repository.transaction(async (write) => {
+          reads += 1;
+          await write.get(path);
+          write.set(path, { value: 99 });
+        });
+        const [first, second] = await Promise.all([
+          tx.list<{ value: number }>('readOnlyViews', 10),
+          tx.list<{ value: number }>('readOnlyViews', 10),
+        ]);
+        first[0]!.value = -1;
+        return { seen, second };
+      });
+      expect(reads).toBe(1);
+      expect(result.seen).toEqual({ value: 1 });
+      expect(result.second.map((entry) => entry.value)).toEqual([1, 2]);
+      await expect(
+        repository.read(async (tx) => {
+          tx.set(path, { value: 3 });
+        }),
+      ).rejects.toThrow('read-only');
+      expect((await db.doc(path).get()).data()).toEqual({ value: 99 });
+    } finally {
+      await deleteApp(adminApp);
+    }
+  }, 30_000);
+
   it('rejects a batch that tries to transfer credits between wallets', async () => {
     const batch = writeBatch(databases.captain!);
     batch.update(doc(databases.captain!, `${eventRoot}/wallets/team-a`), { cashMinor: 2_000_000 });

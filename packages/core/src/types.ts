@@ -20,6 +20,8 @@ export interface EventConfig {
   venue: string;
   phase: Phase;
   phaseVersion: number;
+  /** Counts signups, approvals and joins. Unlike phaseVersion, it does not reload the room. */
+  rosterVersion?: number;
   paused: boolean;
   pauseReason: string;
   windowId: number;

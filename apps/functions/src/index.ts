@@ -15,6 +15,7 @@ import {
 import { DomainError } from '@robinhacks/core';
 import { FirestoreRepository } from './firestore-repository';
 import { RequestLimiter } from './request-limiter';
+import { CommandLane } from './command-lane';
 import { FirestorePosterStore } from './firestore-poster-store';
 import { PosterRedirect } from './poster-redirect';
 
@@ -22,6 +23,7 @@ initializeApp();
 const repository = new FirestoreRepository(getFirestore());
 const clock = new SystemClock();
 const limiter = new RequestLimiter();
+const lane = new CommandLane();
 const posters = new FirestorePosterStore(getFirestore());
 const posterEventId = process.env.POSTER_EVENT_ID || 'robinhacks-2026';
 const posterRedirect = new PosterRedirect(posters, limiter, () => {
@@ -61,6 +63,9 @@ const options = {
         /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/,
       ],
 };
+
+// The whole room hits these at once. Idle cost stays zero: instances scale back to none.
+const busy = { ...options, maxInstances: 5, memory: '512MiB' as const };
 
 async function actor(request: CallableRequest, action: string, rate = 60) {
   if (!request.auth)
@@ -152,19 +157,20 @@ async function transport<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 
-export const gameCommand = onCall(options, (request) =>
+// One instance, so CommandLane can keep shared commands from overlapping each other.
+export const gameCommand = onCall({ ...busy, maxInstances: 1 }, (request) =>
   transport(async () => {
     const identity = await actor(request, 'command', 90);
     requireSmallPayload(request.data);
     const data = commandEnvelope.parse(request.data);
-    return new GameService(repository, data.eventId, clock).execute(
-      identity,
-      parseCommand(data.command),
+    const command = parseCommand(data.command);
+    return lane.run(command.type, () =>
+      new GameService(repository, data.eventId, clock).execute(identity, command),
     );
   }),
 );
 
-export const gameSnapshot = onCall(options, (request) =>
+export const gameSnapshot = onCall(busy, (request) =>
   transport(async () => {
     const identity = await actor(request, 'snapshot', 60);
     const data = envelope.parse(request.data);
@@ -172,7 +178,7 @@ export const gameSnapshot = onCall(options, (request) =>
   }),
 );
 
-export const gamePublic = onCall({ ...options, enforceAppCheck: false }, (request) =>
+export const gamePublic = onCall({ ...busy, enforceAppCheck: false }, (request) =>
   transport(async () => {
     // A room of 150 attendees can share one public IP and load the homepage together.
     limiter.check(request.rawRequest.ip || 'public', 'public', 600);
@@ -181,7 +187,7 @@ export const gamePublic = onCall({ ...options, enforceAppCheck: false }, (reques
   }),
 );
 
-export const gameMessages = onCall(options, (request) =>
+export const gameMessages = onCall(busy, (request) =>
   transport(async () => {
     const identity = await actor(request, 'messages', 60);
     const data = messagesEnvelope.parse(request.data);

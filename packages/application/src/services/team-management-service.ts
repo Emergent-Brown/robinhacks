@@ -78,7 +78,7 @@ export class TeamManagementService {
     requireState(
       teams.length < RULES.maxTeams,
       'TEAM_LIMIT',
-      'This event supports at most 30 teams, including withdrawn teams.',
+      `This event supports at most ${RULES.maxTeams} teams, including withdrawn teams.`,
     );
     this.assertNameAvailable(teams, command.name);
     const id = `team_${command.commandId.slice(0, 100)}`;
@@ -120,7 +120,7 @@ export class TeamManagementService {
     const { tx, paths, now } = context;
     if (command.patch.name)
       this.assertNameAvailable(
-        await tx.list<Team>(paths.collection('teams'), 31),
+        await tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1),
         command.patch.name,
         team.id,
       );
@@ -174,7 +174,7 @@ export class TeamManagementService {
     const [member, members, teams] = await Promise.all([
       tx.get<Member>(paths.member(command.uid)),
       tx.list<Member>(paths.collection('members'), 501),
-      tx.list<Team>(paths.collection('teams'), 31),
+      tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1),
     ]);
     requireState(member, 'NOT_FOUND', 'This person no longer has event access.');
     requireState(

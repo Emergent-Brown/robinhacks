@@ -170,7 +170,7 @@ export class FundingService {
       tx.list<FundingRound>(paths.collection('fundingRounds'), 4),
       tx.list<ProjectUpdate>(paths.collection('projectUpdates'), 301),
       number === 3
-        ? tx.list<ProjectSubmission>(paths.collection('submissions'), 31)
+        ? tx.list<ProjectSubmission>(paths.collection('submissions'), RULES.maxTeams + 1)
         : Promise.resolve([]),
     ]);
     requireState(
@@ -181,7 +181,7 @@ export class FundingService {
     requireState(
       teams.length <= RULES.maxTeams,
       'TEAM_LIMIT',
-      'This event supports at most 30 teams.',
+      `This event supports at most ${RULES.maxTeams} teams.`,
     );
     requireState(
       members.length <= 500 &&
@@ -306,7 +306,7 @@ export class FundingService {
       tx.get<Team>(paths.team(teamId)),
       tx.get<FundingRound>(paths.doc('fundingRounds', command.roundId)),
       tx.get<RoundAllocation>(paths.doc('roundAllocations', id)),
-      tx.list<Team>(paths.collection('teams'), 31),
+      tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1),
     ]);
     requireState(team && round, 'NOT_FOUND', 'The team or funding round was not found.');
     Permissions.trader(member, team);

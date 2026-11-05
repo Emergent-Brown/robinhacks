@@ -153,7 +153,7 @@ Reconciliation independently checks round allocations, totals, exact entitlement
 
 ## Cost controls and App Check
 
-The six callable definitions use zero minimum instances, at most two instances, 256 MiB memory and a 60-second timeout. The existing project has a one-day Artifact Registry cleanup policy for generated deployment images. Team/record limits, bounded conversations, cached scoped snapshots and hidden-tab listener cleanup constrain ordinary pilot usage.
+Callables use zero minimum instances and a 60-second timeout. `gameSnapshot`, `gamePublic` and `gameMessages` allow five instances at 512 MiB because the whole room uses them at once. `gameCommand` also uses 512 MiB but runs on exactly one instance, so its command queue sees every write. The others allow two at 256 MiB. Idle instances scale to zero, so these limits cost nothing unless traffic uses them. The existing project has a one-day Artifact Registry cleanup policy for generated deployment images. Team/record limits, bounded conversations, cached scoped snapshots and hidden-tab listener cleanup constrain ordinary pilot usage.
 
 Blaze remains capable of charging for usage outside free allowances. Configure a project-scoped budget and alerts in [Cloud Billing](https://console.cloud.google.com/billing/budgets?project=robinhacks-2026-ajs) and inspect actual rehearsal usage. Alerts and per-instance request limits are not hard spending caps. Use measured rehearsal traffic to estimate event usage.
 

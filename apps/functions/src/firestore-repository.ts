@@ -24,14 +24,24 @@ export class FirestoreRepository implements Repository {
       { maxAttempts: 5 },
     );
   }
+
+  /** Read-only transactions hold no locks, so a room of readers cannot starve a writer. */
+  read<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
+    return this.firestore.runTransaction(
+      (native) => work(new BufferedTransaction(this.firestore, native, true)),
+      { readOnly: true },
+    );
+  }
 }
 
 class BufferedTransaction implements Transaction {
   private readonly pending = new Map<string, PendingWrite>();
   private readonly cache = new Map<string, unknown | null>();
+  private readonly lists = new Map<string, Promise<unknown[]>>();
   constructor(
     private readonly firestore: Firestore,
     private readonly native: NativeTransaction,
+    private readonly readOnly = false,
   ) {}
 
   async get<T>(path: string): Promise<T | null> {
@@ -47,6 +57,21 @@ class BufferedTransaction implements Transaction {
   async list<T>(collectionPath: string, limit = 1000): Promise<T[]> {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 10_000)
       throw new Error('Repository list limit must be between 1 and 10,000.');
+    if (this.readOnly) {
+      // A snapshot composes several services that need the same collection. Nothing can
+      // change inside a read-only view, so one billed read can serve all of them.
+      const key = `${collectionPath}?${limit}`;
+      const pending =
+        this.lists.get(key) ??
+        this.native.get(this.firestore.collection(collectionPath).limit(limit)).then((result) =>
+          result.docs
+            .map((doc): [string, unknown] => [doc.ref.path, doc.data()])
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([, value]) => value),
+        );
+      this.lists.set(key, pending);
+      return structuredClone(await pending) as T[];
+    }
     const result = await this.native.get(this.firestore.collection(collectionPath).limit(limit));
     const docs = new Map<string, unknown>(
       result.docs.map((doc) => {
@@ -68,9 +93,11 @@ class BufferedTransaction implements Transaction {
   }
 
   set<T>(path: string, value: T): void {
+    if (this.readOnly) throw new Error('This read-only view cannot write.');
     this.pending.set(path, { kind: 'set', value: structuredClone(value) });
   }
   delete(path: string): void {
+    if (this.readOnly) throw new Error('This read-only view cannot write.');
     this.pending.set(path, { kind: 'delete' });
   }
 

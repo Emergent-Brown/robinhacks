@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { RULES } from '@robinhacks/core';
 import type { Command, EventConfig, Member, Team } from '@robinhacks/core';
 import { GameService } from '../packages/application/src/game-service';
 import { parseCommand } from '../packages/application/src/command-schema';
@@ -280,11 +281,11 @@ describe('approval before organizer-controlled team formation', () => {
     ).rejects.toMatchObject({ code: 'TEAM_NOT_APPROVED' });
   });
 
-  it('keeps the 30-team cap and 150-participant cap independent', async () => {
+  it('keeps the 40-team cap and 150-participant cap independent', async () => {
     const h = fixture();
     await h.open();
     const sample = h.repository.dump()[`${root}/teams/team-1`] as Team;
-    for (let number = 13; number <= 30; number++)
+    for (let number = 13; number <= RULES.maxTeams; number++)
       await h.patch(`${root}/teams/team-${number}`, {
         ...sample,
         id: `team-${number}`,
@@ -404,6 +405,21 @@ describe('organizer invitations and access removal', () => {
     expect(claimed.event!.phaseVersion).toBe(h.event().phaseVersion);
     expect((await h.service.snapshot(attendee.uid, attendee)).organizerInvites).toBeUndefined();
     expect((await h.service.publicSnapshot()).organizerInvites).toBeUndefined();
+  });
+
+  it('counts signups, approvals and joins without announcing a phase change', async () => {
+    const h = fixture();
+    await h.open();
+    const phase = h.event().phaseVersion;
+    await h.execute(applicant, { type: 'requestMembership', displayName: applicant.displayName });
+    await h.execute(organizer, { type: 'approveMembership', uid: applicant.uid });
+    await h.execute(attendee, {
+      type: 'createFormationTeam',
+      name: 'Roster counter',
+      role: 'captain',
+    });
+    expect(h.event().phaseVersion).toBe(phase);
+    expect(h.event().rosterVersion).toBe(3);
   });
 
   it('rejects staff-team conflicts and organizer self-removal', async () => {

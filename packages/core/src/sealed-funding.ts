@@ -1,4 +1,5 @@
 import { fromBigInt, invariant, safeInteger } from './errors';
+import { RULES } from './rules';
 import type { FundingRound, FundingSettings, RoundAllocation, RoundEntitlement } from './platform';
 
 interface Fraction {
@@ -111,7 +112,7 @@ export class SealedFunding {
       'Your team is not eligible for this round.',
     );
     invariant(
-      Object.keys(amounts).length <= 30,
+      Object.keys(amounts).length <= RULES.maxTeams,
       'TEAM_LIMIT',
       'An allocation has too many projects.',
     );
@@ -176,7 +177,7 @@ export class SealedFunding {
     );
     invariant(
       round.eligibleTeamIds.length >= 2 &&
-        round.eligibleTeamIds.length <= 30 &&
+        round.eligibleTeamIds.length <= RULES.maxTeams &&
         new Set(round.eligibleTeamIds).size === round.eligibleTeamIds.length,
       'RECONCILIATION_FAILED',
       'The frozen round roster is invalid.',

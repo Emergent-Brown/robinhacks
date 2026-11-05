@@ -46,6 +46,12 @@ Organizer notes have their own revision counter and author/time metadata. Update
 
 ## Runtime and maintenance
 
+Pure reads (`gameSnapshot`, `gamePublic`, `gameMessages`, conversation discovery) use read-only Firestore transactions, which hold no locks and so cannot delay a writer. A snapshot syncs a changed Google email or organizer invitation in its own short transaction first, only when one is needed.
+
+`phaseVersion` means every open client must reload; `rosterVersion` counts signups, approvals and joins, which still write the event root to serialize races but only refresh people choosing a team and organizers, at most every 20 seconds. `apps/web/src/app/refresh-policy.ts` holds these rules: phase changes reload within a random 2.5-second spread, other teams' edits at most every two minutes, and transient failures retry with backoff. Commands retry with their original ID, so a receipt prevents a double effect.
+
+`gameCommand` runs on one instance and passes shared-state commands through `CommandLane`, one at a time. Those commands read a document and then write it, so overlapping copies deadlock on each other's read locks. Commands that touch only their own team's or person's records skip the queue.
+
 Firebase Hosting serves the static client. Callables handle event commands, scoped snapshots, public metadata, conversation pages and review discovery, exports and poster statistics; the poster redirect uses an HTTP Function. Functions and Firestore use `us-west1`. Small instance limits, bounded collections, cached snapshots and no minimum instances constrain ordinary event usage.
 
 Keep credentials and operational data outside Git. Bootstrap and maintenance scripts use the existing Firebase CLI identity rather than frontend credentials. A production reset is a separate explicit operation with backup and maintenance controls; routine deployment does not reset data.

@@ -107,6 +107,21 @@ export class OrganizerAccessService {
     return { message: 'Event access removed. Project and submitted records were preserved.' };
   }
 
+  /** True when `claim` has something to do, so snapshots stay read-only otherwise. */
+  async claimPending(
+    tx: Transaction,
+    paths: EventPaths,
+    current: Member | null,
+    actor: CommandContext['actor'],
+  ): Promise<boolean> {
+    if (!actor.email || actor.emailVerified !== true || current?.status === 'suspended')
+      return false;
+    const email = normalizeOrganizerEmail(actor.email);
+    const invitation = await tx.get<OrganizerInvite>(organizerInvitePath(paths, email));
+    if (!invitation || invitation.email !== email) return false;
+    return !!current?.teamId || current?.role !== 'organizer' || current.status !== 'approved';
+  }
+
   async claim(
     tx: Transaction,
     paths: EventPaths,

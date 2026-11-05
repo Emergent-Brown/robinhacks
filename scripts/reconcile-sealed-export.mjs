@@ -1,5 +1,6 @@
 /** Offline v2 ledger verification. Deliberately independent of the application's arithmetic. */
 const MAX = Number.MAX_SAFE_INTEGER;
+const MAX_TEAMS = 40; // Keep in step with RULES.maxTeams in packages/core/src/rules.ts.
 const check = (condition, code) => {
   if (!condition) throw new Error(code);
 };
@@ -100,7 +101,11 @@ function validateFunding(data, event, teams, settings) {
     1000,
   );
 
-  const submissions = indexed(rows(data, 'submissions', 30), 'teamId', 'DUPLICATE_SUBMISSION');
+  const submissions = indexed(
+    rows(data, 'submissions', MAX_TEAMS),
+    'teamId',
+    'DUPLICATE_SUBMISSION',
+  );
   check(
     [...submissions.keys()].every((id) => teams.has(id)),
     'ORPHAN_SUBMISSION',
@@ -135,7 +140,7 @@ function validateFunding(data, event, teams, settings) {
     check(
       Array.isArray(round.eligibleTeamIds) &&
         round.eligibleTeamIds.length >= 2 &&
-        round.eligibleTeamIds.length <= 30 &&
+        round.eligibleTeamIds.length <= MAX_TEAMS &&
         new Set(round.eligibleTeamIds).size === round.eligibleTeamIds.length &&
         round.eligibleTeamIds.every((id) => teams.has(id) && previousRoster.has(id)),
       'INVALID_FROZEN_ROSTER',
@@ -162,7 +167,10 @@ function validateFunding(data, event, teams, settings) {
       const id = `${round.id}__${teamId}`;
       const sheet = sheets.get(id);
       const amounts = sheet?.amounts ?? {};
-      check(record(amounts) && Object.keys(amounts).length <= 30, 'INVALID_ALLOCATION_AMOUNTS');
+      check(
+        record(amounts) && Object.keys(amounts).length <= MAX_TEAMS,
+        'INVALID_ALLOCATION_AMOUNTS',
+      );
       if (sheet) {
         seenSheets.add(id);
         check(
@@ -290,7 +298,11 @@ function validatePublishedAwards(data, event, teams, settings, entitlements, rou
       integer(awards.publishedAt, awards.publishAfter),
     'AWARDS_REVIEW_PERIOD_MISMATCH',
   );
-  const submissions = indexed(rows(data, 'submissions', 30), 'teamId', 'DUPLICATE_SUBMISSION');
+  const submissions = indexed(
+    rows(data, 'submissions', MAX_TEAMS),
+    'teamId',
+    'DUPLICATE_SUBMISSION',
+  );
   check(
     [...submissions.keys()].every((id) => teams.has(id)),
     'ORPHAN_SUBMISSION',
@@ -505,7 +517,7 @@ export function reconcileSealedExport(data) {
     );
     const settings = event.platform.funding;
     settingsValid(settings);
-    const teams = indexed(rows(data, 'teams', 30), 'id', 'DUPLICATE_TEAM');
+    const teams = indexed(rows(data, 'teams', MAX_TEAMS), 'id', 'DUPLICATE_TEAM');
     check(
       [...teams.values()].every((team) =>
         ['active', 'withdrawn', 'disqualified'].includes(team.eligibility),

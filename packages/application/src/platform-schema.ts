@@ -1,3 +1,4 @@
+import { RULES } from '@robinhacks/core';
 import { z } from 'zod';
 import { JUDGING_SCORE_MAX } from '@robinhacks/core';
 const id = z
@@ -22,9 +23,9 @@ const map = <T extends z.ZodTypeAny>(value: T) =>
     .record(id, value)
     .refine(
       (values) =>
-        Object.keys(values).length <= 30 &&
+        Object.keys(values).length <= RULES.maxTeams &&
         !Object.keys(values).some((key) => ['__proto__', 'constructor', 'prototype'].includes(key)),
-      'Use at most 30 valid projects.',
+      `Use at most ${RULES.maxTeams} valid projects.`,
     );
 const money = z.number().int().min(0).max(100_000_000);
 const deadline = z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable();
@@ -123,7 +124,7 @@ export const platformCommandSchema = z.discriminatedUnion('type', [
     .object({
       type: z.literal('setPitchOrder'),
       commandId,
-      projectIds: z.array(id).max(30),
+      projectIds: z.array(id).max(RULES.maxTeams),
       expectedPhaseVersion: version,
     })
     .strict(),
@@ -268,8 +269,8 @@ export const platformCommandSchema = z.discriminatedUnion('type', [
       type: z.literal('assignJudge'),
       commandId,
       uid: id,
-      projectIds: z.array(id).max(30),
-      conflictIds: z.array(id).max(30),
+      projectIds: z.array(id).max(RULES.maxTeams),
+      conflictIds: z.array(id).max(RULES.maxTeams),
       expectedVersion: version,
     })
     .strict(),

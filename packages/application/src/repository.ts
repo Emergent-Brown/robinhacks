@@ -6,6 +6,8 @@ export interface Transaction {
 }
 export interface Repository {
   transaction<T>(work: (tx: Transaction) => Promise<T>): Promise<T>;
+  /** A consistent, lock-free view. It cannot delay writers and it rejects writes. */
+  read<T>(work: (tx: Transaction) => Promise<T>): Promise<T>;
 }
 export interface Clock {
   now(): number;

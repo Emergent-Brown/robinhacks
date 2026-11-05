@@ -1,4 +1,12 @@
 import { ReadQueue } from '../app/read-queue';
+import {
+  classifyEventChange,
+  followsRoster,
+  missedPhaseChange,
+  REFRESH,
+  ReloadScheduler,
+  withRetry,
+} from '../app/refresh-policy';
 import { initializeApp } from 'firebase/app';
 import {
   getAuth,
@@ -51,6 +59,11 @@ export class FirebaseGateway implements AppGateway {
   private pendingSnapshot: Promise<AppSnapshot> | null = null;
   private generation = 0;
   private messageReads = new ReadQueue();
+  /** The newest event a listener delivered, kept even while a reload is in flight. */
+  private latestEvent: EventConfig | null = null;
+  private loadedAt = 0;
+  private staleWhileHidden = false;
+  private reloads = new ReloadScheduler(() => this.reloadNow());
   constructor(mode: 'firebase' | 'emulator') {
     this.mode = mode;
     const emulator = mode === 'emulator';
@@ -94,10 +107,16 @@ export class FirebaseGateway implements AppGateway {
             ...(user.photoURL ? { photoURL: user.photoURL } : {}),
           }
         : null;
-      if (user)
+      if (user) {
+        let initial = true;
         this.memberStop = onSnapshot(
           doc(this.db, `events/${this.eventId}/members/${user.uid}`),
           () => {
+            // Sign-in already loads a snapshot; only later changes need another.
+            if (initial) {
+              initial = false;
+              return;
+            }
             this.stopMarket();
             this.invalidate();
             this.emit();
@@ -108,15 +127,35 @@ export class FirebaseGateway implements AppGateway {
             this.emit();
           },
         );
+      }
       this.emit();
     });
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') this.stopMarket();
-      else if (this.user) {
-        this.invalidate();
-        this.emit();
+      if (document.visibilityState === 'hidden') {
+        this.stopMarket();
+        // A waiting reload can't run hidden, so remember to do it on return.
+        if (this.reloads.cancel()) this.staleWhileHidden = true;
+      } else if (this.user) {
+        const fresh =
+          !this.staleWhileHidden && !!this.cache && Date.now() - this.loadedAt < REFRESH.freshForMs;
+        this.staleWhileHidden = false;
+        if (fresh) this.watchMarket();
+        else this.reloadNow();
       }
     });
+  }
+  private reloadNow() {
+    this.invalidate();
+    this.emit();
+  }
+  /** Applies a root document change. A phase change waits for a spread-out reload. */
+  private applyEvent(next: EventConfig) {
+    if (!this.cache) return;
+    const change = classifyEventChange(this.cache.event, next);
+    if (change === 'phase') return this.reloads.soon();
+    this.cache = { ...this.cache, event: next };
+    if (change === 'none') return this.emit();
+    if (followsRoster(this.cache)) this.reloads.atMostEvery(REFRESH.rosterGapMs);
   }
   private invalidate() {
     this.cache = null;
@@ -138,31 +177,31 @@ export class FirebaseGateway implements AppGateway {
       onSnapshot(
         doc(this.db, `events/${this.eventId}`),
         (snapshot) => {
-          if (!snapshot.exists() || !this.cache) return;
+          if (!snapshot.exists()) return;
           const next = snapshot.data() as EventConfig;
-          const previous = this.cache.event;
-          if (next.phaseVersion !== previous?.phaseVersion) {
-            this.invalidate();
-          } else this.cache = { ...this.cache, event: next };
-          this.emit();
+          this.latestEvent = next;
+          this.applyEvent(next);
         },
         () => undefined,
       ),
-      ...(!this.cache.member.teamId && this.cache.member.role !== 'organizer'
-        ? []
-        : [
-            onSnapshot(
-              doc(this.db, `events/${this.eventId}/views/market`),
-              (snapshot) => {
-                if (snapshot.exists() && this.cache) {
-                  this.invalidate();
-                  this.emit();
-                }
-              },
-              () => undefined,
-            ),
-          ]),
     ];
+    if (this.cache.member.teamId || this.cache.member.role === 'organizer') {
+      let initial = true;
+      this.marketStops.push(
+        onSnapshot(
+          doc(this.db, `events/${this.eventId}/views/market`),
+          () => {
+            // The first delivery only repeats what the snapshot just returned.
+            if (initial) {
+              initial = false;
+              return;
+            }
+            this.reloads.atMostEvery(REFRESH.teamsGapMs, REFRESH.teamsSpreadMs);
+          },
+          () => undefined,
+        ),
+      );
+    }
     this.marketStops.push(
       onSnapshot(
         doc(this.db, `events/${this.eventId}/messageChannels/general`),
@@ -214,8 +253,7 @@ export class FirebaseGateway implements AppGateway {
               initial = false;
               return;
             }
-            this.invalidate();
-            this.emit();
+            this.reloads.soon();
           },
           () => undefined,
         ),
@@ -303,11 +341,17 @@ export class FirebaseGateway implements AppGateway {
     if (this.cache && !force) return this.cache;
     if (this.pendingSnapshot) return this.pendingSnapshot;
     const generation = this.generation;
-    const request = this.call<AppSnapshot>(this.user ? 'gameSnapshot' : 'gamePublic', {})
+    this.reloads.loading();
+    const request = withRetry('read', () =>
+      this.call<AppSnapshot>(this.user ? 'gameSnapshot' : 'gamePublic', {}),
+    )
       .then((snapshot) => {
         if (generation === this.generation) {
           this.cache = snapshot;
+          this.loadedAt = Date.now();
           this.watchMarket();
+          // Listeners stay quiet during a load, so catch a phase that changed meanwhile.
+          if (missedPhaseChange(snapshot.event, this.latestEvent)) this.reloads.soon();
         }
         return snapshot;
       })
@@ -319,7 +363,10 @@ export class FirebaseGateway implements AppGateway {
   }
   async command(command: Command): Promise<CommandResult> {
     try {
-      const result = await this.call<CommandResult>('gameCommand', { command });
+      const result = await withRetry('command', () =>
+        this.call<CommandResult>('gameCommand', { command }),
+      );
+      if (command.type === 'saveAllocation') this.rememberAllocation(command);
       if (command.type === 'readGeneral' && this.cache?.platform) {
         const general = this.cache.platform.general;
         this.cache = {
@@ -335,9 +382,30 @@ export class FirebaseGateway implements AppGateway {
       }
       return result;
     } finally {
-      if (!['sendGeneralMessage', 'readGeneral'].includes(command.type)) this.invalidate();
+      if (!['sendGeneralMessage', 'readGeneral', 'saveAllocation'].includes(command.type))
+        this.invalidate();
       this.emit();
     }
+  }
+  /** Autosaves update the local copy, because a full reload per keystroke burst adds up. */
+  private rememberAllocation(command: Extract<Command, { type: 'saveAllocation' }>) {
+    const teamId = this.cache?.member?.teamId;
+    if (!this.cache?.platform || !teamId) return;
+    this.cache = {
+      ...this.cache,
+      platform: {
+        ...this.cache.platform,
+        allocation: {
+          id: `${command.roundId}__${teamId}`,
+          roundId: command.roundId,
+          teamId,
+          amounts: command.amounts,
+          version: command.expectedVersion + 1,
+          updatedAt: Date.now(),
+          actorUid: this.user?.uid ?? '',
+        },
+      },
+    };
   }
   async exportEvent(): Promise<Record<string, unknown>> {
     return this.call('gameExport', {});

@@ -1,3 +1,4 @@
+import { RULES } from '@robinhacks/core';
 import { effectiveJudgeAssignments } from '@robinhacks/core';
 import type {
   AwardResults,
@@ -120,7 +121,7 @@ export class CommunityService {
       awards,
     ] = await Promise.all([
       tx.list<ProjectUpdate>(paths.collection('projectUpdates'), 301),
-      tx.list<ProjectSubmission>(paths.collection('submissions'), 31),
+      tx.list<ProjectSubmission>(paths.collection('submissions'), RULES.maxTeams + 1),
       tx.list<Member>(paths.collection('members'), 501),
       competitor ? this.messaging.inbox(tx, paths, member) : Promise.resolve([]),
       this.general.summary(tx, paths, member),
@@ -138,7 +139,8 @@ export class CommunityService {
         : Promise.resolve(null),
       tx.get<AwardResults>(paths.doc('awardResults', 'current')),
     ]);
-    const teams = organizer || judge ? await tx.list<Team>(paths.collection('teams'), 31) : [];
+    const teams =
+      organizer || judge ? await tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1) : [];
     const mode = event.platform!.judgingMode ?? 'all';
     const assignments = effectiveJudgeAssignments(
       mode,

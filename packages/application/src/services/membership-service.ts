@@ -76,7 +76,7 @@ export class MembershipService {
       email: actor.email,
       emailVerified: true,
     });
-    tx.set(paths.root, { ...event, phaseVersion: event.phaseVersion + 1 });
+    tx.set(paths.root, { ...event, rosterVersion: (event.rosterVersion ?? 0) + 1 });
     return {
       message: automatic
         ? 'You’re approved. Choose a team when formation opens.'
@@ -127,7 +127,7 @@ export class MembershipService {
       version: currentMember.version + 1,
     });
     tx.set(paths.doc('accessRequests', command.uid), { ...request, status: 'approved' });
-    tx.set(paths.root, { ...event, phaseVersion: event.phaseVersion + 1 });
+    tx.set(paths.root, { ...event, rosterVersion: (event.rosterVersion ?? 0) + 1 });
     return {
       message: `${request.displayName} approved. They can choose a team when team formation opens.`,
     };

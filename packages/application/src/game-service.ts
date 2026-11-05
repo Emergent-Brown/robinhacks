@@ -1,3 +1,4 @@
+import { RULES } from '@robinhacks/core';
 import { emptyPlatformSnapshot } from '@robinhacks/core';
 import type {
   AccessRequest,
@@ -263,101 +264,126 @@ export class GameService {
       'IDENTITY_MISMATCH',
       'The signed-in identity does not match.',
     );
-    return this.repository.transaction(async (tx) => {
-      let [event, member] = await Promise.all([
-        tx.get<EventConfig>(this.paths.root),
-        tx.get<Member>(this.paths.member(uid)),
-      ]);
-      if (event) {
-        requireState(
-          !event.maintenance,
-          'MAINTENANCE',
-          'Event setup is in progress. Please try again shortly.',
-        );
-        requireState(
-          event.rulesVersion === 2 && event.platform?.version === 2,
-          'RULES_MISMATCH',
-          'This event needs the current funding-round format.',
-        );
-        if (identity) {
-          member = await this.organizers.claim(
-            tx,
-            this.paths,
-            event,
-            member,
-            identity,
-            this.clock.now(),
-          );
-          event = (await tx.get<EventConfig>(this.paths.root))!;
-        }
-      }
-      const snapshot = emptySnapshot(event, member);
-      if (event?.platform) snapshot.platform = emptyPlatformSnapshot();
+    // Almost every snapshot only reads. The rare identity update gets its own short
+    // transaction instead of making every reader take locks.
+    const view = await this.repository.read((tx) => this.composeSnapshot(tx, uid, identity));
+    if (view) return view;
+    await this.repository.transaction((tx) => this.syncIdentity(tx, uid, identity!));
+    return (await this.repository.read((tx) => this.composeSnapshot(tx, uid)))!;
+  }
+
+  private async syncIdentity(tx: Transaction, uid: string, identity: Actor) {
+    const event = await tx.get<EventConfig>(this.paths.root);
+    if (!event) return;
+    const stored = await tx.get<Member>(this.paths.member(uid));
+    const member = await this.organizers.claim(
+      tx,
+      this.paths,
+      event,
+      stored,
+      identity,
+      this.clock.now(),
+    );
+    if (member && this.identityChanged(member, identity))
+      tx.set(this.paths.member(uid), {
+        ...member,
+        email: identity.email,
+        emailVerified: identity.emailVerified === true,
+      });
+  }
+
+  private identityChanged(member: Member, identity: Actor) {
+    return (
+      !!identity.email &&
+      (member.email !== identity.email || member.emailVerified !== identity.emailVerified)
+    );
+  }
+
+  /** Returns null when the identity must be synced first; never writes. */
+  private async composeSnapshot(
+    tx: Transaction,
+    uid: string,
+    identity?: Actor,
+  ): Promise<AppSnapshot | null> {
+    const [event, member] = await Promise.all([
+      tx.get<EventConfig>(this.paths.root),
+      tx.get<Member>(this.paths.member(uid)),
+    ]);
+    if (event) {
+      requireState(
+        !event.maintenance,
+        'MAINTENANCE',
+        'Event setup is in progress. Please try again shortly.',
+      );
+      requireState(
+        event.rulesVersion === 2 && event.platform?.version === 2,
+        'RULES_MISMATCH',
+        'This event needs the current funding-round format.',
+      );
       if (
-        member &&
-        identity?.email &&
-        (member.email !== identity.email || member.emailVerified !== identity.emailVerified)
-      ) {
-        member.email = identity.email;
-        member.emailVerified = identity.emailVerified === true;
-        tx.set(this.paths.member(uid), member);
-      }
-      if (!event || !member || member.status !== 'approved') {
-        if (event) {
-          const request = await tx.get<AccessRequest>(this.paths.doc('accessRequests', uid));
-          if (request) snapshot.requests = [request];
-        }
-        return snapshot;
-      }
-      if (member.teamId === null && !['organizer', 'judge'].includes(member.role)) {
-        snapshot.formationTeams = await this.formation.directory(tx, this.paths);
-        snapshot.platform!.general = await this.community.generalSummary(tx, this.paths, member);
-        return snapshot;
-      }
-      if (['organizer', 'judge'].includes(member.role))
-        requireState(
-          member.teamId === null,
-          'STAFF_CANNOT_COMPETE',
-          'Judges and organizers must use separate staff identities.',
-        );
-      const now = this.clock.now();
-      const context = { tx, paths: this.paths, event, member, now };
-      const teams = await tx.list<Team>(this.paths.collection('teams'), 31);
-      snapshot.market = {
-        entries: teams.map((team) => ({ team })),
-        asOf: now,
-        phaseVersion: event.phaseVersion,
-      };
-      snapshot.platform = {
-        ...emptyPlatformSnapshot(),
-        ...(await this.funding.snapshot(context)),
-        ...(await this.community.snapshot(context)),
-      };
-      const members = await tx.list<Member>(this.paths.collection('members'), 501);
-      if (member.role === 'organizer') {
-        snapshot.members = members;
-        snapshot.organizerInvites = (
-          await tx.list<OrganizerInvite>(this.paths.collection('organizerInvites'), 501)
-        )
-          .map(({ email, createdAt }) => ({ email, createdAt }))
-          .sort((a, b) => a.email.localeCompare(b.email));
-        snapshot.requests = (
-          await tx.list<AccessRequest>(this.paths.collection('accessRequests'), 501)
-        ).filter((request) => request.status === 'pending');
-        snapshot.audit = (await tx.list<AuditEntry>(this.paths.collection('adminAudit'), 1000))
-          .sort((a, b) => b.createdAt - a.createdAt)
-          .slice(0, 100);
-      } else {
-        snapshot.members = members
-          .filter((entry) => entry.teamId && entry.teamId === member.teamId)
-          .map(({ email, emailVerified, ...safe }) => safe);
+        identity &&
+        ((await this.organizers.claimPending(tx, this.paths, member, identity)) ||
+          (member && this.identityChanged(member, identity)))
+      )
+        return null;
+    }
+    const snapshot = emptySnapshot(event, member);
+    if (event?.platform) snapshot.platform = emptyPlatformSnapshot();
+    if (!event || !member || member.status !== 'approved') {
+      if (event) {
+        const request = await tx.get<AccessRequest>(this.paths.doc('accessRequests', uid));
+        if (request) snapshot.requests = [request];
       }
       return snapshot;
-    });
+    }
+    if (member.teamId === null && !['organizer', 'judge'].includes(member.role)) {
+      snapshot.formationTeams = await this.formation.directory(tx, this.paths);
+      snapshot.platform!.general = await this.community.generalSummary(tx, this.paths, member);
+      return snapshot;
+    }
+    if (['organizer', 'judge'].includes(member.role))
+      requireState(
+        member.teamId === null,
+        'STAFF_CANNOT_COMPETE',
+        'Judges and organizers must use separate staff identities.',
+      );
+    const now = this.clock.now();
+    const context = { tx, paths: this.paths, event, member, now };
+    const teams = await tx.list<Team>(this.paths.collection('teams'), RULES.maxTeams + 1);
+    snapshot.market = {
+      entries: teams.map((team) => ({ team })),
+      asOf: now,
+      phaseVersion: event.phaseVersion,
+    };
+    snapshot.platform = {
+      ...emptyPlatformSnapshot(),
+      ...(await this.funding.snapshot(context)),
+      ...(await this.community.snapshot(context)),
+    };
+    const members = await tx.list<Member>(this.paths.collection('members'), 501);
+    if (member.role === 'organizer') {
+      snapshot.members = members;
+      snapshot.organizerInvites = (
+        await tx.list<OrganizerInvite>(this.paths.collection('organizerInvites'), 501)
+      )
+        .map(({ email, createdAt }) => ({ email, createdAt }))
+        .sort((a, b) => a.email.localeCompare(b.email));
+      snapshot.requests = (
+        await tx.list<AccessRequest>(this.paths.collection('accessRequests'), 501)
+      ).filter((request) => request.status === 'pending');
+      snapshot.audit = (await tx.list<AuditEntry>(this.paths.collection('adminAudit'), 1000))
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, 100);
+    } else {
+      snapshot.members = members
+        .filter((entry) => entry.teamId && entry.teamId === member.teamId)
+        .map(({ email, emailVerified, ...safe }) => safe);
+    }
+    return snapshot;
   }
 
   async publicSnapshot(): Promise<AppSnapshot> {
-    return this.repository.transaction(async (tx) => {
+    return this.repository.read(async (tx) => {
       const event = await tx.get<EventConfig>(this.paths.root);
       const snapshot = emptySnapshot(
         event ? { ...event, tieSeed: '', activeOperationId: null } : null,
@@ -382,7 +408,7 @@ export class GameService {
       'INVALID_CURSOR',
       'Refresh the conversation before loading more messages.',
     );
-    return this.repository.transaction(async (tx) => {
+    return this.repository.read(async (tx) => {
       const [member, event] = await Promise.all([
         tx.get<Member>(this.paths.member(uid)),
         tx.get<EventConfig>(this.paths.root),
@@ -399,7 +425,7 @@ export class GameService {
 
   async conversationDirectory(uid: string) {
     identifier.parse(uid);
-    return this.repository.transaction(async (tx) => {
+    return this.repository.read(async (tx) => {
       const [member, event] = await Promise.all([
         tx.get<Member>(this.paths.member(uid)),
         tx.get<EventConfig>(this.paths.root),
@@ -636,7 +662,7 @@ export class GameService {
   private async refreshProjection(tx: Transaction, now: number) {
     const event = await tx.get<EventConfig>(this.paths.root);
     requireState(event, 'EVENT_NOT_FOUND', 'This event does not exist.');
-    const teams = await tx.list<Team>(this.paths.collection('teams'), 31);
+    const teams = await tx.list<Team>(this.paths.collection('teams'), RULES.maxTeams + 1);
     tx.set(this.paths.doc('views', 'market'), {
       entries: teams.map((team) => ({ team })),
       asOf: now,

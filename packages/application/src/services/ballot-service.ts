@@ -1,3 +1,4 @@
+import { RULES } from '@robinhacks/core';
 import type {
   CommunityBallot,
   CommunityCommand,
@@ -58,8 +59,8 @@ export class BallotService {
     );
     Guard.deadline(config.ballotOpen, config.ballotClosesAt, now, 'Community ballots');
     const [teams, submissions, prior] = await Promise.all([
-      tx.list<Team>(paths.collection('teams'), 31),
-      tx.list<ProjectSubmission>(paths.collection('submissions'), 31),
+      tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1),
+      tx.list<ProjectSubmission>(paths.collection('submissions'), RULES.maxTeams + 1),
       tx.get<CommunityBallot>(paths.doc('communityBallots', team.id)),
     ]);
     requireState(

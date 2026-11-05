@@ -79,7 +79,7 @@ export class TeamFormationService {
       requireState(
         teams.length < RULES.maxTeams,
         'TEAM_LIMIT',
-        'This event is limited to 30 teams.',
+        `This event is limited to ${RULES.maxTeams} teams.`,
       );
       requireState(
         !teams.some((entry) => normalizedName(entry.name) === normalizedName(command.name)),
@@ -138,8 +138,9 @@ export class TeamFormationService {
     tx.set(paths.team(team.id), team);
     tx.set(paths.member(member.uid), joined);
     tx.set(`${paths.team(team.id)}/members/${member.uid}`, joined);
-    // Every approval, join and organizer close touches this document, serializing races.
-    tx.set(paths.root, { ...event, phaseVersion: event.phaseVersion + 1 });
+    // Every approval, join and organizer close writes this document, serializing races.
+    // rosterVersion keeps that protection without telling every open client to reload.
+    tx.set(paths.root, { ...event, rosterVersion: (event.rosterVersion ?? 0) + 1 });
     return { message: `You joined ${team.name}.` };
   }
 

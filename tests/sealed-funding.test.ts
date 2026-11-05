@@ -48,6 +48,24 @@ function close(sheets: RoundAllocation[], number = 1, teams = ids) {
 }
 
 describe('sealed funding economics', () => {
+  it('closes a round across the full 40-team limit', () => {
+    const teams = Array.from({ length: 40 }, (_, index) => `team-${index}`);
+    const sheets = teams.map((teamId, index) =>
+      sheet(
+        teamId,
+        SealedFunding.validateAllocation(
+          teamId,
+          { [teams[(index + 1) % 40]!]: 60, [teams[(index + 2) % 40]!]: 40 },
+          teams,
+          settings,
+        ),
+      ),
+    );
+    const closed = close(sheets, 1, teams);
+    expect(closed.entitlements).toHaveLength(40);
+    expect(Object.values(closed.round.totals).reduce((sum, value) => sum + value, 0)).toBe(4000);
+  });
+
   it('uses the floor denominator for an uncrowded project and leaves its unused reserve intact', () => {
     const result = close([sheet('a', { b: 10 })]);
     expect(result.entitlements.find((entry) => entry.teamId === 'a')?.projects).toEqual([

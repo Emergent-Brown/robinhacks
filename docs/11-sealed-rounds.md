@@ -14,7 +14,7 @@ The platform rewards discovery without requiring continuous trading. It cannot p
 
 | Rule | Default |
 | --- | --- |
-| Event size | 2–30 active teams; up to 150 approved competing participants |
+| Event size | 2–40 active teams; up to 150 approved competing participants |
 | Account | One shared allocation account per team |
 | Authorized writer | Captain or one designated trader/investor |
 | Rounds | Initial pitch, working prototype, final demo |
@@ -136,7 +136,7 @@ The default rubric uses whole-number criterion scores from 0 to 5:
 | Originality | 20% |
 | Technical execution | 15% |
 
-The rubric is editable before the first funding round and then locks. Up to 50 judge assignment records are supported, each covering at most 30 projects. Notes are limited to 1,500 characters per project. Drafts may be incomplete and are persisted with optimistic versions. Final submission requires every assigned eligible project to be fully scored or marked conflicted with a reason. Submitted sheets and their assignments lock; an organizer cannot quietly rewrite a submitted score.
+The rubric is editable before the first funding round and then locks. Up to 50 judge assignment records are supported, each covering at most 40 projects. Notes are limited to 1,500 characters per project. Drafts may be incomplete and are persisted with optimistic versions. Final submission requires every assigned eligible project to be fully scored or marked conflicted with a reason. Submitted sheets and their assignments lock; an organizer cannot quietly rewrite a submitted score.
 
 Every active, finally submitted project must have at least one non-conflicted submitted judge score. All judges assigned eligible non-conflicted projects must submit before award preparation. Each project's result averages its weighted judge scores. Funding is not part of that formula.
 

@@ -1,3 +1,4 @@
+import { RULES } from '@robinhacks/core';
 import {
   effectiveJudgeAssignments,
   isJudgingScore,
@@ -81,8 +82,8 @@ export class JudgingService {
       tx.list<JudgingSheet>(paths.collection('judgingSheets'), 51),
       tx.list<JudgeAssignment>(paths.collection('judgeAssignments'), 51),
       tx.list<Member>(paths.collection('members'), 501),
-      tx.list<Team>(paths.collection('teams'), 31),
-      tx.list<ProjectSubmission>(paths.collection('submissions'), 31),
+      tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1),
+      tx.list<ProjectSubmission>(paths.collection('submissions'), RULES.maxTeams + 1),
     ]);
     requireState(
       sheets.every((s) => s.submittedAt === null),
@@ -116,7 +117,10 @@ export class JudgingService {
   ) {
     const config = Guard.organizer(context, command.expectedPhaseVersion);
     Guard.writable(context);
-    const teams = await context.tx.list<Team>(context.paths.collection('teams'), 31);
+    const teams = await context.tx.list<Team>(
+      context.paths.collection('teams'),
+      RULES.maxTeams + 1,
+    );
     requireState(
       new Set(command.projectIds).size === command.projectIds.length &&
         command.projectIds.every((id) => teams.some((t) => t.id === id)),
@@ -148,8 +152,8 @@ export class JudgingService {
       'Refresh the judging review before submitting.',
     );
     const [teams, submissions, members, assignments, sheets] = await Promise.all([
-      tx.list<Team>(paths.collection('teams'), 31),
-      tx.list<ProjectSubmission>(paths.collection('submissions'), 31),
+      tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1),
+      tx.list<ProjectSubmission>(paths.collection('submissions'), RULES.maxTeams + 1),
       tx.list<Member>(paths.collection('members'), 501),
       tx.list<JudgeAssignment>(paths.collection('judgeAssignments'), 51),
       tx.list<JudgingSheet>(paths.collection('judgingSheets'), 51),
@@ -207,9 +211,9 @@ export class JudgingService {
       tx.get<Member>(paths.member(command.uid)),
       tx.get<JudgeAssignment>(paths.doc('judgeAssignments', command.uid)),
       tx.get<JudgingSheet>(paths.doc('judgingSheets', command.uid)),
-      tx.list<Team>(paths.collection('teams'), 31),
+      tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1),
       tx.list<JudgeAssignment>(paths.collection('judgeAssignments'), 51),
-      tx.list<ProjectSubmission>(paths.collection('submissions'), 31),
+      tx.list<ProjectSubmission>(paths.collection('submissions'), RULES.maxTeams + 1),
     ]);
     requireState(
       judge?.status === 'approved' && judge.role === 'judge' && judge.teamId === null,
@@ -291,8 +295,8 @@ export class JudgingService {
     const [storedAssignment, prior, submissions, teams, sheets, members] = await Promise.all([
       tx.get<JudgeAssignment>(paths.doc('judgeAssignments', member.uid)),
       tx.get<JudgingSheet>(paths.doc('judgingSheets', member.uid)),
-      tx.list<ProjectSubmission>(paths.collection('submissions'), 31),
-      tx.list<Team>(paths.collection('teams'), 31),
+      tx.list<ProjectSubmission>(paths.collection('submissions'), RULES.maxTeams + 1),
+      tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1),
       tx.list<JudgingSheet>(paths.collection('judgingSheets'), 51),
       allProjects ? tx.list<Member>(paths.collection('members'), 501) : Promise.resolve([]),
     ]);
@@ -456,9 +460,9 @@ export class JudgingService {
     await this.assertFundingFinished(context);
     const [teams, members, submissions, assignments, sheets, entitlements, current, archived] =
       await Promise.all([
-        tx.list<Team>(paths.collection('teams'), 31),
+        tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1),
         tx.list<Member>(paths.collection('members'), 501),
-        tx.list<ProjectSubmission>(paths.collection('submissions'), 31),
+        tx.list<ProjectSubmission>(paths.collection('submissions'), RULES.maxTeams + 1),
         tx.list<JudgeAssignment>(paths.collection('judgeAssignments'), 51),
         tx.list<JudgingSheet>(paths.collection('judgingSheets'), 51),
         tx.list<RoundEntitlement>(paths.collection('roundEntitlements'), 91),
@@ -674,8 +678,8 @@ export class JudgingService {
     requireState(!event.paused, 'EVENT_PAUSED', 'Resume the event before publishing results.');
     const [awards, teams, submissions] = await Promise.all([
       tx.get<AwardResults>(paths.doc('awardResults', 'current')),
-      tx.list<Team>(paths.collection('teams'), 31),
-      tx.list<ProjectSubmission>(paths.collection('submissions'), 31),
+      tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1),
+      tx.list<ProjectSubmission>(paths.collection('submissions'), RULES.maxTeams + 1),
     ]);
     requireState(
       event.phase === 'FINALIZING' && awards && awards.publishedAt === null,

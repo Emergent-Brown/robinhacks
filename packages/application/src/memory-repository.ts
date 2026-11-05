@@ -14,7 +14,16 @@ export class MemoryRepository implements Repository {
   ) {
     this.documents = structuredClone(persistence?.load() ?? initial);
   }
-  async transaction<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
+  transaction<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
+    return this.unitOfWork(work, true);
+  }
+  read<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
+    return this.unitOfWork(work, false);
+  }
+  private async unitOfWork<T>(
+    work: (tx: Transaction) => Promise<T>,
+    writable: boolean,
+  ): Promise<T> {
     const run = async () => {
       const execute = async () => {
         const draft = structuredClone(this.persistence?.load() ?? this.documents);
@@ -28,13 +37,16 @@ export class MemoryRepository implements Repository {
               .slice(0, limit)
               .map(([, value]) => structuredClone(value as V)),
           set: <V>(path: string, value: V) => {
+            if (!writable) throw new Error('This read-only view cannot write.');
             draft[path] = structuredClone(value);
           },
           delete: (path: string) => {
+            if (!writable) throw new Error('This read-only view cannot write.');
             delete draft[path];
           },
         };
         const result = await work(tx);
+        if (!writable) return result;
         this.persistence?.save(draft);
         this.documents = draft;
         return result;
