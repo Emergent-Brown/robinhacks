@@ -39,7 +39,7 @@ Teams edit a shared allocation sheet. Valid sheets autosave; the interface disti
 
 Only that team's approved members can see its pending allocation. Other teams, judges and organizers receive no current-round totals, investor counts or ownership estimates derived from pending entries. There is no reward for submitting first.
 
-The server rejects saves at or after the closing timestamp. At the deadline, an organizer closes the round in a single bounded transaction. Closing freezes the sheets, publishes project totals and creates each team's awarded entitlement. Missing sheets are treated as zero allocation. Closing cannot happen early, and a completed round cannot reopen.
+The server accepts saves while the round is open and the event is not paused. An organizer closes the round in a single bounded transaction. Closing freezes the sheets, records the actual close time, publishes project totals and creates each team's awarded entitlement. Missing sheets are treated as zero allocation. Organizers may close an open round at any time; a completed round cannot reopen.
 
 For investor team `i`, project `j` and round `r`:
 
@@ -70,7 +70,7 @@ All production prize amounts default to zero. A displayed entitlement is conditi
 | Stage | Organizer action | Participant behavior |
 | --- | --- | --- |
 | Registration | Confirm settings; approve attendees; open team selection; invite organizers and assign judges. | Sign in with Google, request approval, then create or join a team and choose a role when selection opens. Complete a profile and initial checkpoint. |
-| Initial pitch round | Open round one; rules and rosters lock. Close at its deadline. | Allocate a fresh budget privately; completed entitlements become visible afterward. |
+| Initial pitch round | Open round one; rules and rosters lock. Close manually when ready. | Allocate a fresh budget privately; completed entitlements become visible afterward. |
 | Build checkpoint | Keep funding closed; publish announcements and schedule discovery. | Build, visit demos, message teams and archive a prototype update. |
 | Prototype round | Open and close round two. | Make a new allocation; prior investments remain unchanged. |
 | Final evidence | Open a submission window before round three. | Submit the profile, demo and full code commit; publish the final checkpoint. |
@@ -82,11 +82,11 @@ All production prize amounts default to zero. A displayed entitlement is conditi
 
 Storage phase names are retained for compatibility: `REGISTRATION` before funding, `SEED_OPEN` for any live sealed round, `INTERMISSION` between rounds, `FROZEN` for judging, `FINALIZING` for award review, and `FINALIZED` for published results. `CANCELLED` and `ARCHIVED` are terminal historical states. The current interface uses participant-facing labels rather than presenting legacy phase terminology as a trading product.
 
-Funding windows can be configured from one minute to 24 hours. Deadlines depend on the server clock, not the participant's device clock. Opening is manual; the app does not create background schedules or send unsolicited emails.
+Funding windows open and close manually. Suggested schedule times are organizer guidance only: no clock starts a round or stops allocations. The app does not create background schedules or send unsolicited emails.
 
 ### Pauses, failures and cancellation
 
-A pause blocks allocations and other paused event changes. Resuming extends deadlines that still had time remaining when the pause began by the same elapsed pause duration for everyone. A deadline already elapsed before the pause is not revived. Saved allocations stay intact. Ordinary conversations remain available during building and paused periods.
+A pause blocks allocations and other paused event changes. Resuming restores the same open windows without a timer. Saved allocations stay intact. Ordinary conversations remain available during building and paused periods.
 
 After totals are revealed, submissions cannot reopen. For a serious event-wide incident, an organizer can void an entire completed round with an attributable reason. Entitlements are marked void, their original data stays recorded, and that round's reserve remains unallocated. A void is not an extra round or an opportunity to replay a revealed result.
 
@@ -105,7 +105,7 @@ Checkpoint updates are separate append-only records:
 
 Updates are tagged with the target round, server timestamp and author. They must be published before that round opens. Every active team needs the matching checkpoint to open a round. Fields are short, bounded to 600 characters; a team can archive up to ten updates, with a 300-update event bound.
 
-Final submission is an explicit action, distinct from saving a profile. It captures the profile, demo/repository links, technology note, full 40- or 64-character Git commit identifier, submitted roster, submitter and server timestamp. A mutable repository URL alone is insufficient. Captains/designated investors submit during the organizer's deadline window, before the final funding round. The stored snapshot is immutable even if the remote repository later changes; the app does not fetch repositories or videos inside its database transactions. It records submitted references rather than guaranteeing a remote artifact's permanent availability.
+Final submission is an explicit action, distinct from saving a profile. It captures the profile, demo/repository links, technology note, full 40- or 64-character Git commit identifier, submitted roster, submitter and server timestamp. A mutable repository URL alone is insufficient. Team members submit while the organizer has submissions open, before the final funding round. The stored snapshot is immutable even if the remote repository later changes; the app does not fetch repositories or videos inside its database transactions. It records submitted references rather than guaranteeing a remote artifact's permanent availability.
 
 Inactive projects are excluded from new funding rounds. A withdrawn/disqualified project cannot return after the roster lock. Non-submitting active projects must be resolved before the last round can open; they cannot silently proceed to judging as valid submissions.
 
@@ -177,14 +177,14 @@ The local demo and Firebase Functions call the same `GameService`. Its transacti
 | `packages/core/src/platform.ts` | Version-two contracts and safe unconfigured defaults |
 | `packages/core/src/sealed-funding.ts` | Allocation validation, bounded round close, exact entitlements and payout arithmetic |
 | `packages/application/src/platform-schema.ts` | Strict command shapes, bounded strings/maps and identifiers |
-| `FundingService` | Rules configuration, private sheets, funding deadlines, close and whole-round void |
+| `FundingService` | Rules configuration, private sheets, manual funding windows, close and whole-round void |
 | `CommunityService` | Evidence/social/judging command facade and role-scoped snapshot composition |
 | `ProjectService` | Append-only checkpoints and immutable final submissions |
 | `MessagingService` | Team conversation authorization, team rate limit, inboxes, blocks and reports |
 | `GeneralChatService` | Approved-member event chat, bounded history pages and individual read cursors |
 | `ChatReviewService` | Organizer-only conversation directory, read-only review and attributed moderation |
 | `JudgingService` | Assignments, conflicts, drafts, score locks, award preparation/review/publication |
-| `BallotService` | Private team ballot versions and deadlines |
+| `BallotService` | Private team ballot versions and manual windows |
 | `MembershipService` / permission classes | Verified signup, independent approval, roles, roster lock and project permissions |
 | `TeamFormationService` | Organizer-controlled team selection with atomic membership and role availability |
 | `OrganizerAccessService` | Verified organizer email invitations and protected access removal |
@@ -198,10 +198,10 @@ All event data lives under `events/{eventId}`:
 
 | Collection/document | Contents |
 | --- | --- |
-| Event root | Metadata, current phase, server deadlines, version-two settings and first-round rule lock |
+| Event root | Metadata, current phase, manual window state, version-two settings and first-round rule lock |
 | `members`, `accessRequests`, `teams` | Verified identities/roles, approval queue and project profiles |
 | `organizerInvites` | Normalized Google emails explicitly allowed organizer access |
-| `fundingRounds` | One record per round; frozen eligible team IDs, deadline, weight, denominator and revealed totals |
+| `fundingRounds` | One record per round; frozen eligible team IDs, actual open/close times, weight, denominator and revealed totals |
 | `roundAllocations` | Latest version of one team's sealed amount sheet per round |
 | `roundEntitlements` | Immutable per-team round allocation facts; void status is recorded explicitly |
 | `projectUpdates` | Append-only checkpoint evidence and author timestamps |

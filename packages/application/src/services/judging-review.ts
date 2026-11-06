@@ -1,4 +1,4 @@
-import { effectiveJudgeAssignments, isJudgingScore, type JudgingMode } from '@robinhacks/core';
+import { effectiveJudgeAssignments, isJudgingScore } from '@robinhacks/core';
 import type {
   FundingSettings,
   JudgeAssignment,
@@ -16,12 +16,11 @@ export function judgingReview(
   assignments: JudgeAssignment[],
   sheets: JudgingSheet[],
   funding: FundingSettings,
-  mode: JudgingMode = 'assigned',
 ) {
   const eligible = teams.filter(
     (t) => t.eligibility === 'active' && submissions.some((s) => s.teamId === t.id),
   );
-  const active = effectiveJudgeAssignments(mode, members, teams, submissions, assignments);
+  const active = effectiveJudgeAssignments(members, teams, submissions, assignments);
   const required = active.filter((a) =>
     a.projectIds.some((id) => eligible.some((t) => t.id === id) && !a.conflictIds.includes(id)),
   );
@@ -66,7 +65,6 @@ export function judgingReview(
     });
   // Versions make a decision stale after any corrected score, assignment or submission.
   const evidenceKey = JSON.stringify({
-    ...(mode === 'all' ? { judgingMode: mode } : {}),
     teams: eligible.map((t) => [t.id, t.version]).sort(),
     submissions: submissions.map((s) => [s.teamId, s.submittedAt]).sort(),
     assignments: active.map((a) => [a.uid, a.version]).sort(),

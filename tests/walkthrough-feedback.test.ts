@@ -131,7 +131,7 @@ describe('walkthrough feedback regression and load', () => {
     });
     await h.run(PLATFORM_USERS.organizer, {
       type: 'openFundingRound',
-      durationMinutes: 30,
+
       expectedPhaseVersion: h.event().phaseVersion,
     });
     await expect(

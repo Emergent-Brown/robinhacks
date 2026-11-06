@@ -258,7 +258,7 @@ describe('approval before organizer-controlled team formation', () => {
     await expect(
       h.execute(organizer, {
         type: 'openFundingRound',
-        durationMinutes: 30,
+
         expectedPhaseVersion: h.event().phaseVersion,
       }),
     ).rejects.toMatchObject({ code: 'FORMATION_OPEN' });
@@ -275,7 +275,7 @@ describe('approval before organizer-controlled team formation', () => {
     await expect(
       h.execute(organizer, {
         type: 'openFundingRound',
-        durationMinutes: 30,
+
         expectedPhaseVersion: h.event().phaseVersion,
       }),
     ).rejects.toMatchObject({ code: 'TEAM_NOT_APPROVED' });
@@ -422,12 +422,14 @@ describe('organizer invitations and access removal', () => {
     expect(h.event().rosterVersion).toBe(3);
   });
 
-  it('rejects staff-team conflicts and organizer self-removal', async () => {
+  it('moves invited team members to staff and rejects organizer self-removal', async () => {
     const h = fixture();
     const captain = h.repository.dump()[`${root}/members/${PLATFORM_USERS.captain.uid}`] as Member;
-    await expect(
-      h.execute(organizer, { type: 'addOrganizerEmail', email: captain.email }),
-    ).rejects.toMatchObject({ code: 'STAFF_CANNOT_COMPETE' });
+    await h.execute(organizer, { type: 'addOrganizerEmail', email: captain.email });
+    expect((await h.service.snapshot(captain.uid)).member).toMatchObject({
+      role: 'organizer',
+      teamId: null,
+    });
     await expect(
       h.execute(organizer, { type: 'removeMember', uid: organizer.uid }),
     ).rejects.toMatchObject({ code: 'SELF_REMOVAL' });
@@ -556,7 +558,7 @@ describe('organizer recovery of vacant team roles', () => {
         await h.patch(`${root}/members/${replacement.uid}`, { role: 'trader' }); // Historical record; new requests cannot assign this role.
       await h.execute(organizer, {
         type: 'openFundingRound',
-        durationMinutes: 30,
+
         expectedPhaseVersion: h.event().phaseVersion,
       });
       await h.execute(organizer, {
@@ -617,7 +619,7 @@ describe('organizer recovery of vacant team roles', () => {
         );
       await h.execute(organizer, {
         type: 'openFundingRound',
-        durationMinutes: 30,
+
         expectedPhaseVersion: h.event().phaseVersion,
       });
       expect(h.event().platform?.currentRound).toBe(2);

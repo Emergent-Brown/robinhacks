@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { EventSchedule } from '@robinhacks/core';
 import { Dialog, ExternalLink } from '../ui/primitives';
 import { JudgingRubric } from './JudgingRubric';
 import { config, navigate, Panel, type PageProps } from './shared';
@@ -93,7 +92,7 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
             </li>
             <li>
               <strong>Invest in three rounds.</strong> Allocate a fresh credit budget privately
-              before each deadline.
+              while each round is open. Organizers announce when rounds start and end.
             </li>
             <li>
               <strong>Finish and submit.</strong> Judges evaluate the work independently of funding.{' '}
@@ -140,7 +139,7 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
       <section aria-labelledby="home-schedule-title">
         <Panel>
           <div className="p-section-heading">
-            <h2 id="home-schedule-title">Schedule</h2>
+            <h2 id="home-schedule-title">Event outline</h2>
             <span className="muted">
               {details.timeZone === 'America/New_York'
                 ? 'Eastern time'
@@ -150,17 +149,14 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
           {details.schedule.length ? (
             <ol className="p-schedule">
               {details.schedule
-                .filter((item) => item.window !== 'ballot')
+                .filter((item) => !item.window && !/funding|investment/i.test(item.title))
                 .map((item, index) => {
-                  const planned = EventSchedule.resolve(details.timing, item.window);
                   return (
                     <li
                       key={index}
                       className={item.window?.startsWith('round') ? 'p-schedule-round' : undefined}
                     >
-                      <time>
-                        {planned ? EventSchedule.label(planned, details.timeZone) : item.time}
-                      </time>
+                      <time>{item.time}</time>
                       <div>
                         <strong>{item.title}</strong>
                         {item.description && <p>{item.description}</p>}
@@ -172,7 +168,9 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
           ) : (
             <p>The organizer will publish the schedule here.</p>
           )}
-          <p className="muted">Schedule subject to change.</p>
+          <p className="muted">
+            Tentative agenda. Organizers announce funding rounds during the event.
+          </p>
         </Panel>
       </section>
       <section className="p-home-sponsors" aria-labelledby="home-sponsors-title">

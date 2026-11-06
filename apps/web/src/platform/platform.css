@@ -181,6 +181,14 @@
 .p-page-heading p {
   margin: 4px 0 0;
 }
+.p-page-heading > .p-actions,
+.p-section-heading > .p-actions {
+  margin-top: 0;
+}
+.p-page-heading > div,
+.p-section-heading > div {
+  min-width: 0;
+}
 .p-kicker {
   color: #49667e;
   font-size: 12px;
@@ -248,6 +256,7 @@
   gap: 0 20px;
 }
 .platform-app .field {
+  min-width: 0;
   gap: 7px;
   margin-bottom: 18px;
 }

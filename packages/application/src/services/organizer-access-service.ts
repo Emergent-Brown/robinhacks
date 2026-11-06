@@ -22,11 +22,13 @@ export class OrganizerAccessService {
     context: CommandContext,
     command: Extract<
       Command,
-      { type: 'addOrganizerEmail' | 'removeOrganizerEmail' | 'removeMember' }
+      { type: 'addOrganizerEmail' | 'addOrganizerEmails' | 'removeOrganizerEmail' | 'removeMember' }
     >,
   ) {
     const { tx, paths, event, member, now } = context;
     Permissions.organizer(member);
+    if (command.type === 'addOrganizerEmail' || command.type === 'addOrganizerEmails')
+      return this.grant(context, command);
     requireState(
       ['DRAFT', 'REGISTRATION'].includes(event.phase) || event.paused,
       'ROSTER_LOCKED',
@@ -38,37 +40,6 @@ export class OrganizerAccessService {
       'MEMBER_LIMIT',
       'The event has too many membership records.',
     );
-    if (command.type === 'addOrganizerEmail') {
-      const email = normalizeOrganizerEmail(command.email);
-      const matching = members.filter(
-        (entry) => entry.email && normalizeOrganizerEmail(entry.email) === email,
-      );
-      requireState(
-        matching.every((entry) => entry.teamId === null),
-        'STAFF_CANNOT_COMPETE',
-        'Remove this account’s competing membership before inviting it as an organizer.',
-      );
-      requireState(
-        matching.every((entry) => entry.status !== 'suspended'),
-        'MEMBERSHIP_SUSPENDED',
-        'Remove the suspended membership before inviting this account again.',
-      );
-      const path = organizerInvitePath(paths, email);
-      const [prior, invites] = await Promise.all([
-        tx.get<OrganizerInvite>(path),
-        tx.list<OrganizerInvite>(paths.collection('organizerInvites'), 501),
-      ]);
-      requireState(
-        prior || invites.length < 500,
-        'INVITE_LIMIT',
-        'This event has too many organizer invitations.',
-      );
-      if (!prior) tx.set(path, { email, createdAt: now } satisfies OrganizerInvite);
-      tx.set(paths.root, { ...event, phaseVersion: event.phaseVersion + 1 });
-      return {
-        message: `Organizer access invited for ${email}. They can sign in with Google to claim it.`,
-      };
-    }
     if (command.type === 'removeOrganizerEmail') {
       const email = normalizeOrganizerEmail(command.email);
       const matching = members.filter(
@@ -107,6 +78,70 @@ export class OrganizerAccessService {
     return { message: 'Event access removed. Project and submitted records were preserved.' };
   }
 
+  /** One atomic batch: promote verified members now; absent accounts claim by verified email. */
+  private async grant(
+    { tx, paths, event, member, now }: CommandContext,
+    command: Extract<Command, { type: 'addOrganizerEmail' | 'addOrganizerEmails' }>,
+  ) {
+    const emails = [
+      ...new Set(
+        (command.type === 'addOrganizerEmail' ? [command.email] : command.emails).map(
+          normalizeOrganizerEmail,
+        ),
+      ),
+    ];
+    const [members, invites] = await Promise.all([
+      tx.list<Member>(paths.collection('members'), 501),
+      tx.list<OrganizerInvite>(paths.collection('organizerInvites'), 501),
+    ]);
+    requireState(
+      members.length <= 500,
+      'MEMBER_LIMIT',
+      'The event has too many membership records.',
+    );
+    const existing = new Map(invites.map((invite) => [invite.email, invite]));
+    requireState(
+      invites.length + emails.filter((email) => !existing.has(email)).length <= 500,
+      'INVITE_LIMIT',
+      'This event supports at most 500 organizer invitations.',
+    );
+    const matching = members.filter(
+      (entry) =>
+        entry.emailVerified && entry.email && emails.includes(normalizeOrganizerEmail(entry.email)),
+    );
+    // Judges are part of the frozen results evidence too. Changing their role after
+    // publication would make the exported score sheets lose their active judge identity.
+    if (matching.some((entry) => entry.teamId || entry.role === 'judge'))
+      Permissions.rosterEditable(event);
+    let promoted = 0;
+    for (const target of matching) {
+      if (target.role !== 'organizer' || target.status !== 'approved' || target.teamId) {
+        if (target.teamId)
+          await this.removeIdentity(tx, paths, target, now, member.uid, command.commandId);
+        tx.set(paths.member(target.uid), {
+          ...target,
+          role: 'organizer',
+          status: 'approved',
+          teamId: null,
+          version: target.version + 1,
+        } satisfies Member);
+        promoted++;
+      }
+      // Staff should not remain in the participant approval queue.
+      tx.delete(paths.doc('accessRequests', target.uid));
+    }
+    for (const email of emails)
+      tx.set(organizerInvitePath(paths, email), existing.get(email) ?? { email, createdAt: now });
+    tx.set(paths.root, {
+      ...event,
+      phaseVersion: event.phaseVersion + 1,
+      rosterVersion: (event.rosterVersion ?? 0) + (promoted ? 1 : 0),
+    });
+    return {
+      message: `Organizer access added for ${emails.length} ${emails.length === 1 ? 'email' : 'emails'}. ${promoted ? `${promoted} existing ${promoted === 1 ? 'member moved' : 'members moved'} to organizers. ` : ''}New organizers can sign in with Google.`,
+    };
+  }
+
   /** True when `claim` has something to do, so snapshots stay read-only otherwise. */
   async claimPending(
     tx: Transaction,
@@ -141,6 +176,8 @@ export class OrganizerAccessService {
       'An organizer invitation cannot change a competing team account. Contact an organizer.',
     );
     if (current?.role === 'organizer' && current.status === 'approved') return current;
+    // A verified-email claim must observe the same frozen-judge boundary as a direct grant.
+    if (current?.role === 'judge') Permissions.rosterEditable(event);
     const members = await tx.list<Member>(paths.collection('members'), 501);
     requireState(
       current || members.length < 500,
@@ -160,7 +197,7 @@ export class OrganizerAccessService {
     };
     const request = await tx.get<AccessRequest>(paths.doc('accessRequests', actor.uid));
     tx.set(paths.member(actor.uid), approved);
-    if (request) tx.set(paths.doc('accessRequests', actor.uid), { ...request, status: 'approved' });
+    if (request) tx.delete(paths.doc('accessRequests', actor.uid));
     tx.set(paths.root, { ...event, phaseVersion: event.phaseVersion + 1 });
     tx.set(`${paths.collection('adminAudit')}/organizer_claim_${actor.uid}`, {
       id: `organizer_claim_${actor.uid}`,

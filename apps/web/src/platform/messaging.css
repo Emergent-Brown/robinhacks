@@ -36,7 +36,7 @@
   font-size: 13px;
   margin: 0;
 }
-.p-chat-help {
+.p-messaging .p-chat-help {
   font-size: 11px;
   line-height: 1.7;
   margin: 0 16px 18px;
@@ -170,4 +170,35 @@
 }
 .p-messaging .p-inbox-list .p-empty {
   margin: 20px 16px;
+}
+
+.p-messaging .p-review-title {
+  align-items: baseline;
+}
+.p-messaging .p-review-title h2 {
+  min-width: 0;
+}
+.p-messaging .p-review-title .p-link {
+  flex: none;
+}
+.p-messaging .p-inbox-list > .field input,
+.p-messaging .p-inbox-list > .field select {
+  width: 100%;
+  min-width: 0;
+}
+.p-messaging .p-inbox-list > ul:first-child {
+  margin-top: 0;
+}
+.p-messaging .p-inbox-list li strong {
+  overflow-wrap: anywhere;
+}
+.p-messaging .p-conversation > .p-section-heading > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.p-messaging .p-conversation h2 {
+  overflow-wrap: anywhere;
+}
+.p-messaging .p-compose textarea {
+  width: 100%;
 }

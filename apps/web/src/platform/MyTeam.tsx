@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { Team } from '@robinhacks/core';
 import { Dialog, ExternalLink, Field } from '../ui/primitives';
-import { useClock } from '../hooks/useApp';
 import { SectorPicker } from './SectorPicker';
 import { resolveProjectSector } from './project-discovery';
 import './projects.css';
@@ -23,7 +22,6 @@ export function MyTeam({ data, actions }: PageProps) {
   const team = ownTeam(data);
   const [edit, setEdit] = useState(false);
   const [submit, setSubmit] = useState(false);
-  const now = useClock();
   const cmd = useCommand(actions);
   if (!team)
     return (
@@ -46,11 +44,7 @@ export function MyTeam({ data, actions }: PageProps) {
     data.event!.phase !== 'SEED_OPEN' &&
     !data.event!.paused &&
     !['FINALIZING', 'FINALIZED', 'CANCELLED', 'ARCHIVED'].includes(data.event!.phase);
-  const submissionOpen =
-    config(data).submissionsOpen &&
-    !!config(data).submissionClosesAt &&
-    now < config(data).submissionClosesAt! &&
-    !data.event!.paused;
+  const submissionOpen = config(data).submissionsOpen && !data.event!.paused;
   const roster = data.members.filter((member) => member.teamId === team.id);
   return (
     <>
@@ -130,7 +124,7 @@ export function MyTeam({ data, actions }: PageProps) {
           <>
             <p>
               {submissionOpen
-                ? `Submit before ${stamp(config(data).submissionClosesAt, config(data).details.timeZone)}.`
+                ? 'Submissions are open. The organizer will close them manually.'
                 : 'The organizer will open the final submission window.'}{' '}
               Your saved project, demo, repository, commit, and roster become the judging record.
             </p>

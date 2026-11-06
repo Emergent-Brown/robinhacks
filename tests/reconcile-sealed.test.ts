@@ -101,7 +101,6 @@ beforeAll(async () => {
     await run(PLATFORM_USERS.organizer, {
       type: 'openFundingRound',
       expectedPhaseVersion: event().phaseVersion,
-      durationMinutes: 1,
     });
     await run(PLATFORM_USERS.captain, {
       type: 'saveAllocation',
@@ -313,9 +312,9 @@ describe('independent exported sealed-ledger reconciliation', () => {
       },
     ],
     [
-      'deadline violated',
+      'allocation after manual close',
       (data) => {
-        data.roundAllocations[0].updatedAt = data.fundingRounds[0].closesAt;
+        data.roundAllocations[0].updatedAt = data.fundingRounds[0].closesAt + 1;
       },
     ],
     [

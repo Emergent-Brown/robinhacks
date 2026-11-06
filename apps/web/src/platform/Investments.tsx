@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { EventSchedule, type RoundEntitlement } from '@robinhacks/core';
+import { type RoundEntitlement } from '@robinhacks/core';
 import './investments.css';
-import { useClock } from '../hooks/useApp';
 import { newCommandId } from '../app/gateway';
 import {
   Amount,
@@ -15,7 +14,6 @@ import {
   percent,
   platform,
   ProjectLink,
-  stamp,
   teamName,
   teams,
   type PageProps,
@@ -24,7 +22,6 @@ import {
 export function Investments({ data, actions }: PageProps) {
   const state = platform(data);
   const settings = config(data).funding;
-  const now = useClock();
   const active = state.rounds.find((round) => round.state === 'open');
   const [selectedNumber, setSelectedNumber] = useState(
     active?.number || config(data).currentRound || 1,
@@ -46,13 +43,10 @@ export function Investments({ data, actions }: PageProps) {
         {settings.roundNames.map((name, index) => {
           const number = index + 1;
           const round = state.rounds.find((item) => item.number === number);
-          const planned = config(data).details.timing?.rounds[index];
           const status = !round
             ? 'Upcoming'
             : round.state === 'open'
-              ? now >= round.closesAt
-                ? 'Locked · awaiting reveal'
-                : 'Open now'
+              ? 'Open now'
               : round.state === 'void'
                 ? 'Voided'
                 : 'Complete';
@@ -71,16 +65,6 @@ export function Investments({ data, actions }: PageProps) {
                 <span className="p-investment-round-weight">
                   {percent(settings.roundWeightsBps[index]! / 10000)} of the investor prize pool
                 </span>
-                {(round || planned) && (
-                  <span className="p-investment-round-time">
-                    {round
-                      ? EventSchedule.label(
-                          { startsAt: round.openedAt, closesAt: round.closesAt },
-                          config(data).details.timeZone,
-                        )
-                      : EventSchedule.label(planned!, config(data).details.timeZone)}
-                  </span>
-                )}
                 {round?.id === active?.id && active && draftStatus !== 'saved' && (
                   <span className="p-investment-round-draft" role="status">
                     {draftStatus === 'saving' ? 'Saving allocation…' : 'Unsaved changes'}
@@ -227,7 +211,6 @@ function AllocationSheet({
   const state = platform(data);
   const funding = config(data).funding;
   const active = state.rounds.find((round) => round.state === 'open');
-  const now = useClock();
   const saved = state.allocation;
   const [amounts, setAmounts] = useState<Record<string, number>>(saved?.amounts || {});
   const [version, setVersion] = useState(saved?.version || 0);
@@ -243,7 +226,6 @@ function AllocationSheet({
   const seenVersion = useRef(saved?.version || 0);
   const writable =
     !!active &&
-    now < active.closesAt &&
     !data.event!.paused &&
     canAllocate(data) &&
     actions.gateway.user?.uid === data.member?.uid &&
@@ -368,17 +350,12 @@ function AllocationSheet({
       }
     >
       <p>
-        Invest by {stamp(active.closesAt, config(data).details.timeZone)}. Your captain manages this
+        Invest while the round is open. The organizer closes it manually. Your captain manages this
         allocation. Individual investments stay private to your team.
       </p>
       {data.event!.paused && (
         <p className="p-note">
           Funding paused: {data.event!.pauseReason || 'The organizer is resolving an issue.'}
-        </p>
-      )}
-      {now >= active.closesAt && (
-        <p className="p-note">
-          The deadline has passed. Allocations are locked while the organizer closes the round.
         </p>
       )}
       {!canAllocate(data) && <p className="p-note">Only your captain can change allocations.</p>}

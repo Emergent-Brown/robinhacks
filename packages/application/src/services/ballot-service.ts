@@ -31,14 +31,13 @@ export class BallotService {
         'FUNDING_OPEN',
         'Close every funding round before opening the community ballot.',
       );
-      Guard.futureDeadline(command.open, command.closesAt, now);
       tx.set(paths.root, {
         ...event,
         phaseVersion: event.phaseVersion + 1,
         platform: {
           ...config,
           ballotOpen: command.open,
-          ballotClosesAt: command.open ? command.closesAt : null,
+          ballotClosesAt: null,
         },
       });
       return {
@@ -57,7 +56,7 @@ export class BallotService {
       'BALLOT_CLOSED',
       'Community voting is available after funding finishes.',
     );
-    Guard.deadline(config.ballotOpen, config.ballotClosesAt, now, 'Community ballots');
+    Guard.openWindow(config.ballotOpen, 'Community ballots');
     const [teams, submissions, prior] = await Promise.all([
       tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1),
       tx.list<ProjectSubmission>(paths.collection('submissions'), RULES.maxTeams + 1),

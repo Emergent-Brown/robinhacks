@@ -30,7 +30,6 @@ export function Judging({ data, actions }: PageProps) {
       '',
   );
   const cmd = useCommand(actions);
-  const allProjects = (config(data).judgingMode ?? 'all') === 'all';
   const rubric = config(data).funding.rubric;
   const locked = !!sheet?.submittedAt;
   const judgingOpen = data.event!.phase === 'FROZEN' && !data.event!.paused;
@@ -103,9 +102,9 @@ export function Judging({ data, actions }: PageProps) {
         </span>
       </div>
       <p>
-        {allProjects ? 'Score every submitted project.' : 'Score the projects assigned to you.'}{' '}
-        Score each criterion from 0 to {JUDGING_SCORE_MAX} using the published rubric. Funding
-        activity stays hidden. The full ranking and submitted notes appear after all judges finish.
+        Score the projects assigned to you. Score each criterion from 0 to {JUDGING_SCORE_MAX} using
+        the published rubric. Funding activity stays hidden. The full ranking and submitted notes
+        appear after all judges finish.
       </p>
       {!!projects.length && (
         <p className="muted" role="status">
@@ -132,17 +131,13 @@ export function Judging({ data, actions }: PageProps) {
       )}
       {!projects.length ? (
         <Panel>
-          <Blank>
-            {allProjects
-              ? 'Submitted projects will appear here automatically.'
-              : 'No projects assigned yet. Contact the organizer.'}
-          </Blank>
+          <Blank>No projects assigned yet. Contact the organizer.</Blank>
         </Panel>
       ) : (
         <div className="p-judge-layout">
           <aside>
             <label className="field">
-              <span>{allProjects ? 'Project' : 'Assigned project'}</span>
+              <span>Assigned project</span>
               <select value={selected} onChange={(event) => setSelected(event.target.value)}>
                 {projects.map((id) => (
                   <option key={id} value={id}>

@@ -105,7 +105,7 @@ async function main() {
   pass('Unauthenticated homepage contains only public event metadata');
   await denied(
     'gameCommand',
-    { command: command('openFundingRound', { durationMinutes: 1, expectedPhaseVersion: 1 }) },
+    { command: command('openFundingRound', { expectedPhaseVersion: 1 }) },
     undefined,
     'SIGN_IN_REQUIRED',
   );
@@ -127,6 +127,33 @@ async function main() {
     auth('smoke-teammate', 'smoke-teammate@example.test'),
     auth('smoke-organizer', 'smoke-organizer@example.test'),
   ]);
+  const bulkStaff = await auth('smoke-bulk-staff', 'bulk-staff@example.test');
+  await change('requestMembership', { displayName: 'Bulk Staff' }, bulkStaff);
+  await denied(
+    'gameCommand',
+    {
+      command: command('addOrganizerEmails', { emails: ['forbidden-staff@example.test'] }),
+    },
+    member,
+    'ORGANIZER_REQUIRED',
+  );
+  await change(
+    'addOrganizerEmails',
+    {
+      emails: ['bulk-staff@example.test', 'bulk-invite@example.test'],
+    },
+    organizer,
+  );
+  const promoted = await success('gameSnapshot', {}, bulkStaff);
+  assert.equal(promoted.member.role, 'organizer');
+  assert.equal(promoted.member.status, 'approved');
+  assert.equal(promoted.member.teamId, null);
+  assert.ok(!promoted.requests.some((request) => request.email === 'bulk-staff@example.test'));
+  const bulkInvite = await auth('smoke-bulk-invite', 'bulk-invite@example.test');
+  assert.equal((await success('gameSnapshot', {}, bulkInvite)).member.role, 'organizer');
+  pass(
+    'Bulk organizer access promotes existing applicants, clears their requests, and admits invited Google emails',
+  );
   await change('requestMembership', { displayName: 'Smoke Builder' }, newCaptain);
   let applicant = await success('gameSnapshot', {}, newCaptain);
   assert.equal(applicant.member.status, 'pending');
@@ -228,7 +255,6 @@ async function main() {
     'gameCommand',
     {
       command: command('openFundingRound', {
-        durationMinutes: 1,
         expectedPhaseVersion: await phaseVersion(organizer),
       }),
     },
@@ -269,18 +295,8 @@ async function main() {
   assert.equal(staff.platform.allocation, null);
   assert.deepEqual(blind.platform.entitlements, []);
   pass('Open round stays sealed from staff and judges');
-  await denied(
-    'gameCommand',
-    {
-      command: command('closeFundingRound', {
-        roundId: 'funding-1',
-        expectedPhaseVersion: staff.event.phaseVersion,
-      }),
-    },
-    organizer,
-    'ROUND_NOT_DUE',
-  );
-  pass('Early funding closure rejected at the server');
+  assert.equal(staff.event.closesAt, null);
+  pass('Funding stays open until an organizer closes it');
   const unverified = await auth('unverified-attendee', 'unverified@example.test', false);
   await denied(
     'gameCommand',
@@ -354,11 +370,9 @@ async function main() {
     'Organizers review complete team threads and moderate with a visible, attributed removal notice',
   );
 
-  // Advance only this local fixture's deadline; no production project can be reached.
+  // Auth revocation and manual closure use only this isolated emulator event.
   const app = initializeApp({ projectId: 'demo-robinhacks' }, 'sealed-smoke');
   try {
-    const db = getFirestore(app),
-      root = db.doc(`events/${eventId}`);
     const deletedAccount = await auth('deleted-google-attendee', 'deleted-google@example.test');
     await success('gameSnapshot', {}, deletedAccount);
     await getAuth(app).deleteUser(actorUid(deletedAccount));
@@ -366,14 +380,6 @@ async function main() {
     pass(
       'Deleting an Auth identity immediately rejects its previously issued Google session token',
     );
-    await db.runTransaction(async (tx) => {
-      const [event, round] = await Promise.all([
-        tx.get(root),
-        tx.get(root.collection('fundingRounds').doc('funding-1')),
-      ]);
-      tx.set(root, { ...event.data(), closesAt: Date.now() - 1000 });
-      tx.set(round.ref, { ...round.data(), closesAt: Date.now() - 1000 });
-    });
     await success(
       'gameCommand',
       {

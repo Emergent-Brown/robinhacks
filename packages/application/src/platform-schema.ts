@@ -152,8 +152,6 @@ export const platformCommandSchema = z.discriminatedUnion('type', [
       type: z.literal('openFundingRound'),
       commandId,
       expectedPhaseVersion: version,
-      durationMinutes: z.number().int().min(1).max(1440),
-      closesAt: z.number().int().positive().max(253402300799999).optional(),
     })
     .strict(),
   z
@@ -258,9 +256,9 @@ export const platformCommandSchema = z.discriminatedUnion('type', [
     .strict(),
   z
     .object({
-      type: z.literal('setJudgingMode'),
+      type: z.literal('assignJudges'),
       commandId,
-      mode: z.enum(['all', 'assigned']),
+      strategy: z.enum(['all', 'split']),
       expectedPhaseVersion: version,
     })
     .strict(),

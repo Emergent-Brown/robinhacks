@@ -90,8 +90,16 @@ function settingsValid(settings) {
 
 function validateFunding(data, event, teams, settings) {
   const rounds = [...rows(data, 'fundingRounds', 3)].sort((a, b) => a.number - b.number);
-  const sheets = indexed(rows(data, 'roundAllocations', 90), 'id', 'DUPLICATE_ALLOCATION');
-  const entitlements = indexed(rows(data, 'roundEntitlements', 90), 'id', 'DUPLICATE_ENTITLEMENT');
+  const sheets = indexed(
+    rows(data, 'roundAllocations', MAX_TEAMS * 3),
+    'id',
+    'DUPLICATE_ALLOCATION',
+  );
+  const entitlements = indexed(
+    rows(data, 'roundEntitlements', MAX_TEAMS * 3),
+    'id',
+    'DUPLICATE_ENTITLEMENT',
+  );
   const members = indexed(rows(data, 'members', 500), 'uid', 'DUPLICATE_MEMBER');
   // Removed participants remain valid historical allocation authors, but never active judges.
   // One Google account can have several former event identities after removal and readmission.
@@ -126,7 +134,7 @@ function validateFunding(data, event, teams, settings) {
     check(['closed', 'void'].includes(round.state), 'OPEN_ROUND_MUST_REMAIN_SEALED');
     check(
       integer(round.openedAt) &&
-        integer(round.closesAt, round.openedAt + 1) &&
+        integer(round.closesAt, round.openedAt) &&
         event.platform.rulesLockedAt <= round.openedAt &&
         integer(round.version, 1),
       'INVALID_ROUND_TIMESTAMPS',
@@ -177,7 +185,7 @@ function validateFunding(data, event, teams, settings) {
           sheet.roundId === round.id &&
             sheet.teamId === teamId &&
             integer(sheet.version, 1) &&
-            integer(sheet.updatedAt, round.openedAt, round.closesAt - 1) &&
+            integer(sheet.updatedAt, round.openedAt, round.closesAt) &&
             typeof sheet.actorUid === 'string',
           'ALLOCATION_IDENTITY_OR_TIME_MISMATCH',
         );
@@ -321,24 +329,16 @@ function validatePublishedAwards(data, event, teams, settings, entitlements, rou
     'DUPLICATE_JUDGE_ASSIGNMENT',
   );
   const sheets = indexed(rows(data, 'judgingSheets', 50), 'uid', 'DUPLICATE_JUDGING_SHEET');
-  const judgingMode = awards.judgingMode ?? 'assigned';
-  check(['all', 'assigned'].includes(judgingMode), 'INVALID_JUDGING_MODE');
   const judges = [...members.values()].filter(
     (m) => m.status === 'approved' && m.role === 'judge' && m.teamId === null,
   );
-  const activeJudges =
-    judgingMode === 'all'
-      ? judges.map((judge) => {
-          const stored = assignments.get(judge.uid);
-          const projectIds = eligible.map((t) => t.id).sort();
-          return {
-            uid: judge.uid,
-            projectIds,
-            conflictIds: (stored?.conflictIds ?? []).filter((id) => projectIds.includes(id)),
-            version: stored?.version ?? 0,
-          };
-        })
-      : [...assignments.values()].filter((a) => judges.some((m) => m.uid === a.uid));
+  const activeJudges = [...assignments.values()]
+    .filter((a) => judges.some((m) => m.uid === a.uid))
+    .map((a) => ({
+      ...a,
+      projectIds: a.projectIds.filter((id) => eligible.some((t) => t.id === id)),
+      conflictIds: a.conflictIds.filter((id) => eligible.some((t) => t.id === id)),
+    }));
   const scored = eligible.map((team) => {
     let total = 0n;
     let count = 0;
@@ -399,7 +399,6 @@ function validatePublishedAwards(data, event, teams, settings, entitlements, rou
       'INVALID_WINNER',
     );
     const evidenceKey = JSON.stringify({
-      ...(judgingMode === 'all' ? { judgingMode } : {}),
       teams: eligible.map((t) => [t.id, t.version]).sort(),
       submissions: [...submissions.values()].map((s) => [s.teamId, s.submittedAt]).sort(),
       assignments: activeJudges.map((a) => [a.uid, a.version]).sort(),

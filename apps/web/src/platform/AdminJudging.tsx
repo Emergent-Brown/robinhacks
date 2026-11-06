@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { PitchOrderEditor } from './JudgingReview';
-import { Field } from '../ui/primitives';
+import { Dialog, Field } from '../ui/primitives';
 import {
   Blank,
   config,
@@ -22,10 +22,8 @@ export function AdminJudging({ data, actions }: PageProps) {
   const state = platform(data);
   const selectedUid = judges.some((judge) => judge.uid === uid) ? uid : judges[0]?.uid || '';
   const assignment = state.assignments.find((item) => item.uid === selectedUid);
-  const mode = config(data).judgingMode ?? 'all';
   return (
     <>
-      <JudgingModeEditor key={mode} data={data} actions={actions} />
       <PitchOrderEditor
         key={`${teams(data)
           .map((t) => t.id)
@@ -35,15 +33,15 @@ export function AdminJudging({ data, actions }: PageProps) {
       />
       <Panel title="Judge assignments">
         <p>
-          {mode === 'all'
-            ? 'Every approved judge scores all eligible submitted projects. Record any conflicts of interest below.'
-            : 'Choose the projects each judge will score, and record any conflicts of interest.'}{' '}
-          Every eligible project needs at least one non-conflicted score.
+          Choose which projects each judge scores. Assign every project to every judge, split the
+          projects automatically, or edit individual assignments. Every eligible project needs at
+          least one non-conflicted score.
         </p>
         {!judges.length ? (
           <Blank>Approve a verified judge account in Access first.</Blank>
         ) : (
           <>
+            <BulkAssignments data={data} actions={actions} />
             <Field label="Judge">
               <select value={selectedUid} onChange={(event) => setUid(event.target.value)}>
                 {judges.map((judge) => (
@@ -54,7 +52,7 @@ export function AdminJudging({ data, actions }: PageProps) {
               </select>
             </Field>
             <AssignmentEditor
-              key={`${mode}:${selectedUid}:${assignment?.version || 0}:${assignment?.projectIds.join(',')}`}
+              key={`${selectedUid}:${assignment?.version || 0}:${assignment?.projectIds.join(',')}`}
               data={data}
               actions={actions}
               uid={selectedUid}
@@ -115,47 +113,83 @@ function judgingReadOnly(data: PageProps['data']) {
   );
 }
 
-function JudgingModeEditor({ data, actions }: PageProps) {
-  const saved = config(data).judgingMode ?? 'all';
-  const [mode, setMode] = useState(saved);
+function BulkAssignments({ data, actions }: PageProps) {
+  const [strategy, setStrategy] = useState<'all' | 'split' | null>(null);
   const cmd = useCommand(actions);
   const submitted = platform(data).judgingSheets.some((sheet) => sheet.submittedAt != null);
-  const disabled = cmd.pending || submitted || judgingReadOnly(data);
+  const disabled =
+    cmd.pending || submitted || judgingReadOnly(data) || !platform(data).submissions.length;
   return (
-    <Panel title="Judging mode">
-      <p>
-        Use all projects when judges watch every pitch. Use assigned projects when judges split the
-        field between them.
-      </p>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          void cmd.run({
-            type: 'setJudgingMode',
-            mode,
-            expectedPhaseVersion: data.event!.phaseVersion,
-          });
-        }}
-      >
-        <Field label="Projects each judge scores">
-          <select
-            value={mode}
-            disabled={disabled}
-            onChange={(event) => setMode(event.target.value as 'all' | 'assigned')}
-          >
-            <option value="all">All projects</option>
-            <option value="assigned">Assigned projects</option>
-          </select>
-        </Field>
-        {submitted && (
-          <p className="muted">The mode is locked once a judge submits their scores.</p>
-        )}
-        <ErrorMessage>{cmd.error}</ErrorMessage>
-        <button className="button primary" disabled={disabled || mode === saved}>
-          Save judging mode
+    <div className="p-judge-assignment-tools">
+      <div className="p-actions">
+        <button
+          type="button"
+          className="button secondary"
+          disabled={disabled}
+          onClick={() => setStrategy('all')}
+        >
+          Assign all to every judge
         </button>
-      </form>
-    </Panel>
+        <button
+          type="button"
+          className="button secondary"
+          disabled={disabled}
+          onClick={() => setStrategy('split')}
+        >
+          Split projects automatically
+        </button>
+      </div>
+      <p className="muted">
+        Automatic splits balance the workload and respect recorded conflicts. You can adjust each
+        judge’s assignments below.
+      </p>
+      {submitted && (
+        <p className="muted">Assignments are locked once a judge submits their sheet.</p>
+      )}
+      <ErrorMessage>{cmd.error}</ErrorMessage>
+      {strategy && (
+        <Dialog
+          title={
+            strategy === 'all'
+              ? 'Assign every project to every judge'
+              : 'Split projects between judges'
+          }
+          onClose={() => !cmd.pending && setStrategy(null)}
+        >
+          <p>
+            {strategy === 'all'
+              ? 'Replace current assignments so every approved judge reviews every eligible submitted project? Recorded conflicts stay in place.'
+              : 'Replace current assignments with a balanced split of eligible submitted projects? Recorded conflicts stay in place.'}
+          </p>
+          <ErrorMessage>{cmd.error}</ErrorMessage>
+          <div className="p-actions">
+            <button
+              className="button primary"
+              disabled={cmd.pending}
+              onClick={() =>
+                void cmd.run(
+                  {
+                    type: 'assignJudges',
+                    strategy,
+                    expectedPhaseVersion: data.event!.phaseVersion,
+                  },
+                  () => setStrategy(null),
+                )
+              }
+            >
+              {cmd.pending ? 'Assigning…' : 'Apply assignments'}
+            </button>
+            <button
+              className="button secondary"
+              disabled={cmd.pending}
+              onClick={() => setStrategy(null)}
+            >
+              Cancel
+            </button>
+          </div>
+        </Dialog>
+      )}
+    </div>
   );
 }
 
@@ -165,7 +199,6 @@ function AssignmentEditor({ data, actions, uid }: PageProps & { uid: string }) {
   const [projectIds, setProjectIds] = useState(assignment?.projectIds || []);
   const [conflictIds, setConflictIds] = useState(assignment?.conflictIds || []);
   const cmd = useCommand(actions);
-  const allProjects = (config(data).judgingMode ?? 'all') === 'all';
   const submitted = state.submissions.filter((submission) =>
     teams(data).some((team) => team.id === submission.teamId && team.eligibility === 'active'),
   );
@@ -173,7 +206,7 @@ function AssignmentEditor({ data, actions, uid }: PageProps & { uid: string }) {
     (sheet) => sheet.uid === uid && sheet.submittedAt != null,
   );
   const disabled = cmd.pending || sheetLocked || judgingReadOnly(data);
-  const selectedIds = allProjects ? submitted.map((project) => project.teamId) : projectIds;
+  const selectedIds = projectIds;
   return (
     <form
       onSubmit={(event) => {
@@ -187,40 +220,33 @@ function AssignmentEditor({ data, actions, uid }: PageProps & { uid: string }) {
         });
       }}
     >
-      {allProjects ? (
-        <p className="muted">
-          {submitted.length} {submitted.length === 1 ? 'project' : 'projects'} assigned
-          automatically. New eligible submissions are included automatically.
-        </p>
-      ) : (
-        <div className="p-actions">
-          <button
-            type="button"
-            className="p-link"
-            disabled={disabled}
-            onClick={() => setProjectIds(submitted.map((project) => project.teamId))}
-          >
-            Assign all submitted projects
-          </button>
-          <button
-            type="button"
-            className="p-link"
-            disabled={disabled}
-            onClick={() => {
-              setProjectIds([]);
-              setConflictIds([]);
-            }}
-          >
-            Clear selection
-          </button>
-        </div>
-      )}
+      <div className="p-actions">
+        <button
+          type="button"
+          className="p-link"
+          disabled={disabled}
+          onClick={() => setProjectIds(submitted.map((project) => project.teamId))}
+        >
+          Assign all submitted projects
+        </button>
+        <button
+          type="button"
+          className="p-link"
+          disabled={disabled}
+          onClick={() => {
+            setProjectIds([]);
+            setConflictIds([]);
+          }}
+        >
+          Clear selection
+        </button>
+      </div>
       <div className="p-table-wrap">
         <table className="p-table">
           <thead>
             <tr>
               <th>Project</th>
-              {!allProjects && <th>Assigned</th>}
+              <th>Assigned</th>
               <th>Known conflict</th>
             </tr>
           </thead>
@@ -228,25 +254,23 @@ function AssignmentEditor({ data, actions, uid }: PageProps & { uid: string }) {
             {submitted.map((project) => (
               <tr key={project.teamId}>
                 <td>{project.name}</td>
-                {!allProjects && (
-                  <td>
-                    <input
-                      type="checkbox"
-                      aria-label={`Assign ${project.name}`}
-                      disabled={disabled}
-                      checked={projectIds.includes(project.teamId)}
-                      onChange={(event) => {
-                        setProjectIds(
-                          event.target.checked
-                            ? [...projectIds, project.teamId]
-                            : projectIds.filter((id) => id !== project.teamId),
-                        );
-                        if (!event.target.checked)
-                          setConflictIds(conflictIds.filter((id) => id !== project.teamId));
-                      }}
-                    />
-                  </td>
-                )}
+                <td>
+                  <input
+                    type="checkbox"
+                    aria-label={`Assign ${project.name}`}
+                    disabled={disabled}
+                    checked={projectIds.includes(project.teamId)}
+                    onChange={(event) => {
+                      setProjectIds(
+                        event.target.checked
+                          ? [...projectIds, project.teamId]
+                          : projectIds.filter((id) => id !== project.teamId),
+                      );
+                      if (!event.target.checked)
+                        setConflictIds(conflictIds.filter((id) => id !== project.teamId));
+                    }}
+                  />
+                </td>
                 <td>
                   <input
                     type="checkbox"
@@ -273,7 +297,7 @@ function AssignmentEditor({ data, actions, uid }: PageProps & { uid: string }) {
       )}
       <ErrorMessage>{cmd.error}</ErrorMessage>
       <button className="button primary" disabled={disabled || !uid || !submitted.length}>
-        {allProjects ? 'Save conflicts' : 'Save assignments'}
+        Save assignments
       </button>
     </form>
   );

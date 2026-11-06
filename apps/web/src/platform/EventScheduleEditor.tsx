@@ -206,11 +206,10 @@ export function EventScheduleEditor({
       >
         Add schedule item
       </button>
-      <h3>Planned windows</h3>
+      <h3>Suggested organizer schedule</h3>
       <p className="muted">
-        Times use the event time zone. Organizers still open and close windows in Event controls.
-        Changing this plan updates linked public times and future opening defaults; it does not
-        change a window already running. Pause/resume preserves time in a live window.
+        These times are visible to organizers only and never open or close a window. Use Event
+        controls to start and end each round or submission window when everyone is ready.
       </p>
       {!details.timing ? (
         <button
@@ -218,7 +217,7 @@ export function EventScheduleEditor({
           className="button secondary"
           onClick={() => onChange({ ...details, timing: defaultEventDetails().timing })}
         >
-          Add September 26–27 window plan
+          Add suggested window plan
         </button>
       ) : !validZone ? (
         <p className="p-error">Enter a valid event time zone to edit the windows.</p>
@@ -230,13 +229,13 @@ export function EventScheduleEditor({
               <legend>{label}</legend>
               <div className="p-form-grid">
                 <TimeInput
-                  label="Opens"
+                  label="Suggested start"
                   value={value.startsAt}
                   zone={details.timeZone}
                   onChange={(startsAt) => changeWindow(key, { ...value, startsAt })}
                 />
                 <TimeInput
-                  label="Closes"
+                  label="Suggested end"
                   value={value.closesAt}
                   zone={details.timeZone}
                   onChange={(closesAt) => changeWindow(key, { ...value, closesAt })}

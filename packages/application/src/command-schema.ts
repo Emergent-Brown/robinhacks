@@ -149,6 +149,13 @@ const eventCommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('removeMember'), commandId, uid: identifier }).strict(),
   z
     .object({
+      type: z.literal('addOrganizerEmails'),
+      commandId,
+      emails: z.array(z.string().trim().toLowerCase().email().max(254)).min(1).max(50),
+    })
+    .strict(),
+  z
+    .object({
       type: z.literal('addOrganizerEmail'),
       commandId,
       email: z.string().trim().toLowerCase().email().max(254),

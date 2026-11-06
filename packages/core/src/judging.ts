@@ -1,4 +1,4 @@
-import type { JudgeAssignment, JudgingMode, ProjectSubmission } from './platform';
+import type { JudgeAssignment, ProjectSubmission } from './platform';
 import type { Member, Team } from './types';
 
 /** Published judging scale. Rubric weights determine each criterion's contribution. */
@@ -10,9 +10,8 @@ export function isJudgingScore(value: unknown): value is number {
   );
 }
 
-/** Resolve judging scope without storing a duplicate assignment for every judge/project pair. */
+/** Stored assignments are the single authority for which projects a judge rates. */
 export function effectiveJudgeAssignments(
-  mode: JudgingMode,
   members: Member[],
   teams: Team[],
   submissions: ProjectSubmission[],
@@ -21,18 +20,16 @@ export function effectiveJudgeAssignments(
   const judges = members.filter(
     (m) => m.status === 'approved' && m.role === 'judge' && m.teamId === null,
   );
-  if (mode === 'assigned') return assignments.filter((a) => judges.some((m) => m.uid === a.uid));
-  const projectIds = teams
-    .filter((t) => t.eligibility === 'active' && submissions.some((s) => s.teamId === t.id))
-    .map((t) => t.id)
-    .sort();
-  return judges.map((judge) => {
-    const stored = assignments.find((a) => a.uid === judge.uid);
-    return {
-      uid: judge.uid,
-      projectIds,
-      conflictIds: (stored?.conflictIds ?? []).filter((id) => projectIds.includes(id)),
-      version: stored?.version ?? 0,
-    };
-  });
+  const eligible = new Set(
+    teams
+      .filter((t) => t.eligibility === 'active' && submissions.some((s) => s.teamId === t.id))
+      .map((t) => t.id),
+  );
+  return assignments
+    .filter((a) => judges.some((m) => m.uid === a.uid))
+    .map((a) => ({
+      ...a,
+      projectIds: a.projectIds.filter((id) => eligible.has(id)),
+      conflictIds: a.conflictIds.filter((id) => eligible.has(id)),
+    }));
 }

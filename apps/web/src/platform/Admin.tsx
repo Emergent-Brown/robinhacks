@@ -145,11 +145,11 @@ export function Admin({ data, actions }: PageProps) {
 }
 
 function Operations({ data, actions }: PageProps) {
+  const now = useClock();
   const event = data.event!;
   const state = platform(data);
   const settings = config(data);
   const active = state.rounds.find((round) => round.state === 'open');
-  const now = useClock();
   const [pauseReason, setPauseReason] = useState('');
   const [voidReason, setVoidReason] = useState('');
   const [discardReason, setDiscardReason] = useState('');
@@ -194,8 +194,8 @@ function Operations({ data, actions }: PageProps) {
             review(
               event.paused ? 'Resume event' : 'Pause event',
               event.paused
-                ? 'Resume activity and extend affected live deadlines by the paused duration?'
-                : 'Pause allocations and other event changes for everyone? Remaining time will be preserved.',
+                ? 'Resume allocations and other event changes? Open rounds stay open until you close them.'
+                : 'Pause allocations and other event changes for everyone? Open rounds will stay open.',
               { type: 'setPause', paused: !event.paused, reason: pauseReason, ...phaseVersion },
             );
           }}
@@ -218,8 +218,8 @@ function Operations({ data, actions }: PageProps) {
       </Panel>
       <Panel title="Funding rounds">
         <p className="muted">
-          Schedule times are planned times. An organizer opens and closes each round here.
-          Allocations stop at the deadline even if the round has not been closed yet.
+          You control when each round starts and ends. Allocations stay editable until you close the
+          round. Suggested times are a guide for organizers only.
         </p>
         {!active && settings.currentRound < 3 && (
           <div className="p-note">
@@ -258,22 +258,21 @@ function Operations({ data, actions }: PageProps) {
             </ul>
             <span>
               Every active team needs a captain and a checkpoint; round 3 also needs final
-              submissions. Missing items block opening, including at the scheduled time.
+              submissions. Resolve these items before opening the round.
             </span>
           </div>
         )}
         {active ? (
           <>
             <p>
-              <strong>{active.name}</strong> · deadline{' '}
-              {stamp(active.closesAt, settings.details.timeZone)}
+              <strong>{active.name}</strong> · open until you close it
             </p>
             <p>
               Close locks allocations and reveals project totals. A closed round cannot be reopened.
             </p>
             <button
               className="button primary"
-              disabled={cmd.pending || event.paused || now < active.closesAt}
+              disabled={cmd.pending || event.paused}
               onClick={() =>
                 review('Close funding round', 'Lock this round and reveal project totals?', {
                   type: 'closeFundingRound',
@@ -282,7 +281,7 @@ function Operations({ data, actions }: PageProps) {
                 })
               }
             >
-              {now < active.closesAt ? 'Available at the deadline' : 'Close round'}
+              Close round now
             </button>
           </>
         ) : (
@@ -301,10 +300,7 @@ function Operations({ data, actions }: PageProps) {
               key={settings.currentRound}
               plan={settings.details.timing?.rounds[settings.currentRound]}
               zone={settings.details.timeZone}
-              now={now}
               label="Open next round"
-              fallbackMinutes={30}
-              maxMinutes={1440}
               disabled={
                 terminal ||
                 event.paused ||
@@ -312,11 +308,11 @@ function Operations({ data, actions }: PageProps) {
                 settings.currentRound >= settings.funding.roundNames.length ||
                 cmd.pending
               }
-              onOpen={(window) =>
+              onOpen={() =>
                 review(
                   'Open funding round',
-                  `Open ${settings.funding.roundNames[settings.currentRound]} until ${stamp(window.closesAt, settings.details.timeZone)}? ${settings.currentRound === 0 ? 'This locks the roster, funding settings, and judging rubric.' : ''}`,
-                  { type: 'openFundingRound', ...window, ...phaseVersion },
+                  `Open ${settings.funding.roundNames[settings.currentRound]} now? It stays open until you close it. ${settings.currentRound === 0 ? 'This locks the roster, funding settings, and judging rubric.' : ''}`,
+                  { type: 'openFundingRound', ...phaseVersion },
                 )
               }
             />
@@ -365,13 +361,11 @@ function Operations({ data, actions }: PageProps) {
           </details>
         )}
       </Panel>
-      <div className="p-two-column">
+      <div>
         <Panel title="Final submissions">
           <p>
-            {settings.submissionsOpen
-              ? `Open until ${stamp(settings.submissionClosesAt, settings.details.timeZone)}`
-              : 'Closed'}{' '}
-            · {state.submissions.length} submitted projects
+            {settings.submissionsOpen ? 'Open until you close submissions' : 'Closed'} ·{' '}
+            {state.submissions.length} submitted projects
           </p>
           {settings.submissionsOpen ? (
             <button
@@ -392,10 +386,7 @@ function Operations({ data, actions }: PageProps) {
             <WindowOpener
               plan={settings.details.timing?.submissions}
               zone={settings.details.timeZone}
-              now={now}
               label="Open submissions"
-              fallbackMinutes={60}
-              maxMinutes={1440}
               disabled={
                 terminal ||
                 event.paused ||
@@ -403,11 +394,11 @@ function Operations({ data, actions }: PageProps) {
                 settings.currentRound >= 3 ||
                 event.phase === 'FROZEN'
               }
-              onOpen={({ closesAt }) =>
+              onOpen={() =>
                 review(
                   'Open submissions',
-                  `Accept final submissions until ${stamp(closesAt, settings.details.timeZone)}?`,
-                  { type: 'setSubmissionWindow', open: true, closesAt, ...phaseVersion },
+                  'Accept final submissions now? Teams can submit until you close submissions.',
+                  { type: 'setSubmissionWindow', open: true, closesAt: null, ...phaseVersion },
                 )
               }
             />
@@ -416,9 +407,8 @@ function Operations({ data, actions }: PageProps) {
       </div>
       <Panel title="Judging and awards">
         <p>
-          Finish funding and close submissions before judging starts. Choose all projects or
-          assigned projects in the Judging tab. Every eligible submission needs a completed,
-          non-conflicted score.
+          Finish funding and close submissions before judging starts. Assign projects to judges in
+          the Judging tab. Every eligible submission needs a completed, non-conflicted score.
         </p>
         <button
           className="button secondary"

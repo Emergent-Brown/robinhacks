@@ -26,14 +26,13 @@ export class ProjectService {
         'SUBMISSIONS_LOCKED',
         'Submissions must finish before the final funding round.',
       );
-      Guard.futureDeadline(command.open, command.closesAt, now);
       tx.set(paths.root, {
         ...event,
         phaseVersion: event.phaseVersion + 1,
         platform: {
           ...config,
           submissionsOpen: command.open,
-          submissionClosesAt: command.open ? command.closesAt : null,
+          submissionClosesAt: null,
         },
       });
       return {
@@ -102,7 +101,7 @@ export class ProjectService {
       return { receipt: receipt(context, command, 'Project update published.') };
     }
 
-    Guard.deadline(config.submissionsOpen, config.submissionClosesAt, now, 'Final submissions');
+    Guard.openWindow(config.submissionsOpen, 'Final submissions');
     requireState(
       config.currentRound < 3,
       'SUBMISSIONS_LOCKED',

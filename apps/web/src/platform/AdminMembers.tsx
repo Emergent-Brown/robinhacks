@@ -21,9 +21,24 @@ const isStaff = (role: Member['role']) => role === 'organizer' || role === 'judg
 const roleLabel = (role: string) => (role === 'trader' ? 'Member' : role);
 
 export function AdminMembers({ data, actions }: PageProps) {
-  const [email, setEmail] = useState('');
+  const [emails, setEmails] = useState('');
+  const addresses = [
+    ...new Set(
+      emails
+        .split(/[\s,;]+/)
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
+  const emailError =
+    addresses.length > 50
+      ? 'Add up to 50 emails at a time.'
+      : addresses.some((email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+        ? 'Enter complete email addresses, separated by commas or new lines.'
+        : '';
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
+  const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<Member | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [checkedAt, setCheckedAt] = useState<number | null>(null);
@@ -40,7 +55,7 @@ export function AdminMembers({ data, actions }: PageProps) {
     .filter((request) => request.status === 'pending')
     .sort((a, b) => a.requestedAt - b.requestedAt);
   const members = data.members
-    .filter((member) => member.status !== 'pending')
+    .filter((member) => member.status !== 'pending' && member.role !== 'organizer')
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
   const unassigned = members.filter(
     (member) => member.status === 'approved' && !isStaff(member.role) && !member.teamId,
@@ -61,9 +76,37 @@ export function AdminMembers({ data, actions }: PageProps) {
         (filter === 'unassigned' && !isStaff(member.role) && !member.teamId) ||
         (filter === 'suspended' && member.status === 'suspended')),
   );
-  const approvedOrganizers = members.filter(
+  const pageSize = 20;
+  const pageCount = Math.max(1, Math.ceil(visibleMembers.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const displayedMembers = visibleMembers.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
+  const approvedOrganizers = data.members.filter(
     (member) => member.role === 'organizer' && member.status === 'approved',
   ).length;
+
+  const organizers = new Map(
+    (data.organizerInvites ?? []).map((invite) => [
+      invite.email.toLowerCase(),
+      {
+        email: invite.email,
+        createdAt: invite.createdAt,
+        member: data.members.find(
+          (member) =>
+            member.role === 'organizer' &&
+            member.email?.toLowerCase() === invite.email.toLowerCase(),
+        ),
+      },
+    ]),
+  );
+  data.members
+    .filter((member) => member.role === 'organizer')
+    .forEach((member) => {
+      if (member.email && !organizers.has(member.email.toLowerCase()))
+        organizers.set(member.email.toLowerCase(), { email: member.email, createdAt: 0, member });
+    });
 
   function confirm(title: string, description: string, command: CommandInput, label?: string) {
     cmd.clearError();
@@ -125,7 +168,7 @@ export function AdminMembers({ data, actions }: PageProps) {
         </label>
         <p className="muted">
           Applies to new verified Google signups. Existing requests and judge requests still need
-          review. Limit: 150 participants; four people per team.
+          review. Limit: 160 participants; four people per team.
         </p>
         <ErrorMessage>{cmd.error}</ErrorMessage>
       </Panel>
@@ -195,6 +238,92 @@ export function AdminMembers({ data, actions }: PageProps) {
           <p className="muted">Participant approvals close when the first funding round opens.</p>
         )}
       </Panel>
+      <Panel title="Organizers">
+        <p>
+          Add up to 50 Google account emails at once. Existing accounts become organizers
+          immediately; participants leave their competing team. New organizers receive access when
+          they sign in. Organizers are listed here, separate from participants.
+        </p>
+        {!rosterEditable && (
+          <p className="p-note">
+            Pause the event before promoting a team member or judge. Those roles are locked once
+            results review starts. New organizer emails can still be added.
+          </p>
+        )}
+        <form
+          className="p-organizer-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (emailError || !addresses.length) return;
+            confirm(
+              'Grant organizer access',
+              `Give ${addresses.length} ${addresses.length === 1 ? 'person' : 'people'} organizer access? They can approve attendees, manage the event, change settings, and publish results. Existing participants and judges leave their current event role; participants also leave their team. Emails: ${addresses.join(', ')}.`,
+              { type: 'addOrganizerEmails', emails: addresses },
+              `Add ${addresses.length === 1 ? 'organizer' : 'organizers'}`,
+            );
+          }}
+        >
+          <Field label="Google account emails" hint="One email per line, or separated by commas.">
+            <textarea
+              rows={4}
+              autoComplete="off"
+              required
+              maxLength={13000}
+              value={emails}
+              onChange={(event) => setEmails(event.target.value)}
+              placeholder={'alex@example.com\nsam@example.com'}
+            />
+          </Field>
+          <button
+            className="button secondary"
+            disabled={cmd.pending || !addresses.length || !!emailError}
+          >
+            Add {addresses.length > 1 ? `${addresses.length} organizers` : 'organizer'}
+          </button>
+        </form>
+        <ErrorMessage>{emailError}</ErrorMessage>
+        {!!organizers.size && (
+          <ul className="p-admin-invites">
+            {[...organizers.values()].map((invite) => (
+              <li key={invite.email}>
+                <div>
+                  <strong className="p-break">{invite.email}</strong>
+                  <small className="p-cell-note">
+                    {invite.member
+                      ? `${invite.member.displayName} · ${invite.member.status}`
+                      : 'Awaiting first sign-in'}
+                  </small>
+                </div>
+                <button
+                  className="p-link p-member-danger"
+                  disabled={
+                    cmd.pending ||
+                    !rosterEditable ||
+                    data.members.some(
+                      (member) =>
+                        member.email?.toLowerCase() === invite.email.toLowerCase() &&
+                        (member.uid === data.member?.uid ||
+                          (member.role === 'organizer' &&
+                            member.status === 'approved' &&
+                            approvedOrganizers <= 1)),
+                    )
+                  }
+                  onClick={() =>
+                    confirm(
+                      'Remove organizer email',
+                      `Remove organizer access for ${invite.email}? This removes their email invitation and any existing organizer membership for this account. Submitted event records stay.`,
+                      { type: 'removeOrganizerEmail', email: invite.email },
+                      'Remove organizer access',
+                    )
+                  }
+                >
+                  Remove access
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
       <Panel
         title="Team selection"
         aside={<span className="p-status">{formationOpen ? 'Open' : 'Closed'}</span>}
@@ -237,7 +366,7 @@ export function AdminMembers({ data, actions }: PageProps) {
         {settings.rulesLockedAt && <p className="muted">Team rosters locked when funding began.</p>}
         {data.event!.paused && <p className="muted">Resume the event to change team selection.</p>}
       </Panel>
-      <Panel title="Members and staff">
+      <Panel title="Participants and judges">
         <p className="muted">
           Each team has up to four people: one captain and the remaining teammates join as members.
           Pause the event before removing access after registration.
@@ -256,15 +385,24 @@ export function AdminMembers({ data, actions }: PageProps) {
               type="search"
               placeholder="Name, email, or team"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
             />
           </Field>
           <Field label="Show">
-            <select value={filter} onChange={(event) => setFilter(event.target.value)}>
-              <option value="all">Everyone</option>
+            <select
+              value={filter}
+              onChange={(event) => {
+                setFilter(event.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="all">Participants and judges</option>
               <option value="participants">Participants</option>
               <option value="unassigned">Waiting for a team</option>
-              <option value="staff">Staff</option>
+              <option value="staff">Judges</option>
               <option value="suspended">Suspended</option>
             </select>
           </Field>
@@ -285,7 +423,7 @@ export function AdminMembers({ data, actions }: PageProps) {
                 </tr>
               </thead>
               <tbody>
-                {visibleMembers.map((member) => {
+                {displayedMembers.map((member) => {
                   const protectedMember =
                     member.uid === data.member?.uid ||
                     (member.role === 'organizer' &&
@@ -342,81 +480,29 @@ export function AdminMembers({ data, actions }: PageProps) {
             </table>
           </div>
         )}
-      </Panel>
-      <Panel title="Organizer emails">
-        <p>
-          Add a Google account email to grant organizer access. That person will receive access when
-          they next sign in or refresh the site.
-        </p>
-        <form
-          className="p-inline-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const address = email.trim().toLowerCase();
-            confirm(
-              'Grant organizer access',
-              `Give ${address} organizer access? They will be able to approve attendees, manage the event, change settings, and publish results.`,
-              { type: 'addOrganizerEmail', email: address },
-              'Add organizer email',
-            );
-          }}
-        >
-          <Field label="Google account email">
-            <input
-              type="email"
-              autoComplete="off"
-              required
-              maxLength={254}
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="name@example.com"
-            />
-          </Field>
-          <button
-            className="button secondary"
-            disabled={cmd.pending || !email.trim() || !rosterEditable}
-          >
-            Add organizer
-          </button>
-        </form>
-        {!!data.organizerInvites?.length && (
-          <ul className="p-admin-invites">
-            {data.organizerInvites.map((invite) => (
-              <li key={invite.email}>
-                <div>
-                  <strong>{invite.email}</strong>
-                  <small className="p-cell-note">
-                    Added {stamp(invite.createdAt, settings.details.timeZone)}
-                  </small>
-                </div>
-                <button
-                  className="p-link p-member-danger"
-                  disabled={
-                    cmd.pending ||
-                    !rosterEditable ||
-                    data.members.some(
-                      (member) =>
-                        member.email?.toLowerCase() === invite.email.toLowerCase() &&
-                        (member.uid === data.member?.uid ||
-                          (member.role === 'organizer' &&
-                            member.status === 'approved' &&
-                            approvedOrganizers <= 1)),
-                    )
-                  }
-                  onClick={() =>
-                    confirm(
-                      'Remove organizer email',
-                      `Remove organizer access for ${invite.email}? This removes their email invitation and any existing organizer membership for this account. Submitted event records stay.`,
-                      { type: 'removeOrganizerEmail', email: invite.email },
-                      'Remove organizer access',
-                    )
-                  }
-                >
-                  Remove access
-                </button>
-              </li>
-            ))}
-          </ul>
+        {pageCount > 1 && (
+          <nav className="p-member-pagination" aria-label="Participant pages">
+            <button
+              className="button secondary"
+              disabled={currentPage === 1}
+              onClick={() => setPage(currentPage - 1)}
+            >
+              Previous
+            </button>
+            <span aria-live="polite">
+              Page {currentPage} of {pageCount}
+            </span>
+            <button
+              className="button secondary"
+              disabled={currentPage === pageCount}
+              onClick={() => setPage(currentPage + 1)}
+            >
+              Next
+            </button>
+          </nav>
+        )}
+        {!!members.length && !visibleMembers.length && (
+          <Blank>No participants match your search.</Blank>
         )}
       </Panel>
       <ErrorMessage>{cmd.error}</ErrorMessage>
@@ -438,7 +524,7 @@ export function AdminMembers({ data, actions }: PageProps) {
               disabled={cmd.pending}
               onClick={() =>
                 void cmd.run(confirmation.command, () => {
-                  if (confirmation.command.type === 'addOrganizerEmail') setEmail('');
+                  if (confirmation.command.type === 'addOrganizerEmails') setEmails('');
                   setConfirmation(null);
                 })
               }

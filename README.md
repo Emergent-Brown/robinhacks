@@ -4,7 +4,7 @@ A mobile-friendly hackathon platform for building projects, meeting other teams,
 
 The repository retains the technical name `robinhacks`. The participant-facing event is **Emergent Hacks**, with **Silicon Valley** as its theme. React and TypeScript provide the interface; Firebase Authentication, Firestore and callable Functions provide the deployed backend. The local demo runs the same application services and economic rules without a cloud account.
 
-**Updated September 24, 2026:** the [live event](https://emergenthacks.com/) uses the sealed-round platform. The [populated demo](https://robinhacks-2026-ajs--walkthrough-pyhnt4be.web.app/) supports attendee, captain, teammate, organizer and judge perspectives. See the [deployment record](docs/FIREBASE-SETUP.md#deployment-record) for verification and remaining rehearsal checks.
+**Updated November 6, 2026:** the [live event](https://emergenthacks.com/) uses manually controlled sealed rounds and explicit judge assignments. The [populated demo](https://robinhacks-2026-ajs--walkthrough-pyhnt4be.web.app/) supports attendee, captain, teammate, organizer and judge perspectives. See the [organizer guide](docs/20-manual-event-controls.md) for the current controls and reset procedure.
 
 ## Start locally
 
@@ -40,10 +40,10 @@ The local project is `demo-robinhacks`; the seed script refuses remote emulator 
 - A public event homepage with editable event details, logistics, schedule, registration link, organizer information, contact and judging rubric.
 - Numbered NFC poster links that count visits in Firestore, redirect to the homepage, and show organizer-only totals under Admin → Posters. See [poster tracking](docs/13-poster-tracking.md).
 - Google-only signup, independent organizer approval, and participant team/role selection opened by organizers. See [joining and approval](docs/14-joining-and-approval.md).
-- Verified Google identity, organizer email invitations, protected access removal, and locked team rosters.
+- Verified Google identity, bulk organizer email access, protected access removal, and locked team rosters.
 - Project profiles with sectors and optional teammate bios, search by project or person, unopened-project discovery, archived checkpoints, and immutable final submissions with demo, repository and full Git commit.
 - Pinned #general chat for all approved attendees, including people still choosing a team. Team inboxes include blocking and reports; organizers can review any thread by team or participant and remove messages with an attributed notice.
-- Autosaved team allocations, read-only round history, deadline enforcement, simultaneous closing, per-round entitlements, audit records and exact payout calculations.
+- Autosaved team allocations, read-only round history, manual opening and atomic closing, per-round entitlements, audit records and exact payout calculations.
 - An independent judge portal with assignments, conflicts, saved drafts, submitted score locks and reviewed awards.
 - A private community ballot, results publication, and post-event export/reconciliation.
 - A short onboarding tour and replayable rules; layouts support desktop and phone screens.
@@ -73,12 +73,12 @@ Read [11 · Sealed rounds](docs/11-sealed-rounds.md) for the complete current ru
 1. Complete [Firebase setup](docs/FIREBASE-SETUP.md). Rehearse sign-in with the primary organizer, a backup and a judge.
 2. Fill **Admin → Settings** with confirmed event details, prize amounts, reserve policy and judging rubric. Approve actual attendees and separate staff accounts in **Admin → People**.
 3. In **Admin → People**, start team selection. Approved attendees create or join teams and choose an available role. Check every team has a captain, close team selection, then collect an initial checkpoint from every active team. Open round one; this locks the funding/judging rules and competing rosters.
-4. At the deadline, close the round to reveal totals and freeze entitlements. Teams build, publish the next checkpoint and allocate a fresh budget in round two.
+4. When ready, close the round to reveal totals and freeze entitlements. No clock closes it for you. Teams build, publish the next checkpoint and allocate a fresh budget in round two.
 5. Open final submissions before round three. Every active project must submit final evidence and its final checkpoint before the last funding window opens.
-6. Finish funding, open judging, assign projects, and collect complete independent score sheets. Run the separate community ballot.
+6. Finish funding, open judging, assign all projects to every judge or distribute them automatically, and collect complete independent score sheets. Assignments remain individually editable. Open and close the separate community ballot manually.
 7. Close ballots, prepare awards, check the scores and conditional payouts during the review period, then publish. Export the final event record and reconcile it before distributing any prizes.
 
-Pause preserves everyone's remaining time equally. A revealed round cannot reopen; an event-wide technical failure can void the whole completed round without deleting its history. Participant allocations and live ballots are private even from organizers. Complete exports become available only after publication or cancellation.
+Pause temporarily blocks participant changes; resuming restores the same open window without a timer. The suggested schedule is planning guidance, not an automatic trigger. A revealed round cannot reopen; an event-wide technical failure can void the whole completed round without deleting its history. Participant allocations and live ballots are private even from organizers. Complete exports become available only after publication or cancellation.
 
 ## Organization and maintenance
 

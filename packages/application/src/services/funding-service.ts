@@ -156,13 +156,6 @@ export class FundingService {
     );
     const number = platform.currentRound + 1;
     requireState(number <= 3, 'ROUND_LIMIT', 'All three funding rounds have already run.');
-    requireState(
-      Number.isInteger(command.durationMinutes) &&
-        command.durationMinutes >= 1 &&
-        command.durationMinutes <= 1_440,
-      'INVALID_DURATION',
-      'A funding window must last between one minute and 24 hours.',
-    );
     SealedFunding.validateSettings(platform.funding);
     const [teams, members, rounds, updates, submissions] = await Promise.all([
       tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1),
@@ -254,19 +247,13 @@ export class FundingService {
     );
     const now = context.clock.now();
     context.now = now;
-    const closesAt = command.closesAt ?? now + command.durationMinutes * 60_000;
-    requireState(
-      Number.isSafeInteger(closesAt) && closesAt > now && closesAt <= now + 1_440 * 60_000,
-      'INVALID_DEADLINE',
-      'Choose a funding deadline in the next 24 hours.',
-    );
     const round: FundingRound = {
       id: `funding-${number}`,
       number,
       name: platform.funding.roundNames[number - 1],
       state: 'open',
       openedAt: now,
-      closesAt,
+      closesAt: null,
       closedAt: null,
       weightBps: platform.funding.roundWeightsBps[number - 1],
       minimumDenominator: platform.funding.minimumDenominator,
@@ -326,11 +313,6 @@ export class FundingService {
     const now = context.clock.now();
     context.now = now;
     requireState(
-      now < round.closesAt && event.closesAt !== null && now < event.closesAt,
-      'ROUND_CLOSED',
-      'The funding deadline has passed.',
-    );
-    requireState(
       (allocation?.version ?? 0) === command.expectedVersion,
       'ALLOCATION_CHANGED',
       'A teammate changed this allocation. Reload before saving.',
@@ -369,7 +351,7 @@ export class FundingService {
     requireState(
       event.phase === 'SEED_OPEN' && !event.paused,
       'INVALID_PHASE',
-      'Resume the active round before closing it at the deadline.',
+      'Resume the active round before closing it.',
     );
     const round = await tx.get<FundingRound>(paths.doc('fundingRounds', command.roundId));
     requireState(

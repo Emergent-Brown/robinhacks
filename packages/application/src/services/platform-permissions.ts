@@ -52,21 +52,8 @@ export class PlatformPermissions {
     return this.config(context.event);
   }
 
-  static deadline(open: boolean, closesAt: number | null, now: number, label: string): void {
-    requireState(
-      open && closesAt !== null && now < closesAt,
-      'WINDOW_CLOSED',
-      `${label} are closed.`,
-    );
-  }
-
-  static futureDeadline(open: boolean, closesAt: number | null, now: number): void {
-    requireState(
-      !open ||
-        (Number.isSafeInteger(closesAt) && closesAt! > now && closesAt! <= now + 7 * 86_400_000),
-      'INVALID_DEADLINE',
-      'Choose a closing time within the next seven days.',
-    );
+  static openWindow(open: boolean, label: string): void {
+    requireState(open, 'WINDOW_CLOSED', `${label} are closed.`);
   }
 
   static httpUrl(value: string, label: string): string {

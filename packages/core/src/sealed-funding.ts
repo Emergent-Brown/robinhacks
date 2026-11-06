@@ -162,9 +162,9 @@ export class SealedFunding {
     this.validateSettings(settings);
     invariant(round.state === 'open', 'ROUND_CLOSED', 'This round has already closed.');
     invariant(
-      now >= round.closesAt,
-      'ROUND_NOT_DUE',
-      'Every team has until the published deadline to allocate.',
+      Number.isSafeInteger(now) && now >= round.openedAt,
+      'INVALID_CLOSE_TIME',
+      'The close time cannot precede the round opening.',
     );
     invariant(
       Number.isInteger(round.number) &&
@@ -223,7 +223,14 @@ export class SealedFunding {
       };
     });
     return {
-      round: { ...round, state: 'closed', totals, closedAt: now, version: round.version + 1 },
+      round: {
+        ...round,
+        state: 'closed',
+        totals,
+        closesAt: now,
+        closedAt: now,
+        version: round.version + 1,
+      },
       entitlements,
     };
   }
@@ -234,7 +241,11 @@ export class SealedFunding {
     investorPoolMinor: number,
   ): FundingPayoff {
     safeInteger(investorPoolMinor, 'Investor prize pool');
-    invariant(entitlements.length <= 90, 'TEAM_LIMIT', 'Too many round entitlements.');
+    invariant(
+      entitlements.length <= RULES.maxTeams * 3,
+      'TEAM_LIMIT',
+      'Too many round entitlements.',
+    );
     const claims = new Map<string, Fraction>();
     const seen = new Set<string>();
     const roundTerms = new Map<

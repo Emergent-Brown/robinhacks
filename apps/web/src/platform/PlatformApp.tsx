@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import type { AppSnapshot } from '@robinhacks/core';
 import { Dialog } from '../ui/primitives';
 import type { AppActions } from '../hooks/useApp';
-import { useClock } from '../hooks/useApp';
 import { Access } from './Access';
 import { Homepage } from './Homepage';
 import { Admin } from './Admin';
@@ -15,7 +14,7 @@ import { TeamFormation } from './TeamFormation';
 import { ProjectDetail, Projects } from './Projects';
 import { Results } from './Results';
 import { QuickStart, Rules } from './Rules';
-import { config, navigate, platform, stamp } from './shared';
+import { config, navigate, platform } from './shared';
 import './platform.css';
 
 function readRoute() {
@@ -47,7 +46,6 @@ export function PlatformApp({
   const [modal, setModal] = useState<'account' | 'demo' | 'onboarding' | 'note' | null>(null);
   const [offline, setOffline] = useState(!navigator.onLine);
   const [localError, setLocalError] = useState('');
-  const now = useClock();
   const user = actions.gateway.user;
   const approved = !!user && data.member?.uid === user.uid && data.member.status === 'approved';
   const organizer = approved && data.member?.role === 'organizer';
@@ -133,15 +131,6 @@ export function PlatformApp({
           ['team', 'My team'],
           ['more', 'More'],
         ];
-  const deadline = [
-    ...(active ? [{ label: active.name, time: active.closesAt }] : []),
-    ...(settings.submissionsOpen && settings.submissionClosesAt
-      ? [{ label: 'Final submissions', time: settings.submissionClosesAt }]
-      : []),
-  ]
-    .filter((item) => item.time > now)
-    .sort((a, b) => a.time - b.time)[0];
-  const reminder = workspaceReady && !event.paused && deadline && deadline.time - now <= 5 * 60000;
   return (
     <div className="platform-app">
       <a
@@ -245,9 +234,7 @@ export function PlatformApp({
                 : event.phase === 'CANCELLED'
                   ? 'Event cancelled'
                   : active
-                    ? now >= active.closesAt
-                      ? `${active.name} · allocations locked`
-                      : `${active.name} · closes ${stamp(active.closesAt, settings.details.timeZone)}`
+                    ? `${active.name} · funding open`
                     : event.phase === 'FROZEN'
                       ? 'Judging in progress'
                       : event.phase === 'FINALIZING'
@@ -298,12 +285,6 @@ export function PlatformApp({
               Edit note
             </button>
           )}
-        </div>
-      )}
-      {reminder && (
-        <div className="p-banner" role="status">
-          {deadline.label} closes in {Math.max(1, Math.ceil((deadline.time - now) / 60000))}{' '}
-          minutes. Check your saved work.
         </div>
       )}
       <main id="platform-main" tabIndex={-1} className="p-main">

@@ -1,21 +1,21 @@
 # September 25 walkthrough changes
 
-This is the current operating guide for the rules changed by the walkthrough feedback. It supersedes earlier references to designated investors, community awards, and score-only winner selection.
+This records the September walkthrough feedback, updated for manual controls on November 6. See the [current organizer guide](20-manual-event-controls.md). It supersedes earlier references to designated investors, community awards, and score-only winner selection.
 
 ## Where the controls are
 
 - **Admin → People → Signup approval:** toggle automatic approval for new verified Google signups. It starts off. Existing pending requests and judge requests still need review. Signup closes when funding starts, as before.
 - **Admin → People:** open team formation. Teams have at most four people, with one captain and up to three members. The captain invests; all members can edit the project, post checkpoints, and submit. Organizer moves cannot overfill a team. Suspended members still occupy a seat until removed or moved.
-- **Admin → Judging → Judging mode:** “All projects” is the default. Every approved independent judge scores every active submitted project automatically, including new submissions. Use “Assigned projects” to choose a subset for each judge. Set the mode before anyone submits scores; compatible drafts are preserved when switching.
+- **Admin → Judging → Judge assignments:** assign all projects to every judge, or distribute projects automatically with a balanced split. Assignments are explicit records; compatible drafts are preserved and submitted scores lock reassignment.
 - **Admin → Judging → Pitch order:** move projects up or down and save. Judges see their projects in that order. New projects go at the end.
-- **Admin → Judging → Judge assignments:** record conflicts in either mode. In assigned mode, choose each judge’s projects too. Every submitted, active project needs at least one non-conflicted judge.
+- **Individual judge assignments:** record conflicts and adjust projects for each judge. Every submitted, active project needs at least one non-conflicted judge.
 - **Judging → Judge deliberation:** after all assigned judges submit, every judge can see the ranked scores and notes. Any assigned judge can record the agreed winner and a decision summary. Scores guide discussion; the agreed winner can differ from the numeric leader. Simultaneous decisions cannot overwrite each other silently.
 - **Admin → Event controls → Judging and awards:** approve the submitted decision, review the computed awards, then publish after the review period. Corrected evidence or assignments invalidate an earlier decision.
 - **Admin → Settings:** enter one total prize. Half goes to the winning team; half is the maximum investor pool. Existing weighted shares, minimum denominators, integer-cent rounding, and the unallocated-share reserve are unchanged. No community prize or second/third builder prize is awarded.
 
 ## Round timing
 
-Schedule times are plans, not an automatic scheduler. Organizers open and close rounds in Event controls. Allocations stop at the saved deadline regardless of when the organizer closes the round to reveal totals. The readiness list identifies teams missing captains, checkpoints, or final submissions; the server checks the same requirements. A scheduled start does not bypass missing work. Changing the schedule changes future defaults, not a running round.
+Schedule times are planning guidance for organizers. Organizers open and close rounds in Event controls; allocations remain available until an organizer closes the round. The readiness list identifies teams missing captains, checkpoints, or final submissions; the server checks the same requirements. Suggested times never bypass missing work or change a running round. Submissions and community ballots are also opened and closed manually.
 
 ## Interface changes
 

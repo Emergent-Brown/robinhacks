@@ -47,10 +47,7 @@ export interface FundingSettings {
   reviewMinutes: number;
   rubric: Array<{ id: string; label: string; weight: number }>;
 }
-export type JudgingMode = 'all' | 'assigned';
 export interface PlatformConfig {
-  /** All approved judges score all eligible submissions unless explicitly set to assigned. */
-  judgingMode?: JudgingMode;
   teamFormationOpen?: boolean;
   autoApproveParticipants?: boolean;
   pitchOrder?: string[];
@@ -70,7 +67,8 @@ export interface FundingRound {
   name: string;
   state: 'open' | 'closed' | 'void';
   openedAt: number;
-  closesAt: number;
+  /** Null while open; set to the actual organizer close time for audit exports. */
+  closesAt: number | null;
   closedAt: number | null;
   weightBps: number;
   minimumDenominator: number;
@@ -237,7 +235,6 @@ export interface CommunityBallot {
   updatedAt: number;
 }
 export interface AwardResults {
-  judgingMode?: JudgingMode;
   judgeDecision?: JudgeDecision;
   id: string;
   createdAt: number;
@@ -296,8 +293,6 @@ export type FundingCommand = WithId<
   | {
       type: 'openFundingRound';
       expectedPhaseVersion: number;
-      durationMinutes: number;
-      closesAt?: number;
     }
   | {
       type: 'saveAllocation';
@@ -340,7 +335,7 @@ export type CommunityCommand = WithId<
   | { type: 'readConversation'; otherTeamId: string }
   | { type: 'blockConversation'; otherTeamId: string; blocked: boolean }
   | { type: 'reportMessage'; otherTeamId: string; messageId: string; reason: string }
-  | { type: 'setJudgingMode'; mode: JudgingMode; expectedPhaseVersion: number }
+  | { type: 'assignJudges'; strategy: 'all' | 'split'; expectedPhaseVersion: number }
   | {
       type: 'assignJudge';
       uid: string;
@@ -373,7 +368,6 @@ export type CommunityCommand = WithId<
 >;
 export type PlatformCommand = FundingCommand | CommunityCommand;
 export const defaultPlatformConfig = (): PlatformConfig => ({
-  judgingMode: 'all',
   version: 2,
   teamFormationOpen: false,
   details: defaultEventDetails(),

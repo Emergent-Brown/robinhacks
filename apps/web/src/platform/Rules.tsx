@@ -16,9 +16,9 @@ export function Rules({ data }: { data: AppSnapshot }) {
       </p>
       <h2>One private allocation per team</h2>
       <p>
-        The captain can edit the team’s allocation until the deadline. Valid changes save
-        automatically. Unused credits expire. Current-round allocations and totals stay private
-        until the round closes. There is no selling or carryover.
+        The captain can edit the team’s allocation until the organizer closes the round. Valid
+        changes save automatically. Unused credits expire. Current-round allocations and totals stay
+        private until the round closes. There is no selling or carryover.
       </p>
       <h2>Each round stands on its own</h2>
       <p>
@@ -77,7 +77,7 @@ export function QuickStart({ data, onClose }: { data: AppSnapshot; onClose: () =
     ],
     [
       'Back other teams',
-      `Your team gets ${funding.budget} credits per round. Read projects, ask questions, and enter amounts on Investments. Your valid allocation saves privately until the deadline.`,
+      `Your team gets ${funding.budget} credits per round. Read projects, ask questions, and enter amounts on Investments. Your valid allocation saves privately until the organizer closes the round.`,
     ],
     [
       'Review the round, then keep building',

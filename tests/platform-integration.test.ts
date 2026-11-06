@@ -7,6 +7,7 @@ import {
   PLATFORM_USERS,
 } from '../packages/application/src/platform-fixtures';
 import { MemoryRepository } from '../packages/application/src/memory-repository';
+import type { Repository } from '../packages/application/src/repository';
 
 const root = `events/${DEMO_EVENT_ID}`;
 const start = 10_000_000;
@@ -75,6 +76,33 @@ function fixture(preset: 'registration' | 'funding' = 'funding') {
 }
 
 describe('v2 integration isolation and privacy', () => {
+  it('rechecks maintenance before an organizer claim writes after the initial snapshot read', async () => {
+    const h = fixture('registration');
+    await h.repository.transaction(async (tx) => {
+      tx.set(`${root}/organizerInvites/${encodeURIComponent(newcomer.email)}`, {
+        email: newcomer.email,
+        createdAt: start,
+      });
+    });
+    const boundary: Repository = {
+      transaction: (work) => h.repository.transaction(work),
+      read: async (work) => {
+        const result = await h.repository.read(work);
+        // The admin begins a reset between the read-only check and identity sync.
+        await h.patch(root, { maintenance: true });
+        return result;
+      },
+    };
+    const service = new GameService(boundary, DEMO_EVENT_ID, { now: () => start });
+    await expect(service.snapshot(newcomer.uid, newcomer)).rejects.toMatchObject({
+      code: 'MAINTENANCE',
+    });
+    expect(h.repository.dump()[`${root}/members/${newcomer.uid}`]).toBeUndefined();
+    expect(
+      h.repository.dump()[`${root}/adminAudit/organizer_claim_${newcomer.uid}`],
+    ).toBeUndefined();
+    expect(h.event().maintenance).toBe(true);
+  });
   it.each([
     {
       type: 'executeTrade',
@@ -440,45 +468,16 @@ describe('v2 verified identity and frozen rosters', () => {
   });
 });
 
-describe('fair pause and server deadlines', () => {
-  it('extends all active deadlines by the same outage duration and keeps event and round deadlines equal', async () => {
+describe('manual event windows', () => {
+  it('pauses writes and resumes without introducing a deadline', async () => {
     const h = fixture();
-    const original = h.event().closesAt!;
-    await h.patch(root, {
-      platform: {
-        ...h.event().platform!,
-        submissionsOpen: true,
-        submissionClosesAt: original + 10_000,
-        ballotOpen: true,
-        ballotClosesAt: original + 20_000,
-      },
-    });
     h.setNow(start + 10_000);
     await h.pause(true);
-    h.setNow(start + 310_000);
+    await expect(h.allocation()).rejects.toMatchObject({ code: 'EVENT_PAUSED' });
+    h.setNow(start + 7 * 86_400_000);
     await h.pause(false);
-    expect(h.event().closesAt).toBe(original + 300_000);
-    expect(h.event().platform).toMatchObject({
-      submissionClosesAt: original + 310_000,
-      ballotClosesAt: original + 320_000,
-    });
-    expect(h.repository.dump()[`${root}/fundingRounds/funding-2`]).toMatchObject({
-      closesAt: original + 300_000,
-    });
+    expect(h.event().closesAt).toBeNull();
+    expect(h.event().platform).toMatchObject({ submissionClosesAt: null, ballotClosesAt: null });
     await h.allocation();
-  });
-
-  it('does not revive an already expired deadline by pausing after it passed', async () => {
-    const h = fixture();
-    const original = h.event().closesAt!;
-    h.setNow(original + 1);
-    await h.pause(true);
-    h.setNow(original + 100_001);
-    await h.pause(false);
-    expect(h.event().closesAt).toBe(original);
-    expect(h.repository.dump()[`${root}/fundingRounds/funding-2`]).toMatchObject({
-      closesAt: original,
-    });
-    await expect(h.allocation()).rejects.toMatchObject({ code: 'ROUND_CLOSED' });
   });
 });

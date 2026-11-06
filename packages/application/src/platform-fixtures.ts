@@ -132,7 +132,7 @@ export function createPlatformDemoDocuments(
     phase: open ? 'SEED_OPEN' : 'REGISTRATION',
     phaseVersion: open ? 4 : 1,
     windowId: open ? 2 : 0,
-    closesAt: open ? now + 20 * 60000 : null,
+    closesAt: null,
     platform: {
       ...config,
       currentRound: open ? 2 : 0,
@@ -248,7 +248,12 @@ export function createPlatformDemoDocuments(
         updatedAt: round.openedAt + 60000,
         actorUid: team.captainUid,
       }));
-      const closed = SealedFunding.closeRound(round, allocations, config.funding, round.closesAt);
+      const closed = SealedFunding.closeRound(
+        round,
+        allocations,
+        config.funding,
+        now - (4 - number) * 30 * 60000,
+      );
       docs[`${root}/fundingRounds/${round.id}`] = closed.round;
       for (const row of allocations) docs[`${root}/roundAllocations/${row.id}`] = row;
       for (const row of closed.entitlements) docs[`${root}/roundEntitlements/${row.id}`] = row;

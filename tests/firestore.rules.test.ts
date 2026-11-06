@@ -574,7 +574,6 @@ describe.skipIf(!emulatorAddress)('Firestore client authorization', () => {
         type: 'openFundingRound',
         commandId: 'sealed-open-round-1',
         expectedPhaseVersion: initial.event!.phaseVersion,
-        durationMinutes: 1,
       });
       const command = {
         type: 'saveAllocation' as const,

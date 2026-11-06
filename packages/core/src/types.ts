@@ -217,6 +217,7 @@ export type Command =
   | { type: 'joinFormationTeam'; commandId: string; teamId: string; role: FormationRole }
   | { type: 'removeMember'; commandId: string; uid: string }
   | { type: 'addOrganizerEmail'; commandId: string; email: string }
+  | { type: 'addOrganizerEmails'; commandId: string; emails: string[] }
   | { type: 'removeOrganizerEmail'; commandId: string; email: string }
   | {
       type: 'updateTeam';

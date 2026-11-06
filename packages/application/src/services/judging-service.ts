@@ -28,7 +28,7 @@ type JudgingCommand = Extract<
   CommunityCommand,
   {
     type:
-      | 'setJudgingMode'
+      | 'assignJudges'
       | 'setPitchOrder'
       | 'submitJudgeDecision'
       | 'assignJudge'
@@ -50,8 +50,8 @@ interface ScoredProject {
 export class JudgingService {
   async execute(context: CommandContext, command: JudgingCommand) {
     switch (command.type) {
-      case 'setJudgingMode':
-        return this.setMode(context, command);
+      case 'assignJudges':
+        return this.assignMany(context, command);
       case 'setPitchOrder':
         return this.pitchOrder(context, command);
       case 'submitJudgeDecision':
@@ -71,12 +71,12 @@ export class JudgingService {
     }
   }
 
-  private async setMode(
+  private async assignMany(
     context: CommandContext,
-    command: Extract<JudgingCommand, { type: 'setJudgingMode' }>,
+    command: Extract<JudgingCommand, { type: 'assignJudges' }>,
   ) {
     const { tx, paths, event } = context;
-    const config = Guard.organizer(context, command.expectedPhaseVersion);
+    Guard.organizer(context, command.expectedPhaseVersion);
     Guard.writable(context);
     const [sheets, assignments, members, teams, submissions] = await Promise.all([
       tx.list<JudgingSheet>(paths.collection('judgingSheets'), 51),
@@ -85,30 +85,84 @@ export class JudgingService {
       tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1),
       tx.list<ProjectSubmission>(paths.collection('submissions'), RULES.maxTeams + 1),
     ]);
+    const judges = members
+      .filter((m) => m.status === 'approved' && m.role === 'judge' && m.teamId === null)
+      .sort((a, b) => a.uid.localeCompare(b.uid));
+    const projects = teams
+      .filter((t) => t.eligibility === 'active' && submissions.some((s) => s.teamId === t.id))
+      .map((t) => t.id)
+      .sort();
+    requireState(judges.length > 0, 'JUDGE_REQUIRED', 'Add an approved judge first.');
     requireState(
-      sheets.every((s) => s.submittedAt === null),
-      'JUDGING_MODE_LOCKED',
-      'Choose the judging mode before any judge submits scores.',
+      projects.length > 0,
+      'NO_ELIGIBLE_PROJECTS',
+      'Wait for eligible final project submissions before assigning judges.',
     );
-    const next = effectiveJudgeAssignments(command.mode, members, teams, submissions, assignments);
-    for (const sheet of sheets) {
-      const ids = next.find((a) => a.uid === sheet.uid)?.projectIds ?? [];
-      tx.set(paths.doc('judgingSheets', sheet.uid), {
-        ...sheet,
-        entries: Object.fromEntries(
-          Object.entries(sheet.entries).filter(([id]) => ids.includes(id)),
-        ),
-        version: sheet.version + 1,
-        updatedAt: context.now,
-      });
+    requireState(
+      new Set([...assignments.map((a) => a.uid), ...judges.map((j) => j.uid)]).size <= 50,
+      'JUDGE_LIMIT',
+      'This event supports at most 50 judge assignment records.',
+    );
+    requireState(
+      sheets.every((s) => s.submittedAt === null || !judges.some((j) => j.uid === s.uid)),
+      'SHEET_LOCKED',
+      'Bulk assignment is locked after a judge submits scores. Edit an unsubmitted judge individually.',
+    );
+    const next = judges.map((judge): JudgeAssignment => {
+      const prior = assignments.find((a) => a.uid === judge.uid);
+      const conflicts = (prior?.conflictIds ?? []).filter((id) => projects.includes(id));
+      return {
+        uid: judge.uid,
+        projectIds: command.strategy === 'all' ? [...projects] : [...conflicts],
+        conflictIds: conflicts,
+        version: (prior?.version ?? 0) + 1,
+      };
+    });
+    for (const id of projects) {
+      const candidates = next.filter((a) => !a.conflictIds.includes(id));
+      requireState(
+        candidates.length > 0,
+        'PROJECT_UNJUDGED',
+        'Every project needs at least one judge without a declared conflict.',
+      );
+      if (command.strategy === 'split') {
+        candidates.sort(
+          (a, b) =>
+            a.projectIds.length -
+              a.conflictIds.length -
+              (b.projectIds.length - b.conflictIds.length) || a.uid.localeCompare(b.uid),
+        );
+        candidates[0]!.projectIds.push(id);
+      }
+    }
+    for (const assignment of next) {
+      assignment.projectIds.sort();
+      tx.set(paths.doc('judgeAssignments', assignment.uid), assignment);
+      const sheet = sheets.find((s) => s.uid === assignment.uid);
+      if (sheet)
+        tx.set(paths.doc('judgingSheets', sheet.uid), {
+          ...sheet,
+          entries: Object.fromEntries(
+            Object.entries(sheet.entries).filter(([id]) => assignment.projectIds.includes(id)),
+          ),
+          version: sheet.version + 1,
+          updatedAt: context.now,
+        });
     }
     tx.set(paths.root, {
       ...event,
-      platform: { ...config, judgingMode: command.mode },
       phaseVersion: event.phaseVersion + 1,
       judgingRevision: (event.judgingRevision ?? 0) + 1,
     });
-    return { receipt: receipt(context, command, 'Judging mode saved.') };
+    return {
+      receipt: receipt(
+        context,
+        command,
+        command.strategy === 'all'
+          ? 'Every judge is assigned every submitted project.'
+          : 'Submitted projects distributed evenly among the judges.',
+      ),
+    };
   }
 
   private async pitchOrder(
@@ -158,15 +212,7 @@ export class JudgingService {
       tx.list<JudgeAssignment>(paths.collection('judgeAssignments'), 51),
       tx.list<JudgingSheet>(paths.collection('judgingSheets'), 51),
     ]);
-    const review = judgingReview(
-      teams,
-      submissions,
-      members,
-      assignments,
-      sheets,
-      config.funding,
-      config.judgingMode ?? 'all',
-    );
+    const review = judgingReview(teams, submissions, members, assignments, sheets, config.funding);
     requireState(
       review.ready,
       'JUDGING_INCOMPLETE',
@@ -205,15 +251,14 @@ export class JudgingService {
     command: Extract<JudgingCommand, { type: 'assignJudge' }>,
   ) {
     const { tx, paths } = context;
-    const config = Guard.organizer(context);
+    Guard.organizer(context);
     Guard.writable(context);
-    const [judge, prior, sheet, teams, assignments, submissions] = await Promise.all([
+    const [judge, prior, sheet, teams, assignments] = await Promise.all([
       tx.get<Member>(paths.member(command.uid)),
       tx.get<JudgeAssignment>(paths.doc('judgeAssignments', command.uid)),
       tx.get<JudgingSheet>(paths.doc('judgingSheets', command.uid)),
       tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1),
       tx.list<JudgeAssignment>(paths.collection('judgeAssignments'), 51),
-      tx.list<ProjectSubmission>(paths.collection('submissions'), RULES.maxTeams + 1),
     ]);
     requireState(
       judge?.status === 'approved' && judge.role === 'judge' && judge.teamId === null,
@@ -236,16 +281,13 @@ export class JudgingService {
       'This assignment changed. Refresh before saving.',
     );
     requireState(
-      command.projectIds.length <= 30 &&
+      command.projectIds.length <= RULES.maxTeams &&
         new Set(command.projectIds).size === command.projectIds.length &&
         command.projectIds.every((id) => teams.some((team) => team.id === id)),
       'INVALID_ASSIGNMENT',
       'Choose distinct projects from this event.',
     );
-    const projectIds =
-      (config.judgingMode ?? 'all') === 'all'
-        ? effectiveJudgeAssignments('all', [judge], teams, submissions, [])[0]!.projectIds
-        : command.projectIds;
+    const projectIds = command.projectIds;
     requireState(
       new Set(command.conflictIds).size === command.conflictIds.length &&
         command.conflictIds.every((id) => projectIds.includes(id)),
@@ -291,30 +333,19 @@ export class JudgingService {
       'JUDGING_CLOSED',
       'Judging opens after the final funding round.',
     );
-    const allProjects = (config.judgingMode ?? 'all') === 'all';
-    const [storedAssignment, prior, submissions, teams, sheets, members] = await Promise.all([
+    const [storedAssignment, prior, submissions, teams, sheets] = await Promise.all([
       tx.get<JudgeAssignment>(paths.doc('judgeAssignments', member.uid)),
       tx.get<JudgingSheet>(paths.doc('judgingSheets', member.uid)),
       tx.list<ProjectSubmission>(paths.collection('submissions'), RULES.maxTeams + 1),
       tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1),
       tx.list<JudgingSheet>(paths.collection('judgingSheets'), 51),
-      allProjects ? tx.list<Member>(paths.collection('members'), 501) : Promise.resolve([]),
     ]);
-    requireState(
-      !allProjects ||
-        members.filter(
-          (entry) => entry.status === 'approved' && entry.role === 'judge' && entry.teamId === null,
-        ).length <= 50,
-      'JUDGE_LIMIT',
-      'This event supports at most 50 approved judges. Ask an organizer to correct judge access.',
-    );
     requireState(
       sheets.length <= 50 && (prior !== null || sheets.length < 50),
       'JUDGE_LIMIT',
       'This event supports at most 50 judging sheets, including earlier judge records. Existing sheets can still be updated.',
     );
     const assignment = effectiveJudgeAssignments(
-      config.judgingMode ?? 'all',
       [member],
       teams,
       submissions,
@@ -465,7 +496,7 @@ export class JudgingService {
         tx.list<ProjectSubmission>(paths.collection('submissions'), RULES.maxTeams + 1),
         tx.list<JudgeAssignment>(paths.collection('judgeAssignments'), 51),
         tx.list<JudgingSheet>(paths.collection('judgingSheets'), 51),
-        tx.list<RoundEntitlement>(paths.collection('roundEntitlements'), 91),
+        tx.list<RoundEntitlement>(paths.collection('roundEntitlements'), RULES.maxTeams * 3 + 1),
         tx.get<AwardResults>(paths.doc('awardResults', 'current')),
         tx.get<AwardResults>(paths.doc('awardResults', command.commandId)),
       ]);
@@ -489,13 +520,7 @@ export class JudgingService {
       'NO_ELIGIBLE_PROJECTS',
       'At least one active project must have a final submission.',
     );
-    const activeAssignments = effectiveJudgeAssignments(
-      config.judgingMode ?? 'all',
-      members,
-      teams,
-      submissions,
-      assignments,
-    );
+    const activeAssignments = effectiveJudgeAssignments(members, teams, submissions, assignments);
     for (const assignment of activeAssignments) {
       if (
         assignment.projectIds.some(
@@ -546,15 +571,7 @@ export class JudgingService {
     };
     scored.sort((a, b) => compare(a, b) || a.teamId.localeCompare(b.teamId));
     const decision = await tx.get<JudgeDecision>(paths.doc('judgeDecisions', 'current'));
-    const review = judgingReview(
-      teams,
-      submissions,
-      members,
-      assignments,
-      sheets,
-      config.funding,
-      config.judgingMode ?? 'all',
-    );
+    const review = judgingReview(teams, submissions, members, assignments, sheets, config.funding);
     requireState(
       decision &&
         review.ready &&
@@ -587,7 +604,6 @@ export class JudgingService {
     );
     const awards: AwardResults = {
       id: command.commandId,
-      judgingMode: config.judgingMode ?? 'all',
       judgeDecision: decision,
       createdAt: now,
       publishAfter: now + config.funding.reviewMinutes * 60_000,

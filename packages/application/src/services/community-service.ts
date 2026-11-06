@@ -65,7 +65,7 @@ export class CommunityService {
         return this.ballots.execute(context, command);
       case 'submitJudgeDecision':
       case 'setPitchOrder':
-      case 'setJudgingMode':
+      case 'assignJudges':
       case 'assignJudge':
       case 'saveJudgingSheet':
       case 'beginJudging':
@@ -141,14 +141,7 @@ export class CommunityService {
     ]);
     const teams =
       organizer || judge ? await tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1) : [];
-    const mode = event.platform!.judgingMode ?? 'all';
-    const assignments = effectiveJudgeAssignments(
-      mode,
-      members,
-      teams,
-      submissions,
-      storedAssignments,
-    );
+    const assignments = effectiveJudgeAssignments(members, teams, submissions, storedAssignments);
     const review =
       organizer || judge
         ? judgingReview(
@@ -158,7 +151,6 @@ export class CommunityService {
             assignments,
             judgingSheets,
             event.platform!.funding,
-            mode,
           )
         : null;
     const decision =
@@ -194,8 +186,7 @@ export class CommunityService {
       conversations,
       general,
       reports,
-      assignments:
-        organizer || judge ? (mode === 'assigned' ? storedAssignments : assignments) : [],
+      assignments: organizer || judge ? storedAssignments : [],
       judgingSheets: organizer
         ? judgingSheets
         : judgingSheets.filter(

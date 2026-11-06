@@ -81,6 +81,33 @@
   color: #526b80;
   font-size: 12px;
 }
+.p-organizer-form {
+  max-width: 640px;
+  margin: 20px 0 24px;
+}
+.p-organizer-form textarea {
+  resize: vertical;
+}
+.p-judge-assignment-tools {
+  padding-bottom: 12px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #d9e3ec;
+}
+.p-judge-assignment-tools .p-actions {
+  margin-top: 0;
+}
+.p-member-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+.p-member-pagination > span {
+  color: #526b80;
+  font-size: 12px;
+}
 @media (max-width: 600px) {
   .p-admin-team-list > li {
     align-items: flex-start;

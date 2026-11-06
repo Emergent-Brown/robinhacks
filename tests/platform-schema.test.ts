@@ -26,15 +26,15 @@ describe('platform transport configuration', () => {
     expect(() => parseCommand(command)).toThrow();
   });
 
-  it('accepts the documented maximum funding duration and rejects longer windows', () => {
+  it('accepts manual opening and rejects obsolete duration or deadline parameters', () => {
     const command = {
       type: 'openFundingRound',
       commandId: 'duration-check',
       expectedPhaseVersion: 1,
-      durationMinutes: 1440,
     };
     expect(parseCommand(command)).toEqual(command);
-    expect(() => parseCommand({ ...command, durationMinutes: 1441 })).toThrow();
+    expect(() => parseCommand({ ...command, durationMinutes: 30 })).toThrow();
+    expect(() => parseCommand({ ...command, closesAt: Date.now() + 60_000 })).toThrow();
   });
 
   it('lets the service choose the sole highest-scoring winner', () => {

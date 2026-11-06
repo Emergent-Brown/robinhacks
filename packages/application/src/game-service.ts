@@ -161,6 +161,7 @@ export class GameService {
             result = await this.formation.execute(context, command);
             break;
           case 'addOrganizerEmail':
+          case 'addOrganizerEmails':
           case 'removeOrganizerEmail':
           case 'removeMember':
             result = await this.organizers.execute(context, command);
@@ -275,6 +276,12 @@ export class GameService {
   private async syncIdentity(tx: Transaction, uid: string, identity: Actor) {
     const event = await tx.get<EventConfig>(this.paths.root);
     if (!event) return;
+    // The initial read-only snapshot may have completed just before a reset locked the event.
+    requireState(
+      !event.maintenance,
+      'MAINTENANCE',
+      'Event setup is in progress. Please try again shortly.',
+    );
     const stored = await tx.get<Member>(this.paths.member(uid));
     const member = await this.organizers.claim(
       tx,
@@ -550,6 +557,7 @@ export class GameService {
         tx.set(context.paths.doc('fundingRounds', round.id), {
           ...round,
           state: 'void',
+          closesAt: now,
           totals: {},
           voidReason: 'Event cancelled',
           version: round.version + 1,
@@ -587,35 +595,23 @@ export class GameService {
       'PAUSE_UNCHANGED',
       'The pause state already matches.',
     );
-    const pausedAt = event.pausedAt ?? context.now;
-    const extension = command.paused ? 0 : Math.max(0, context.now - pausedAt);
-    const extend = (deadline: number | null) =>
-      deadline && deadline > pausedAt ? deadline + extension : deadline;
-    const rounds = await tx.list<FundingRound>(paths.collection('fundingRounds'), 4);
-    for (const round of rounds)
-      if (round.state === 'open' && !command.paused && round.closesAt > pausedAt)
-        tx.set(paths.doc('fundingRounds', round.id), {
-          ...round,
-          closesAt: round.closesAt + extension,
-          version: round.version + 1,
-        });
     tx.set(paths.root, {
       ...event,
       paused: command.paused,
       pausedAt: command.paused ? context.now : null,
       pauseReason: command.paused ? command.reason : '',
       phaseVersion: event.phaseVersion + 1,
-      closesAt: extend(event.closesAt),
+      closesAt: null,
       platform: {
         ...event.platform,
-        submissionClosesAt: extend(event.platform!.submissionClosesAt),
-        ballotClosesAt: extend(event.platform!.ballotClosesAt),
+        submissionClosesAt: null,
+        ballotClosesAt: null,
       },
     });
     return {
       message: command.paused
-        ? 'Event paused. Remaining submission time is preserved for everyone.'
-        : 'Event resumed. Active deadlines were extended equally.',
+        ? 'Event paused. Saved work is preserved.'
+        : 'Event resumed. Open windows remain open until an organizer closes them.',
     };
   }
 
