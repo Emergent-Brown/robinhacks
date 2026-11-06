@@ -47,9 +47,9 @@ describe('CommandLane', () => {
     const held = deferred();
     void lane.run('joinFormationTeam', () => held.promise);
     const work = vi.fn(async () => 'saved');
-    for (const type of ['saveAllocation', 'saveBallot', 'readGeneral', 'updateProfile'])
+    for (const type of ['saveAllocation', 'saveBallot', 'readGeneral'])
       await expect(lane.run(type, work)).resolves.toBe('saved');
-    expect(work).toHaveBeenCalledTimes(4);
+    expect(work).toHaveBeenCalledTimes(3);
     held.resolve();
   });
 
@@ -57,5 +57,25 @@ describe('CommandLane', () => {
     const lane = new CommandLane(5);
     void lane.run('joinFormationTeam', () => new Promise(() => undefined));
     await expect(lane.run('joinFormationTeam', async () => 'next')).resolves.toBe('next');
+  });
+  it('does not release an entire backlog when the first command times out', async () => {
+    vi.useFakeTimers();
+    try {
+      const lane = new CommandLane(100);
+      const starts: number[] = [];
+      const work = (n: number) => () => {
+        starts.push(n);
+        return new Promise<void>((resolve) => setTimeout(resolve, 150));
+      };
+      const requests = [0, 1, 2].map((n) => lane.run('joinFormationTeam', work(n)));
+      await vi.advanceTimersByTimeAsync(101);
+      expect(starts).toEqual([0, 1]);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(starts).toEqual([0, 1, 2]);
+      await vi.runAllTimersAsync();
+      await Promise.all(requests);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

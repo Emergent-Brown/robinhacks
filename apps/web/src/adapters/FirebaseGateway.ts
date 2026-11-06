@@ -95,6 +95,10 @@ export class FirebaseGateway implements AppGateway {
         isTokenAutoRefreshEnabled: true,
       });
     onAuthStateChanged(this.auth, (user) => {
+      this.reloads.cancel();
+      this.latestEvent = null;
+      this.loadedAt = 0;
+      this.staleWhileHidden = false;
       this.memberStop?.();
       this.stopMarket();
       this.invalidate();
@@ -152,7 +156,11 @@ export class FirebaseGateway implements AppGateway {
   private applyEvent(next: EventConfig) {
     if (!this.cache) return;
     const change = classifyEventChange(this.cache.event, next);
-    if (change === 'phase') return this.reloads.soon();
+    if (
+      change === 'phase' ||
+      (change === 'judging' && ['judge', 'organizer'].includes(this.cache.member?.role ?? ''))
+    )
+      return this.reloads.soon();
     this.cache = { ...this.cache, event: next };
     if (change === 'none') return this.emit();
     if (followsRoster(this.cache)) this.reloads.atMostEvery(REFRESH.rosterGapMs);
@@ -341,17 +349,26 @@ export class FirebaseGateway implements AppGateway {
     if (this.cache && !force) return this.cache;
     if (this.pendingSnapshot) return this.pendingSnapshot;
     const generation = this.generation;
+    const owner = this.auth.currentUser?.uid;
     this.reloads.loading();
-    const request = withRetry('read', () =>
-      this.call<AppSnapshot>(this.user ? 'gameSnapshot' : 'gamePublic', {}),
-    )
+    const request = withRetry('read', () => {
+      this.requireIdentity(owner);
+      return this.call<AppSnapshot>(owner ? 'gameSnapshot' : 'gamePublic', {});
+    })
       .then((snapshot) => {
         if (generation === this.generation) {
           this.cache = snapshot;
           this.loadedAt = Date.now();
           this.watchMarket();
           // Listeners stay quiet during a load, so catch a phase that changed meanwhile.
-          if (missedPhaseChange(snapshot.event, this.latestEvent)) this.reloads.soon();
+          if (
+            missedPhaseChange(snapshot.event, this.latestEvent) ||
+            (this.latestEvent &&
+              snapshot.event &&
+              (this.latestEvent.judgingRevision ?? 0) > (snapshot.event.judgingRevision ?? 0) &&
+              ['judge', 'organizer'].includes(snapshot.member?.role ?? ''))
+          )
+            this.reloads.soon();
         }
         return snapshot;
       })
@@ -362,12 +379,16 @@ export class FirebaseGateway implements AppGateway {
     return request;
   }
   async command(command: Command): Promise<CommandResult> {
+    const owner = this.auth.currentUser?.uid;
+    const generation = this.generation;
+    const current = () => owner === this.auth.currentUser?.uid && generation === this.generation;
     try {
-      const result = await withRetry('command', () =>
-        this.call<CommandResult>('gameCommand', { command }),
-      );
-      if (command.type === 'saveAllocation') this.rememberAllocation(command);
-      if (command.type === 'readGeneral' && this.cache?.platform) {
+      const result = await withRetry('command', () => {
+        this.requireIdentity(owner);
+        return this.call<CommandResult>('gameCommand', { command });
+      });
+      if (current() && command.type === 'saveAllocation') this.rememberAllocation(command);
+      if (current() && command.type === 'readGeneral' && this.cache?.platform) {
         const general = this.cache.platform.general;
         this.cache = {
           ...this.cache,
@@ -381,11 +402,24 @@ export class FirebaseGateway implements AppGateway {
         };
       }
       return result;
+    } catch (error) {
+      // A failed allocation may mean another tab advanced its version. Fetch authority again.
+      if (current() && command.type === 'saveAllocation') this.invalidate();
+      throw error;
     } finally {
-      if (!['sendGeneralMessage', 'readGeneral', 'saveAllocation'].includes(command.type))
-        this.invalidate();
-      this.emit();
+      if (owner === this.auth.currentUser?.uid) {
+        if (!['sendGeneralMessage', 'readGeneral', 'saveAllocation'].includes(command.type))
+          this.invalidate();
+        this.emit();
+      }
     }
+  }
+  /** Never replay a request using a different account after waiting through a retry. */
+  private requireIdentity(owner: string | undefined) {
+    if (owner !== this.auth.currentUser?.uid)
+      throw Object.assign(new Error('Account changed. Please try again.'), {
+        code: 'ACCOUNT_CHANGED',
+      });
   }
   /** Autosaves update the local copy, because a full reload per keystroke burst adds up. */
   private rememberAllocation(command: Extract<Command, { type: 'saveAllocation' }>) {

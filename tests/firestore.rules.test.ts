@@ -48,6 +48,9 @@ const googleClaims = {
 };
 
 const privatePaths = [
+  'readViews/members',
+  'readViews/members/chunks/0',
+  'readViews/teams/chunks/0',
   'organizerInvites/invited@example.test',
   'removedMembers/previous-captain',
   'submissionCorrections/correction-one',

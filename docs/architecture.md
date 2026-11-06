@@ -1,5 +1,8 @@
 # Application architecture
 
+For the server-only read pages, consistency boundaries, benchmark, and deployment
+backfill procedure, see [Firestore cost review](19-firestore-cost-review.md).
+
 Emergent Hacks is a React/TypeScript client backed by Firebase Authentication, Cloud Functions and Firestore. The browser-local demo calls the same application services as production, through an in-memory repository.
 
 ## Boundaries

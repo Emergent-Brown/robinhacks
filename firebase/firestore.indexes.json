@@ -1,6 +1,7 @@
 {
   "indexes": [],
   "fieldOverrides": [
+    { "collectionGroup": "chunks", "fieldPath": "rows", "indexes": [] },
     { "collectionGroup": "receipts", "fieldPath": "entries", "indexes": [] },
     { "collectionGroup": "receipts", "fieldPath": "payloadKey", "indexes": [] },
     { "collectionGroup": "commandReceipts", "fieldPath": "result", "indexes": [] },

@@ -16,13 +16,15 @@ export const REFRESH = Object.freeze({
   retryMaxMs: 10_000,
 });
 
-export type EventChange = 'none' | 'phase' | 'roster';
+export type EventChange = 'none' | 'phase' | 'roster' | 'judging';
 
 export function classifyEventChange(
-  previous: Pick<EventConfig, 'phaseVersion' | 'rosterVersion'> | null | undefined,
-  next: Pick<EventConfig, 'phaseVersion' | 'rosterVersion'>,
+  previous:
+    Pick<EventConfig, 'phaseVersion' | 'rosterVersion' | 'judgingRevision'> | null | undefined,
+  next: Pick<EventConfig, 'phaseVersion' | 'rosterVersion' | 'judgingRevision'>,
 ): EventChange {
   if (next.phaseVersion !== previous?.phaseVersion) return 'phase';
+  if ((next.judgingRevision ?? 0) !== (previous?.judgingRevision ?? 0)) return 'judging';
   return (next.rosterVersion ?? 0) === (previous?.rosterVersion ?? 0) ? 'none' : 'roster';
 }
 
@@ -142,7 +144,12 @@ export async function withRetry<T>(
       const failure = error as Failure;
       if (attempt >= REFRESH.retries || !transient.has(failure.code ?? '')) throw error;
       const backoff = REFRESH.retryBaseMs * 2 ** attempt * (1 + random());
-      await sleep(Math.min(REFRESH.retryMaxMs, Math.max(backoff, failure.retryAfterMs ?? 0)));
+      await sleep(
+        Math.max(
+          Math.min(REFRESH.retryMaxMs, backoff),
+          Math.min(60_000, failure.retryAfterMs ?? 0),
+        ),
+      );
     }
   }
 }

@@ -1,5 +1,5 @@
 /** Commands that write only their own team's or person's records. They cannot deadlock. */
-const INDEPENDENT = new Set(['saveAllocation', 'saveBallot', 'readGeneral', 'updateProfile']);
+const INDEPENDENT = new Set(['saveAllocation', 'saveBallot', 'readGeneral']);
 const MAX_HOLD_MS = 20_000;
 
 /**
@@ -14,16 +14,20 @@ export class CommandLane {
 
   run<T>(commandType: string, work: () => Promise<T>): Promise<T> {
     if (INDEPENDENT.has(commandType)) return work();
-    const result = this.tail.then(work);
+    const previous = this.tail;
+    const result = previous.then(work);
     // A stuck transaction fails on its own later; it must not stall the room meanwhile.
-    let timer: ReturnType<typeof setTimeout>;
-    const released = new Promise<void>((resolve) => {
-      timer = setTimeout(resolve, this.maxHoldMs);
-      timer.unref?.();
+    this.tail = previous.then(() => {
+      // Time only active work. Starting at enqueue time releases the whole backlog at once.
+      let timer: ReturnType<typeof setTimeout>;
+      const released = new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, this.maxHoldMs);
+        timer.unref?.();
+      });
+      return Promise.race([result.catch(() => undefined), released]).finally(() =>
+        clearTimeout(timer),
+      );
     });
-    this.tail = Promise.race([result.catch(() => undefined), released]).finally(() =>
-      clearTimeout(timer),
-    );
     return result;
   }
 }

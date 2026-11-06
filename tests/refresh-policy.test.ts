@@ -47,6 +47,9 @@ describe('deciding what a change means', () => {
     expect(classifyEventChange(base, base)).toBe('none');
     expect(classifyEventChange({ phaseVersion: 5 }, { phaseVersion: 5 })).toBe('none');
     expect(classifyEventChange(null, base)).toBe('phase');
+    expect(
+      classifyEventChange({ ...base, judgingRevision: 1 }, { ...base, judgingRevision: 2 }),
+    ).toBe('judging');
   });
 
   it('notices a phase that changed while a load was in flight', () => {
@@ -129,14 +132,14 @@ describe('withRetry', () => {
     expect(work).toHaveBeenCalledTimes(REFRESH.retries + 1);
   });
 
-  it('honours a server wait, within the cap', async () => {
+  it('honours the full server cooldown instead of retrying early', async () => {
     const work = vi
       .fn()
       .mockRejectedValueOnce(failing('RATE_LIMITED', 45_000))
       .mockResolvedValue(1);
     const sleep = vi.fn().mockResolvedValue(undefined);
     await withRetry('read', work, sleep, () => 0);
-    expect(sleep).toHaveBeenCalledWith(REFRESH.retryMaxMs);
+    expect(sleep).toHaveBeenCalledWith(45_000);
   });
 
   it('never retries a rule rejection or a rate-limited command', async () => {
