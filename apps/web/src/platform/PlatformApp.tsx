@@ -378,6 +378,11 @@ export function PlatformApp({
           {pages.map(([page, label]) => (
             <button
               key={page}
+              aria-label={
+                page === 'messages' && unread > 0
+                  ? `Messages, ${unread} unread ${unread === 1 ? 'conversation' : 'conversations'}`
+                  : undefined
+              }
               aria-current={
                 route.page === page ||
                 (page === 'more' && ['results', 'rules', 'home'].includes(route.page))
@@ -386,7 +391,14 @@ export function PlatformApp({
               }
               onClick={() => navigate(page!)}
             >
-              {page === 'investments' ? 'Invest' : label}
+              <span className="p-mobile-nav-label">
+                {page === 'investments' ? 'Invest' : page === 'messages' ? 'Messages' : label}
+              </span>
+              {page === 'messages' && unread > 0 && (
+                <span className="p-mobile-nav-unread" aria-hidden="true">
+                  {unread > 99 ? '99+' : unread}
+                </span>
+              )}
             </button>
           ))}
         </nav>
