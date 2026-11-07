@@ -350,8 +350,35 @@ function UpdateEditor({ data, actions }: PageProps) {
   return (
     <Panel title="Publish a checkpoint update">
       <p className="muted">
-        Updates remain public and cannot be edited. Publish a correction as a new update if needed.
+        Share what you built, tried, or learned. A working demo is not required. Updates remain
+        public and cannot be edited; publish a correction as a new update if needed.
       </p>
+      <details className="p-prose">
+        <summary>Checkpoint examples</summary>
+        <ul>
+          <li>
+            Building: “We connected the signup form to the database and added error messages.”
+          </li>
+          <li>
+            Research: “We compared three APIs. One supports offline use, which our project needs.”
+          </li>
+          <li>
+            User interviews: “We talked to four students. Finding a pickup time was their main
+            problem.”
+          </li>
+          <li>
+            Design: “We sketched two flows and made a clickable prototype of the simpler one.”
+          </li>
+          <li>Testing: “We tried the demo on phones and found a bug in the upload step.”</li>
+          <li>
+            Experiments: “We tested two approaches. The first was too slow, so we changed
+            direction.”
+          </li>
+        </ul>
+        <p>
+          Use your own results. Say what is still an idea, what you tried, and what you learned.
+        </p>
+      </details>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -372,7 +399,10 @@ function UpdateEditor({ data, actions }: PageProps) {
           </select>
         </Field>
         <div className="p-form-grid">
-          <Field label="What works now">
+          <Field
+            label="What you worked on or learned"
+            hint="Code, research, sketches, interviews, tests, or experiments all count."
+          >
             <textarea
               required
               rows={3}
@@ -381,7 +411,10 @@ function UpdateEditor({ data, actions }: PageProps) {
               onChange={(e) => setForm({ ...form, works: e.target.value })}
             />
           </Field>
-          <Field label="What changed">
+          <Field
+            label="What changed"
+            hint="Describe your progress or a decision you made. For the first checkpoint, explain your starting point."
+          >
             <textarea
               required
               rows={3}
@@ -391,16 +424,21 @@ function UpdateEditor({ data, actions }: PageProps) {
             />
           </Field>
         </div>
-        <Field label="Demo or evidence URL">
+        <Field
+          label="Demo or evidence URL (optional)"
+          hint="If you have one, share an HTTPS link to a demo, design, notes, or repository. Otherwise, leave this blank."
+        >
           <input
             type="url"
-            required
             maxLength={500}
             value={form.evidenceUrl}
             onChange={(e) => setForm({ ...form, evidenceUrl: e.target.value })}
           />
         </Field>
-        <Field label="What is still incomplete">
+        <Field
+          label="What is still incomplete"
+          hint="For example: “We still need to test the API and build the upload screen.”"
+        >
           <textarea
             required
             rows={2}
@@ -416,7 +454,7 @@ function UpdateEditor({ data, actions }: PageProps) {
           <div className="p-prose">
             <h3>{config(data).funding.roundNames[round - 1]}</h3>
             <p>
-              <strong>Works:</strong> {form.works}
+              <strong>Progress:</strong> {form.works}
             </p>
             <p>
               <strong>Changed:</strong> {form.changed}

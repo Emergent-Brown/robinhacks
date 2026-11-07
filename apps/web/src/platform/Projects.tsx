@@ -281,7 +281,7 @@ export function ProjectDetail({ data, actions, id }: PageProps & { id: string })
                 </span>
               </div>
               <dl className="p-update-content">
-                <dt>What works</dt>
+                <dt>Progress and findings</dt>
                 <dd>{update.works}</dd>
                 <dt>What changed</dt>
                 <dd>{update.changed || 'No changes noted.'}</dd>
