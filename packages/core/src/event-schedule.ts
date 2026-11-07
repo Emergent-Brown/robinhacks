@@ -133,18 +133,18 @@ export function defaultEventDetails(): EventDetails {
     schedule: [
       { time: 'Sat · 10 a.m.', title: 'Welcome & team forming', description: '' },
       {
-        time: '',
-        window: 'round1',
-        title: 'Round 1 · First investments',
-        description: 'Back the initial pitches.',
-      },
-      {
         time: 'Sat · 11:30 a.m.–noon',
         title: 'Building',
         description: 'Work on your project and meet other teams.',
       },
       { time: 'Sat · noon', title: 'Lunch', description: '' },
-      { time: 'Sat · 1–6 p.m.', title: 'Building', description: '' },
+      {
+        time: '',
+        window: 'round1',
+        title: 'Round 1 · First investments',
+        description: 'Back the initial pitches.',
+      },
+      { time: 'Sat · 1:30–6 p.m.', title: 'Building', description: '' },
       {
         time: 'Sat · 6 p.m.',
         title: 'Funding reveal',

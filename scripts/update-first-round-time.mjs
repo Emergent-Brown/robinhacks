@@ -29,8 +29,22 @@ try {
     const timing = structuredClone(event.platform.details.timing);
     timing.rounds[0] = defaultEventDetails().timing.rounds[0];
     EventSchedule.validate(timing);
+    const schedule = event.platform.details.schedule.filter((row) => row.window !== 'round1');
+    const lunch = schedule.findIndex((row) => /lunch/i.test(row.title));
+    schedule.splice(
+      lunch >= 0 ? lunch + 1 : 1,
+      0,
+      defaultEventDetails().schedule.find((row) => row.window === 'round1'),
+    );
+    for (const row of schedule) {
+      if (row.title === 'Building' && row.time === 'Sat · 1–6 p.m.') row.time = 'Sat · 1:30–6 p.m.';
+    }
     if (process.argv.includes('--apply')) {
-      tx.update(root, { 'platform.details.timing': timing, phaseVersion: event.phaseVersion + 1 });
+      tx.update(root, {
+        'platform.details.timing': timing,
+        'platform.details.schedule': schedule,
+        phaseVersion: event.phaseVersion + 1,
+      });
     }
     return {
       applied: process.argv.includes('--apply'),

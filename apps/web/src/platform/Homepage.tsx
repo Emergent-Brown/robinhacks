@@ -1,3 +1,4 @@
+import { EventSchedule } from '@robinhacks/core';
 import { useState } from 'react';
 import { Dialog, ExternalLink } from '../ui/primitives';
 import { JudgingRubric } from './JudgingRubric';
@@ -138,14 +139,25 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
           {details.schedule.length ? (
             <ol className="p-schedule">
               {details.schedule
-                .filter((item) => !item.window && !/funding|investment/i.test(item.title))
+                .filter(
+                  (item) =>
+                    item.window === 'round1' ||
+                    (!item.window && !/funding|investment/i.test(item.title)),
+                )
                 .map((item, index) => {
                   return (
                     <li
                       key={index}
                       className={item.window?.startsWith('round') ? 'p-schedule-round' : undefined}
                     >
-                      <time>{item.time}</time>
+                      <time>
+                        {EventSchedule.resolve(details.timing, item.window)
+                          ? EventSchedule.label(
+                              EventSchedule.resolve(details.timing, item.window)!,
+                              details.timeZone,
+                            )
+                          : item.time}
+                      </time>
                       <div>
                         <strong>{item.title}</strong>
                         {item.description && <p>{item.description}</p>}
@@ -158,7 +170,7 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
             <p>The organizer will publish the schedule here.</p>
           )}
           <p className="muted">
-            Tentative agenda. Organizers announce funding rounds during the event.
+            Tentative agenda. Organizers manually open and close investment rounds.
           </p>
         </Panel>
       </section>
