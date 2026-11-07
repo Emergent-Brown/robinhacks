@@ -41,20 +41,9 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
           <button className="p-link" onClick={() => navigate('rules')}>
             Event rules
           </button>
-          {details.registrationUrl ? (
-            <a
-              className="button primary"
-              href={details.registrationUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Join the event <span aria-hidden="true">↗</span>
-            </a>
-          ) : (
-            <button className="button primary" onClick={onJoin}>
-              Join the event
-            </button>
-          )}
+          <button className="button primary" onClick={onJoin}>
+            Join the event
+          </button>
         </div>
       </div>
       <div className="p-home-columns">

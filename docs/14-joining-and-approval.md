@@ -1,6 +1,6 @@
 # Joining, approval, and team selection
 
-**Join the event** opens the event registration form. App access is separate: open [emergenthacks.com](https://emergenthacks.com/) and choose **Sign in → Continue with Google**. Confirm your name and verified account email, then send the access request. Signup asks for no team or role, and has no password option.
+**Join the event** on [emergenthacks.com](https://emergenthacks.com/) opens the app signup page. Choose **Continue with Google**. Confirm your name and verified account email, then send the access request. Signup asks for no team or role, and has no password option.
 
 While the request is pending, **Check status** fetches a fresh result and shows when it was checked. Return using the same Google account. A verified email identifies the account; an organizer still approves attendance.
 
