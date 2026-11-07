@@ -363,18 +363,74 @@ describe('approval before organizer-controlled team formation', () => {
     expectGated(restored);
   });
 
-  it('refuses signup approvals, formation and create/join once funding locks the roster', async () => {
+  it('accepts late signups and approvals while keeping self-service team formation closed', async () => {
     const h = fixture('funding');
-    await expect(
-      h.execute(applicant, { type: 'requestMembership', displayName: 'Sam' }),
-    ).rejects.toMatchObject({ code: 'REGISTRATION_CLOSED' });
-    await expect(
-      h.execute(organizer, { type: 'approveMembership', uid: applicant.uid }),
-    ).rejects.toMatchObject({ code: 'ROSTER_LOCKED' });
+    const before = h.repository.dump();
+    await h.patch(root, { platform: { ...h.event().platform!, autoApproveParticipants: true } });
+    await h.execute(applicant, { type: 'requestMembership', displayName: 'Sam' });
+    expect(h.repository.dump()[`${root}/members/${applicant.uid}`]).toMatchObject({
+      status: 'pending',
+      teamId: null,
+    });
+    await h.execute(organizer, { type: 'approveMembership', uid: applicant.uid });
+    const approved = await h.service.snapshot(applicant.uid, applicant);
+    expectGated(approved);
+    await h.execute(organizer, {
+      type: 'adminAssignMember',
+      uid: applicant.uid,
+      teamId: 'team-1',
+      role: 'member',
+      expectedVersion: approved.member!.version,
+    });
+    expect(h.repository.dump()[`${root}/members/${applicant.uid}`]).toMatchObject({
+      status: 'approved',
+      teamId: 'team-1',
+    });
+    expect(h.event().paused).toBe(false);
+    for (const [path, value] of Object.entries(before)) {
+      if (/\/(fundingRounds|roundAllocations|roundEntitlements|submissions)\//.test(path))
+        expect(h.repository.dump()[path]).toEqual(value);
+    }
     await expect(h.open()).rejects.toMatchObject({ code: 'FORMATION_UNAVAILABLE' });
     await expect(
       h.execute(attendee, { type: 'createFormationTeam', name: 'Too late', role: 'captain' }),
     ).rejects.toMatchObject({ code: 'FORMATION_UNAVAILABLE' });
+  });
+  it.each(['SEED_OPEN', 'INTERMISSION', 'FROZEN'] as const)(
+    'accepts and approves requests during %s',
+    async (phase) => {
+      const h = fixture('funding');
+      await h.patch(root, { phase });
+      await h.execute(applicant, { type: 'requestMembership', displayName: 'Sam' });
+      await h.execute(organizer, { type: 'approveMembership', uid: applicant.uid });
+      expect(h.repository.dump()[`${root}/members/${applicant.uid}`]).toMatchObject({
+        status: 'approved',
+        teamId: null,
+      });
+    },
+  );
+
+  it.each([
+    { phase: 'FINALIZING' },
+    { phase: 'FINALIZED' },
+    { phase: 'ARCHIVED' },
+    { phase: 'CANCELLED' },
+    { activeOperationId: 'closing-round' },
+  ])('blocks requests and approvals when unavailable: %j', async (patch) => {
+    const h = fixture('funding');
+    await h.execute(applicant, { type: 'requestMembership', displayName: 'Sam' });
+    await h.patch(root, patch);
+    const before = h.repository.dump();
+    await expect(
+      h.execute(
+        { ...applicant, uid: 'another-person' },
+        { type: 'requestMembership', displayName: 'Another' },
+      ),
+    ).rejects.toMatchObject({ code: 'REGISTRATION_CLOSED' });
+    await expect(
+      h.execute(organizer, { type: 'approveMembership', uid: applicant.uid }),
+    ).rejects.toMatchObject({ code: 'REGISTRATION_CLOSED' });
+    expect(h.repository.dump()).toEqual(before);
   });
 });
 

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { AccessRequest, Member } from '@robinhacks/core';
+import { SignupPolicy } from '@robinhacks/core';
 import { Dialog, Field } from '../ui/primitives';
 import { AdminPersonEditor } from './AdminPersonEditor';
 import { assignmentLockReason, managementLockReason } from './admin-management';
@@ -62,7 +63,9 @@ export function AdminMembers({ data, actions }: PageProps) {
   );
   const registration = ['DRAFT', 'REGISTRATION'].includes(data.event!.phase);
   const rosterEditable = registration || (data.event!.paused && !data.event!.activeOperationId);
-  const canApprove = registration && !settings.rulesLockedAt;
+  const canApprove = SignupPolicy.isOpen(data.event!);
+  const canEditSignupPolicy =
+    registration && !settings.rulesLockedAt && !data.event!.paused && canApprove;
   const formationOpen = !!settings.teamFormationOpen;
   const managementLock = managementLockReason(data);
   const visibleMembers = members.filter(
@@ -155,7 +158,7 @@ export function AdminMembers({ data, actions }: PageProps) {
           <input
             type="checkbox"
             checked={!!settings.autoApproveParticipants}
-            disabled={!canApprove || cmd.pending}
+            disabled={!canEditSignupPolicy || cmd.pending}
             onChange={(event) =>
               void cmd.run({
                 type: 'setSignupPolicy',
@@ -168,7 +171,8 @@ export function AdminMembers({ data, actions }: PageProps) {
         </label>
         <p className="muted">
           Applies to new verified Google signups. Existing requests and judge requests still need
-          review. Limit: 160 participants; four people per team.
+          review. Once funding begins, all new participants need organizer approval. Limit: 150
+          participants; four people per team.
         </p>
         <ErrorMessage>{cmd.error}</ErrorMessage>
       </Panel>
@@ -185,8 +189,8 @@ export function AdminMembers({ data, actions }: PageProps) {
         }
       >
         <p className="muted">
-          Check the attendee’s name and verified email, then approve access. They’ll choose their
-          own team when you open team selection.
+          Check the attendee’s name and verified email, then approve access. Once funding has
+          started, use Edit person / team to add approved people to a team without pausing.
         </p>
         {checkedAt && (
           <p className="muted" role="status">
@@ -235,7 +239,9 @@ export function AdminMembers({ data, actions }: PageProps) {
           ))}
         </ul>
         {!canApprove && (
-          <p className="muted">Participant approvals close when the first funding round opens.</p>
+          <p className="muted">
+            Approvals are unavailable while the event is closing or processing an operation.
+          </p>
         )}
       </Panel>
       <Panel title="Organizers">

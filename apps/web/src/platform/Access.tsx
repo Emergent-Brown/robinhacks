@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { SignupPolicy } from '@robinhacks/core';
 import { Field } from '../ui/primitives';
 import { config, Panel, useCommand, ErrorMessage, type PageProps } from './shared';
 
@@ -12,9 +13,7 @@ export function Access({ data, actions }: PageProps) {
   const [checkedAt, setCheckedAt] = useState<number | null>(null);
   const cmd = useCommand(actions);
   const rosterLocked = !!config(data).rulesLockedAt;
-  const requestsOpen = !['FINALIZING', 'FINALIZED', 'ARCHIVED', 'CANCELLED'].includes(
-    data.event!.phase,
-  );
+  const requestsOpen = SignupPolicy.isOpen(data.event!);
   useEffect(() => {
     setName(user?.displayName || '');
   }, [user?.uid]);
@@ -100,7 +99,9 @@ export function Access({ data, actions }: PageProps) {
               identify your account.
             </p>
             <p className="muted">
-              After approval, you’ll choose a team when the organizer opens team selection.
+              {rosterLocked
+                ? 'After approval, ask an organizer to add you to a team.'
+                : 'After approval, you’ll choose a team when the organizer opens team selection.'}
             </p>
             <button
               className="button secondary"
@@ -139,10 +140,7 @@ export function Access({ data, actions }: PageProps) {
               });
             }}
           >
-            <p>
-              Confirm your name and email. You’ll choose a team after approval, when team selection
-              opens.
-            </p>
+            <p>Confirm your name and email to request access.</p>
             <Field label="Your name">
               <input
                 value={name}
@@ -158,10 +156,10 @@ export function Access({ data, actions }: PageProps) {
             </Field>
             {rosterLocked && (
               <p className="p-note">
-                Participant requests have closed. Contact an organizer if you need to join a team.
+                You can still join. After approval, an organizer can add you to a team.
               </p>
             )}
-            <button className="button primary full" disabled={cmd.pending || rosterLocked}>
+            <button className="button primary full" disabled={cmd.pending}>
               {cmd.pending ? 'Sending…' : 'Send access request'}
             </button>
           </form>

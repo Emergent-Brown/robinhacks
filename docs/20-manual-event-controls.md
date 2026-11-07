@@ -16,7 +16,13 @@ use the team controls to appoint a replacement. During the event, pause before
 promoting a team member or judge. Their roles stay locked once awards review
 begins. Adding a new staff email does not require a pause.
 
-Approve attendees, then open team selection when ready. Approved participants
+Registration stays open during building and investment rounds. Late arrivals sign in
+with Google and send their name and email. Approve them in **Admin → People →
+Pending approvals**, then add them to an existing team. Late requests always need
+review, even if automatic approval was enabled before funding. Signup and approval
+close when results review begins.
+
+Before funding, approve attendees, then open team selection when ready. Approved participants
 create or join teams before entering the main app. Close selection before
 opening the first funding round. To add an approved person who is still waiting
 for a team during the event, use **Admin → People → Edit person / team**, select

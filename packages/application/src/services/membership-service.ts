@@ -1,4 +1,5 @@
 import type { AccessRequest, Command, Member, Team } from '@robinhacks/core';
+import { SignupPolicy } from '@robinhacks/core';
 import { requireState } from '../errors';
 import { Permissions } from './permissions';
 import type { CommandContext } from './context';
@@ -15,16 +16,9 @@ export class MembershipService {
     );
     requireState(event.platform, 'PLATFORM_REQUIRED', 'This event needs funding-round settings.');
     requireState(
-      !event.activeOperationId &&
-        (['DRAFT', 'REGISTRATION'].includes(event.phase) ||
-          (!!command.staffRole && ['SEED_OPEN', 'INTERMISSION', 'FROZEN'].includes(event.phase))),
+      SignupPolicy.isOpen(event),
       'REGISTRATION_CLOSED',
       'Participant signup is closed. Contact an organizer.',
-    );
-    requireState(
-      !event.platform.rulesLockedAt || !!command.staffRole,
-      'ROSTER_LOCKED',
-      'Participant signup is closed after funding starts.',
     );
     const [member, prior, members] = await Promise.all([
       tx.get<Member>(paths.member(actor.uid)),
@@ -46,7 +40,10 @@ export class MembershipService {
       'RATE_LIMITED',
       'Wait 30 seconds before changing your access request.',
     );
-    const automatic = event.platform.autoApproveParticipants === true && !command.staffRole;
+    const automatic =
+      event.platform.autoApproveParticipants === true &&
+      !event.platform.rulesLockedAt &&
+      !command.staffRole;
     requireState(
       !automatic ||
         members.filter(
@@ -88,11 +85,9 @@ export class MembershipService {
     const { tx, paths, event, member } = context;
     Permissions.organizer(member);
     requireState(
-      event.platform &&
-        ['DRAFT', 'REGISTRATION'].includes(event.phase) &&
-        !event.platform.rulesLockedAt,
-      'ROSTER_LOCKED',
-      'Approve participants before funding begins.',
+      SignupPolicy.isOpen(event),
+      'REGISTRATION_CLOSED',
+      'Participant approvals are unavailable while the event is closing or processing an operation.',
     );
     const [request, currentMember, members] = await Promise.all([
       tx.get<AccessRequest>(paths.doc('accessRequests', command.uid)),
@@ -129,7 +124,9 @@ export class MembershipService {
     tx.set(paths.doc('accessRequests', command.uid), { ...request, status: 'approved' });
     tx.set(paths.root, { ...event, rosterVersion: (event.rosterVersion ?? 0) + 1 });
     return {
-      message: `${request.displayName} approved. They can choose a team when team formation opens.`,
+      message: event.platform?.rulesLockedAt
+        ? `${request.displayName} approved. Use Edit person / team to add them to a team.`
+        : `${request.displayName} approved. They can choose a team when team formation opens.`,
     };
   }
 

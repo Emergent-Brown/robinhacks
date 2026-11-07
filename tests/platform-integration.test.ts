@@ -412,14 +412,12 @@ describe('v2 verified identity and frozen rosters', () => {
     });
   });
 
-  it('locks team access and reassignment after funding begins, even while paused', async () => {
+  it('allows late access without unlocking existing team roles', async () => {
     const h = fixture();
-    await expect(
-      h.execute(newcomer, {
-        type: 'requestMembership',
-        displayName: newcomer.displayName,
-      }),
-    ).rejects.toMatchObject({ code: 'REGISTRATION_CLOSED' });
+    await h.execute(newcomer, {
+      type: 'requestMembership',
+      displayName: newcomer.displayName,
+    });
     await h.pause(true);
     await expect(
       h.execute(PLATFORM_USERS.organizer, {
@@ -429,12 +427,10 @@ describe('v2 verified identity and frozen rosters', () => {
         status: 'approved',
       }),
     ).rejects.toMatchObject({ code: 'ROSTER_LOCKED' });
-    await expect(
-      h.execute(PLATFORM_USERS.organizer, {
-        type: 'approveMembership',
-        uid: newcomer.uid,
-      }),
-    ).rejects.toMatchObject({ code: 'ROSTER_LOCKED' });
+    await h.execute(PLATFORM_USERS.organizer, {
+      type: 'approveMembership',
+      uid: newcomer.uid,
+    });
   });
 
   it('locks project profiles during a round and permanently after final submission', async () => {
