@@ -1,3 +1,4 @@
+import { fundingLeaderboard } from './funding-leaderboard';
 import {
   Blank,
   config,
@@ -16,6 +17,8 @@ export function Results({ data, actions }: PageProps) {
   const settings = config(data).funding;
   const published = state.awards?.publishedAt ? state.awards : null;
   const rounds = state.rounds.filter((round) => round.state !== 'open');
+  const blindJudge =
+    data.member?.role === 'judge' && !['FINALIZED', 'ARCHIVED'].includes(data.event!.phase);
   return (
     <>
       <div className="p-page-heading">
@@ -111,7 +114,11 @@ export function Results({ data, actions }: PageProps) {
         </Panel>
       )}
 
-      <Panel title="Completed funding rounds">
+      <Panel title="Funding leaderboard">
+        <p className="muted">
+          Ranked by credits received in each round. Equal totals share a place (1, 1, 3). Funding
+          does not determine the judges’ winner.
+        </p>
         {!rounds.length && (
           <Blank>
             Current-round totals are private. Results appear after the organizer closes a round.
@@ -129,6 +136,10 @@ export function Results({ data, actions }: PageProps) {
               <p className="p-note">
                 Voided: {round.voidReason}. This round awards no entitlement.
               </p>
+            ) : blindJudge ? (
+              <p className="muted">
+                Funding totals stay hidden from judges until results are finalized.
+              </p>
             ) : (
               <>
                 <p className="muted">
@@ -139,19 +150,27 @@ export function Results({ data, actions }: PageProps) {
                   <table className="p-table">
                     <thead>
                       <tr>
-                        <th>Project</th>
-                        <th>Credits received</th>
+                        <th scope="col">Rank</th>
+                        <th scope="col">Project</th>
+                        <th scope="col">Funding raised (credits)</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {round.eligibleTeamIds.map((id) => (
-                        <tr key={id}>
+                      {fundingLeaderboard(round, (id) => teamName(data, id)).map((entry) => (
+                        <tr key={entry.teamId}>
+                          <td>{entry.rank}</td>
                           <td>
-                            <button className="p-link" onClick={() => navigate('projects', id)}>
-                              {teamName(data, id)}
+                            <button
+                              className="p-link"
+                              onClick={() => navigate('projects', entry.teamId)}
+                            >
+                              {entry.name}
                             </button>
+                            {entry.teamId === data.member?.teamId && (
+                              <span className="muted"> (your team)</span>
+                            )}
                           </td>
-                          <td>{round.totals[id] || 0}</td>
+                          <td>{entry.credits.toLocaleString()}</td>
                         </tr>
                       ))}
                     </tbody>

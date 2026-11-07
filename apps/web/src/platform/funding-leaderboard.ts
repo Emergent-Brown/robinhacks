@@ -1,0 +1,33 @@
+import type { FundingRound } from '@robinhacks/core';
+
+export interface FundingStanding {
+  teamId: string;
+  name: string;
+  credits: number;
+  rank: number;
+}
+
+/** Competition ranks: equal totals share a place (1, 1, 3). Names only order ties. */
+export function fundingLeaderboard(
+  round: Pick<FundingRound, 'state' | 'eligibleTeamIds' | 'totals'>,
+  nameFor: (teamId: string) => string,
+): FundingStanding[] {
+  // An empty totals map can mean the server withheld results from a blind judge.
+  if (round.state !== 'closed' || Object.keys(round.totals).length === 0) return [];
+  const rows = round.eligibleTeamIds
+    .map((teamId) => ({
+      teamId,
+      name: nameFor(teamId),
+      credits: round.totals[teamId] ?? 0,
+      rank: 0,
+    }))
+    .sort(
+      (a, b) =>
+        b.credits - a.credits || a.name.localeCompare(b.name) || a.teamId.localeCompare(b.teamId),
+    );
+  for (const [index, row] of rows.entries()) {
+    row.rank =
+      index > 0 && row.credits === rows[index - 1].credits ? rows[index - 1].rank : index + 1;
+  }
+  return rows;
+}
