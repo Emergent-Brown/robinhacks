@@ -150,6 +150,7 @@ export const platformCommandSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('openFundingRound'),
+      allowMissingCheckpoints: z.boolean().optional(),
       commandId,
       expectedPhaseVersion: version,
     })

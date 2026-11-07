@@ -212,9 +212,9 @@ export class FundingService {
       'TEAM_NOT_APPROVED',
       'Every active team needs an approved captain.',
     );
-    requireState(
-      active.every((team) =>
-        updates.some(
+    const missingCheckpoints = active.filter(
+      (team) =>
+        !updates.some(
           (update) =>
             update.teamId === team.id &&
             update.round === number &&
@@ -222,22 +222,11 @@ export class FundingService {
             (number === 1 || update.changed.trim()) &&
             update.incomplete.trim(),
         ),
-      ),
+    );
+    requireState(
+      missingCheckpoints.length === 0 || command.allowMissingCheckpoints === true,
       'CHECKPOINT_REQUIRED',
-      `Checkpoint updates missing: ${active
-        .filter(
-          (team) =>
-            !updates.some(
-              (update) =>
-                update.teamId === team.id &&
-                update.round === number &&
-                update.works.trim() &&
-                (number === 1 || update.changed.trim()) &&
-                update.incomplete.trim(),
-            ),
-        )
-        .map((team) => team.name)
-        .join(', ')}. Publish those updates, then open the round.`,
+      `Checkpoint updates missing: ${missingCheckpoints.map((team) => team.name).join(', ')}. Confirm opening without these updates, or publish them first.`,
     );
     requireState(
       number !== 3 ||
@@ -277,7 +266,7 @@ export class FundingService {
       },
     });
     return {
-      message: `${round.name} is open. Each team has a new ${platform.funding.budget}-credit budget.`,
+      message: `${round.name} is open. Each team has a new ${platform.funding.budget}-credit budget.${missingCheckpoints.length ? ` Organizer confirmed opening without checkpoint updates from: ${missingCheckpoints.map((team) => team.name).join(', ')}.` : ''}`,
     };
   }
 

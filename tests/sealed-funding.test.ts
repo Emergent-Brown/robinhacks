@@ -468,6 +468,38 @@ describe('sealed funding application boundaries', () => {
     expect(h.currentEvent().phase).toBe('REGISTRATION');
   });
 
+  it('lets only organizers explicitly confirm missing checkpoints without excluding teams', async () => {
+    const h = fixture();
+    await h.repository.transaction(async (tx) => tx.delete(h.paths.doc('projectUpdates', 'c-1')));
+    const override = {
+      type: 'openFundingRound',
+      expectedPhaseVersion: 0,
+      allowMissingCheckpoints: true,
+    };
+    await expect(h.command('captain-a', override)).rejects.toThrow();
+    await expect(
+      h.command('organizer', { ...override, allowMissingCheckpoints: false }),
+    ).rejects.toMatchObject({ code: 'CHECKPOINT_REQUIRED' });
+    const result = await h.command('organizer', override);
+    expect(result.message).toContain(
+      'Organizer confirmed opening without checkpoint updates from:',
+    );
+    expect(h.currentEvent().phase).toBe('SEED_OPEN');
+    expect((await h.snapshot('captain-a')).rounds[0].eligibleTeamIds).toContain('c');
+  });
+
+  it('does not let checkpoint confirmation bypass captain approval', async () => {
+    const h = fixture();
+    await h.change(h.paths.member('captain-c'), { status: 'pending' });
+    await expect(
+      h.command('organizer', {
+        type: 'openFundingRound',
+        expectedPhaseVersion: 0,
+        allowMissingCheckpoints: true,
+      }),
+    ).rejects.toMatchObject({ code: 'TEAM_NOT_APPROVED' });
+  });
+
   it('requires an approved captain for every competing team and at least two active teams', async () => {
     const h = fixture();
     await h.change(h.paths.member('captain-c'), { status: 'pending' });
@@ -590,6 +622,13 @@ describe('sealed funding application boundaries', () => {
     h.setNow(121_000);
     await h.finish();
     await expect(h.open()).rejects.toMatchObject({ code: 'SUBMISSION_REQUIRED' });
+    await expect(
+      h.command('organizer', {
+        type: 'openFundingRound',
+        expectedPhaseVersion: h.currentEvent().phaseVersion,
+        allowMissingCheckpoints: true,
+      }),
+    ).rejects.toMatchObject({ code: 'SUBMISSION_REQUIRED' });
     await h.repository.transaction(async (tx) => {
       for (const id of ids) tx.set(h.paths.doc('submissions', id), { teamId: id });
     });

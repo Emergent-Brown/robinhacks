@@ -292,6 +292,7 @@ export type FundingCommand = WithId<
     }
   | {
       type: 'openFundingRound';
+      allowMissingCheckpoints?: boolean;
       expectedPhaseVersion: number;
     }
   | {

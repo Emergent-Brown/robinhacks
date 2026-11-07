@@ -33,6 +33,11 @@ describe('platform transport configuration', () => {
       expectedPhaseVersion: 1,
     };
     expect(parseCommand(command)).toEqual(command);
+    expect(parseCommand({ ...command, allowMissingCheckpoints: true })).toEqual({
+      ...command,
+      allowMissingCheckpoints: true,
+    });
+    expect(() => parseCommand({ ...command, allowMissingCheckpoints: 'true' })).toThrow();
     expect(() => parseCommand({ ...command, durationMinutes: 30 })).toThrow();
     expect(() => parseCommand({ ...command, closesAt: Date.now() + 60_000 })).toThrow();
   });

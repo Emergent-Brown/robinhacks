@@ -150,6 +150,19 @@ function Operations({ data, actions }: PageProps) {
   const state = platform(data);
   const settings = config(data);
   const active = state.rounds.find((round) => round.state === 'open');
+  const nextRound = settings.currentRound + 1;
+  const missingCheckpoints = teams(data).filter(
+    (team) =>
+      team.eligibility === 'active' &&
+      !state.updates.some(
+        (update) =>
+          update.teamId === team.id &&
+          update.round === nextRound &&
+          update.works.trim() &&
+          (nextRound === 1 || update.changed.trim()) &&
+          update.incomplete.trim(),
+      ),
+  );
   const [pauseReason, setPauseReason] = useState('');
   const [voidReason, setVoidReason] = useState('');
   const [discardReason, setDiscardReason] = useState('');
@@ -238,9 +251,7 @@ function Operations({ data, actions }: PageProps) {
                     )
                       ? 'needs a captain'
                       : '',
-                    !state.updates.some(
-                      (u) => u.teamId === t.id && u.round === settings.currentRound + 1,
-                    )
+                    missingCheckpoints.some((team) => team.id === t.id)
                       ? 'needs a checkpoint update'
                       : '',
                     settings.currentRound === 2 && !state.submissions.some((s) => s.teamId === t.id)
@@ -257,8 +268,8 @@ function Operations({ data, actions }: PageProps) {
                 })}
             </ul>
             <span>
-              Every active team needs a captain and a checkpoint; round 3 also needs final
-              submissions. Resolve these items before opening the round.
+              Every active team needs an approved captain; round 3 also needs final submissions. You
+              can confirm opening without missing checkpoint updates.
             </span>
           </div>
         )}
@@ -310,9 +321,15 @@ function Operations({ data, actions }: PageProps) {
               }
               onOpen={() =>
                 review(
-                  'Open funding round',
-                  `Open ${settings.funding.roundNames[settings.currentRound]} now? It stays open until you close it. ${settings.currentRound === 0 ? 'This locks the roster, funding settings, and judging rubric.' : ''}`,
-                  { type: 'openFundingRound', ...phaseVersion },
+                  missingCheckpoints.length
+                    ? 'Open without checkpoint updates?'
+                    : 'Open funding round',
+                  `${missingCheckpoints.length ? `Missing updates: ${missingCheckpoints.map((team) => team.name).join(', ')}. These teams will still participate, but cannot post a checkpoint for this round once it opens. ` : ''}Open ${settings.funding.roundNames[settings.currentRound]} now? It stays open until you close it. ${settings.currentRound === 0 ? 'This locks the roster, funding settings, and judging rubric.' : ''}`,
+                  {
+                    type: 'openFundingRound',
+                    allowMissingCheckpoints: missingCheckpoints.length > 0,
+                    ...phaseVersion,
+                  },
                 )
               }
             />

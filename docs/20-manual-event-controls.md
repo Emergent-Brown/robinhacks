@@ -25,8 +25,12 @@ opening the first funding round.
 Funding rounds, final submissions, and the community ballot open and close only
 when an organizer presses the corresponding control. There is no duration input,
 automatic cutoff, or countdown. A round remains open past suggested times until
-someone closes it. Opening still checks the required project checkpoints and
-closing still commits all allocations atomically.
+someone closes it. If checkpoints are missing, **Open next round** names those
+teams and asks you to confirm opening anyway. They remain eligible to invest and
+receive funding, but cannot add a checkpoint for that round after it opens. The
+audit record lists any missing checkpoints you confirmed. Approved captains and
+round-three final submissions remain required. Closing commits all allocations
+atomically.
 
 The suggested round schedule is available to organizers for planning. Changing
 that schedule never changes event state. General event information, meals, and
