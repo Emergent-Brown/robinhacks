@@ -7,7 +7,7 @@ export function TeamMark({
   team,
   large = false,
 }: {
-  team: Pick<Team, 'color' | 'ticker' | 'name'>;
+  team: Pick<Team, 'color' | 'name'>;
   large?: boolean;
 }) {
   return (
@@ -16,7 +16,13 @@ export function TeamMark({
       style={{ background: team.color || '#d4e6f1', color: markTextColor(team.color) }}
       aria-hidden="true"
     >
-      {(team.ticker || team.name).slice(0, 2)}
+      {team.name
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((word) => word.match(/[\p{L}\p{N}]/u)?.[0] ?? '')
+        .join('')
+        .toLocaleUpperCase()}
     </span>
   );
 }
