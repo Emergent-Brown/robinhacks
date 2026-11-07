@@ -124,7 +124,7 @@ export function defaultEventDetails(): EventDetails {
     timing: {
       rounds: [
         window('2026-11-07T13:00:00-05:00', '2026-11-07T13:30:00-05:00'),
-        window('2026-11-07T21:00:00-05:00', '2026-11-07T21:30:00-05:00'),
+        window('2026-11-07T19:30:00-05:00', '2026-11-07T20:00:00-05:00'),
         window('2026-11-08T12:00:00-05:00', '2026-11-08T12:30:00-05:00'),
       ],
       submissions: window('2026-11-08T10:00:00-05:00', '2026-11-08T10:45:00-05:00'),
@@ -152,14 +152,13 @@ export function defaultEventDetails(): EventDetails {
       },
       { time: 'Sat · 6–7 p.m.', title: 'Building', description: '' },
       { time: 'Sat · 7 p.m.', title: 'Dinner', description: '' },
-      { time: 'Sat · 8–9 p.m.', title: 'Building', description: '' },
       {
         time: '',
         window: 'round2',
         title: 'Round 2 · Second investments',
         description: 'Back the working prototypes.',
       },
-      { time: 'Sat · 9:30 p.m.–midnight', title: 'Building', description: '' },
+      { time: 'Sat · 8 p.m.–midnight', title: 'Building', description: '' },
       { time: 'Sun · midnight', title: 'Ice cream social', description: '' },
       { time: 'Sun · 1–8 a.m.', title: 'Overnight building', description: '' },
       { time: 'Sun · 8 a.m.', title: 'Breakfast', description: '' },

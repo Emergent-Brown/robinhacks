@@ -142,6 +142,7 @@ export function Homepage({ data, onJoin }: PageProps & { onJoin: () => void }) {
                 .filter(
                   (item) =>
                     item.window === 'round1' ||
+                    item.window === 'round2' ||
                     (!item.window && !/funding|investment/i.test(item.title)),
                 )
                 .map((item, index) => {
