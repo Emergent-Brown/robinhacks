@@ -116,8 +116,8 @@ export function Results({ data, actions }: PageProps) {
 
       <Panel title="Funding leaderboard">
         <p className="muted">
-          Ranked by credits received in each round. Equal totals share a place (1, 1, 3). Funding
-          does not determine the judges’ winner.
+          Ordered by total credits received in this round, highest first. Equal totals share a place
+          (1, 1, 3). Funding does not determine the judges’ winner.
         </p>
         {!rounds.length && (
           <Blank>
@@ -152,7 +152,9 @@ export function Results({ data, actions }: PageProps) {
                       <tr>
                         <th scope="col">Rank</th>
                         <th scope="col">Project</th>
-                        <th scope="col">Funding raised (credits)</th>
+                        <th scope="col" aria-sort="descending">
+                          Total credits received
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
