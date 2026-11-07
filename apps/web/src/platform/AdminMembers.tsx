@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { AccessRequest, Member } from '@robinhacks/core';
 import { Dialog, Field } from '../ui/primitives';
 import { AdminPersonEditor } from './AdminPersonEditor';
-import { managementLockReason } from './admin-management';
+import { assignmentLockReason, managementLockReason } from './admin-management';
 import {
   Blank,
   config,
@@ -369,7 +369,8 @@ export function AdminMembers({ data, actions }: PageProps) {
       <Panel title="Participants and judges">
         <p className="muted">
           Each team has up to four people: one captain and the remaining teammates join as members.
-          Pause the event before removing access after registration.
+          You can add approved, unassigned people to a team without pausing. Pause before moving
+          existing teammates, changing their roles, or removing access.
         </p>
         {settings.rulesLockedAt && data.event!.paused && (
           <p className="p-note">
@@ -448,7 +449,7 @@ export function AdminMembers({ data, actions }: PageProps) {
                       <td>
                         <button
                           className="p-link"
-                          disabled={cmd.pending || !!managementLock}
+                          disabled={cmd.pending || !!assignmentLockReason(data, member)}
                           onClick={() => setEditing(member)}
                         >
                           Edit person / team

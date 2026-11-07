@@ -18,7 +18,11 @@ begins. Adding a new staff email does not require a pause.
 
 Approve attendees, then open team selection when ready. Approved participants
 create or join teams before entering the main app. Close selection before
-opening the first funding round.
+opening the first funding round. To add an approved person who is still waiting
+for a team during the event, use **Admin → People → Edit person / team**, select
+the team and an available role, then **Save team and role**. No pause is needed.
+The four-person limit still applies. Moving an existing teammate or changing
+their role requires a pause. Published and award-review rosters remain locked.
 
 ## Manual event controls
 

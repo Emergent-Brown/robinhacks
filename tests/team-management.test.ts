@@ -201,6 +201,63 @@ describe('organizer team and person management', () => {
     ).rejects.toMatchObject({ code: 'MEMBER_CHANGED' });
   });
 
+  it('adds an approved unassigned person during open funding without changing allocations or pausing', async () => {
+    const h = fixture('funding');
+    const fundingBefore = {
+      rounds: h.rows('fundingRounds'),
+      allocations: h.rows('roundAllocations'),
+      entitlements: h.rows('roundEntitlements'),
+    };
+    await h.execute({
+      type: 'adminAssignMember',
+      uid: attendee.uid,
+      teamId: 'team-1',
+      role: 'member',
+      expectedVersion: 0,
+    });
+    expect(h.event().paused).toBe(false);
+    expect(h.event().phase).toBe('SEED_OPEN');
+    expect(h.get<Member>(`members/${attendee.uid}`)).toMatchObject({
+      teamId: 'team-1',
+      role: 'member',
+    });
+    expect(h.get<Member>(`teams/team-1/members/${attendee.uid}`)).toMatchObject({
+      teamId: 'team-1',
+    });
+    expect({
+      rounds: h.rows('fundingRounds'),
+      allocations: h.rows('roundAllocations'),
+      entitlements: h.rows('roundEntitlements'),
+    }).toEqual(fundingBefore);
+    await expect(
+      h.execute({
+        type: 'adminAssignMember',
+        uid: attendee.uid,
+        teamId: 'team-2',
+        role: 'member',
+        expectedVersion: 1,
+      }),
+    ).rejects.toMatchObject({ code: 'PAUSE_REQUIRED' });
+  });
+
+  it('keeps approval and final award locks for unpaused team additions', async () => {
+    const h = fixture('funding');
+    const command = {
+      type: 'adminAssignMember',
+      uid: attendee.uid,
+      teamId: 'team-1',
+      role: 'member',
+      expectedVersion: 0,
+    };
+    await h.patch(`${root}/members/${attendee.uid}`, { status: 'pending' });
+    await expect(h.execute(command)).rejects.toMatchObject({ code: 'MEMBERSHIP_REQUIRED' });
+    await h.patch(`${root}/members/${attendee.uid}`, { status: 'approved' });
+    await h.patch(root, { phase: 'FINALIZING' });
+    await expect(h.execute(command)).rejects.toMatchObject({ code: 'AWARDS_PREVIEW_EXISTS' });
+    await h.patch(root, { phase: 'FINALIZED' });
+    await expect(h.execute(command)).rejects.toMatchObject({ code: 'EVENT_READ_ONLY' });
+  });
+
   it('moves and changes roles while paused without changing funding records, retaining former authors', async () => {
     const h = fixture('judging');
     // Demo timestamps are illustrative; reconciliation needs rules frozen before every round.

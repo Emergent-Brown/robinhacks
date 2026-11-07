@@ -22,7 +22,7 @@ const participant = (member: Member) => !['organizer', 'judge'].includes(member.
 /** Organizer corrections change the live workspace, never settled funding records. */
 export class TeamManagementService {
   async execute(context: CommandContext, command: TeamManagementCommand) {
-    this.assertEditable(context);
+    this.assertEditable(context, command.type !== 'adminAssignMember');
     if (command.type === 'adminCreateTeam') return this.create(context, command);
     if (command.type === 'adminAssignMember') return this.assign(context, command);
     if (command.type === 'adminUpdateMember') return this.updateMember(context, command);
@@ -38,7 +38,7 @@ export class TeamManagementService {
     return this.correctSubmission(context, command, team);
   }
 
-  private assertEditable({ event, member }: CommandContext) {
+  private assertEditable({ event, member }: CommandContext, requiresPause = true) {
     Permissions.member(member);
     Permissions.organizer(member);
     requireState(
@@ -57,7 +57,7 @@ export class TeamManagementService {
       'Discard the award preview in Event controls before making corrections.',
     );
     requireState(
-      ['DRAFT', 'REGISTRATION'].includes(event.phase) || event.paused,
+      !requiresPause || ['DRAFT', 'REGISTRATION'].includes(event.phase) || event.paused,
       'PAUSE_REQUIRED',
       'Pause the event in Event controls before correcting teams or people.',
     );
@@ -177,6 +177,13 @@ export class TeamManagementService {
       tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1),
     ]);
     requireState(member, 'NOT_FOUND', 'This person no longer has event access.');
+    requireState(
+      ['DRAFT', 'REGISTRATION'].includes(context.event.phase) ||
+        context.event.paused ||
+        (member.teamId === null && command.teamId !== null),
+      'PAUSE_REQUIRED',
+      'Pause the event before moving an existing teammate or changing their role. Unassigned participants can join a team without pausing.',
+    );
     requireState(
       member.version === command.expectedVersion,
       'MEMBER_CHANGED',

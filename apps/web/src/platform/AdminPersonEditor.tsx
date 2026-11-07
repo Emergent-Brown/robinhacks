@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { FormationRole, Member } from '@robinhacks/core';
 import { Dialog, Field } from '../ui/primitives';
 import { ErrorMessage, teams, useCommand, type PageProps } from './shared';
-import { managementLockReason, roleLabel } from './admin-management';
+import { assignmentLockReason, managementLockReason, roleLabel } from './admin-management';
 import './admin-management.css';
 
 export function AdminPersonEditor({
@@ -21,6 +21,7 @@ export function AdminPersonEditor({
   const locked = managementLockReason(data);
   const live = data.members.find((person) => person.uid === member.uid) || member;
   const changed = live.version !== member.version;
+  const assignmentLocked = assignmentLockReason(data, live);
   const canAssign = member.status === 'approved' && !['organizer', 'judge'].includes(member.role);
   const available = (['captain', 'member'] as const).filter(
     (choice) =>
@@ -37,7 +38,13 @@ export function AdminPersonEditor({
   return (
     <Dialog title={`Edit ${member.displayName}`} onClose={() => !cmd.pending && onClose()}>
       <div className="p-admin-editor">
-        {locked && <p className="p-note">{locked}</p>}
+        {locked && (
+          <p className="p-note">
+            {assignmentLocked
+              ? locked
+              : 'You can add this person to a team now. Pause the event to edit their name or bio.'}
+          </p>
+        )}
         {changed && (
           <p className="p-note">
             This person changed while you were editing. Close and reopen to load their current
@@ -153,7 +160,7 @@ export function AdminPersonEditor({
                 className="button primary"
                 disabled={
                   cmd.pending ||
-                  !!locked ||
+                  !!assignmentLocked ||
                   changed ||
                   !available.includes(role) ||
                   (teamId === (member.teamId || '') && role === member.role)
