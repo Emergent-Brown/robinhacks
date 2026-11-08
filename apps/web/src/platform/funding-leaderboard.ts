@@ -7,9 +7,28 @@ export interface FundingStanding {
   rank: number;
 }
 
+type RoundTotals = Pick<FundingRound, 'state' | 'eligibleTeamIds' | 'totals'>;
+
+/** Sum credits received, without applying the separate investor reward weights. */
+export function totalFundingLeaderboard(
+  rounds: RoundTotals[],
+  nameFor: (teamId: string) => string,
+): FundingStanding[] {
+  const totals = new Map<string, number>();
+  for (const round of rounds) {
+    for (const row of fundingLeaderboard(round, nameFor)) {
+      totals.set(row.teamId, (totals.get(row.teamId) ?? 0) + row.credits);
+    }
+  }
+  return fundingLeaderboard(
+    { state: 'closed', eligibleTeamIds: [...totals.keys()], totals: Object.fromEntries(totals) },
+    nameFor,
+  );
+}
+
 /** Competition ranks: equal totals share a place (1, 1, 3). Names only order ties. */
 export function fundingLeaderboard(
-  round: Pick<FundingRound, 'state' | 'eligibleTeamIds' | 'totals'>,
+  round: RoundTotals,
   nameFor: (teamId: string) => string,
 ): FundingStanding[] {
   // An empty totals map can mean the server withheld results from a blind judge.

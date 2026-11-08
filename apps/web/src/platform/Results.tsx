@@ -1,4 +1,8 @@
-import { fundingLeaderboard } from './funding-leaderboard';
+import {
+  fundingLeaderboard,
+  totalFundingLeaderboard,
+  type FundingStanding,
+} from './funding-leaderboard';
 import {
   Blank,
   config,
@@ -16,7 +20,10 @@ export function Results({ data, actions }: PageProps) {
   const state = platform(data);
   const settings = config(data).funding;
   const published = state.awards?.publishedAt ? state.awards : null;
-  const rounds = state.rounds.filter((round) => round.state !== 'open');
+  const rounds = state.rounds
+    .filter((round) => round.state !== 'open')
+    .sort((a, b) => a.number - b.number);
+  const totals = totalFundingLeaderboard(rounds, (id) => teamName(data, id));
   const blindJudge =
     data.member?.role === 'judge' && !['FINALIZED', 'ARCHIVED'].includes(data.event!.phase);
   return (
@@ -25,6 +32,67 @@ export function Results({ data, actions }: PageProps) {
         <h1>Results</h1>
         <span className="muted">Completed rounds and final awards</span>
       </div>
+
+      <Panel title="Overall funding ranking">
+        <p className="muted">
+          Total credits received across completed rounds, highest first. Round reward weights do not
+          affect this ranking. Equal totals share a place. Funding does not determine the judges’
+          winner.
+        </p>
+        {blindJudge ? (
+          <p className="muted">
+            Funding totals stay hidden from judges until results are finalized.
+          </p>
+        ) : totals.length ? (
+          <FundingTable rows={totals} ownTeamId={data.member?.teamId} />
+        ) : (
+          <Blank>
+            Totals appear after the organizer closes a round. Open and voided rounds are not
+            included.
+          </Blank>
+        )}
+      </Panel>
+      <Panel title="Funding by round">
+        <p className="muted">
+          Each round is ranked separately by credits received, highest first. Equal totals share a
+          place (1, 1, 3).
+        </p>
+        {!rounds.length && (
+          <Blank>
+            Current-round totals are private. Results appear after the organizer closes a round.
+          </Blank>
+        )}
+        {rounds.map((round) => (
+          <section className="p-entitlement" key={round.id}>
+            <div className="p-section-heading">
+              <h3>
+                {round.number}. {round.name}
+              </h3>
+              <span>{percent(round.weightBps / 10000)} reward weight</span>
+            </div>
+            {round.state === 'void' ? (
+              <p className="p-note">
+                Voided: {round.voidReason}. This round awards no entitlement.
+              </p>
+            ) : blindJudge ? (
+              <p className="muted">
+                Funding totals stay hidden from judges until results are finalized.
+              </p>
+            ) : (
+              <>
+                <p className="muted">
+                  Closed {stamp(round.closedAt)}. These are project totals, not individual team
+                  allocations.
+                </p>
+                <FundingTable
+                  rows={fundingLeaderboard(round, (id) => teamName(data, id))}
+                  ownTeamId={data.member?.teamId}
+                />
+              </>
+            )}
+          </section>
+        ))}
+      </Panel>
       {published ? (
         <>
           <Panel title="Judges’ results">
@@ -114,76 +182,40 @@ export function Results({ data, actions }: PageProps) {
         </Panel>
       )}
 
-      <Panel title="Funding leaderboard">
-        <p className="muted">
-          Ordered by total credits received in this round, highest first. Equal totals share a place
-          (1, 1, 3). Funding does not determine the judges’ winner.
-        </p>
-        {!rounds.length && (
-          <Blank>
-            Current-round totals are private. Results appear after the organizer closes a round.
-          </Blank>
-        )}
-        {rounds.map((round) => (
-          <section className="p-entitlement" key={round.id}>
-            <div className="p-section-heading">
-              <h3>
-                {round.number}. {round.name}
-              </h3>
-              <span>{percent(round.weightBps / 10000)} reward weight</span>
-            </div>
-            {round.state === 'void' ? (
-              <p className="p-note">
-                Voided: {round.voidReason}. This round awards no entitlement.
-              </p>
-            ) : blindJudge ? (
-              <p className="muted">
-                Funding totals stay hidden from judges until results are finalized.
-              </p>
-            ) : (
-              <>
-                <p className="muted">
-                  Closed {stamp(round.closedAt)}. These are project totals, not individual team
-                  allocations.
-                </p>
-                <div className="p-table-wrap">
-                  <table className="p-table">
-                    <thead>
-                      <tr>
-                        <th scope="col">Rank</th>
-                        <th scope="col">Project</th>
-                        <th scope="col" aria-sort="descending">
-                          Total credits received
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {fundingLeaderboard(round, (id) => teamName(data, id)).map((entry) => (
-                        <tr key={entry.teamId}>
-                          <td>{entry.rank}</td>
-                          <td>
-                            <button
-                              className="p-link"
-                              onClick={() => navigate('projects', entry.teamId)}
-                            >
-                              {entry.name}
-                            </button>
-                            {entry.teamId === data.member?.teamId && (
-                              <span className="muted"> (your team)</span>
-                            )}
-                          </td>
-                          <td>{entry.credits.toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </section>
-        ))}
-      </Panel>
       <p className="muted">{settings.reservePolicy}</p>
     </>
+  );
+}
+
+/** The same columns and tie ranks apply to overall and per-round funding. */
+function FundingTable({ rows, ownTeamId }: { rows: FundingStanding[]; ownTeamId?: string | null }) {
+  return (
+    <div className="p-table-wrap">
+      <table className="p-table">
+        <thead>
+          <tr>
+            <th scope="col">Rank</th>
+            <th scope="col">Project</th>
+            <th scope="col" aria-sort="descending">
+              Total credits received
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((entry) => (
+            <tr key={entry.teamId}>
+              <td>{entry.rank}</td>
+              <td>
+                <button className="p-link" onClick={() => navigate('projects', entry.teamId)}>
+                  {entry.name}
+                </button>
+                {entry.teamId === ownTeamId && <span className="muted"> (your team)</span>}
+              </td>
+              <td>{entry.credits.toLocaleString()}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
