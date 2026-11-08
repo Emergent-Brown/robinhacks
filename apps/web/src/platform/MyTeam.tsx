@@ -1,3 +1,4 @@
+import { ProjectLinks, ProjectLinksEditor } from './ProjectLinks';
 import { useState } from 'react';
 import type { Team } from '@robinhacks/core';
 import { CheckpointPolicy } from '@robinhacks/core';
@@ -77,6 +78,7 @@ export function MyTeam({ data, actions }: PageProps) {
         <div className="p-actions">
           <ExternalLink href={team.demoUrl}>Demo</ExternalLink>
           <ExternalLink href={team.repoUrl}>Source code</ExternalLink>
+          <ProjectLinks links={team.links} />
         </div>
       </Panel>
       <Panel title="Team members">
@@ -119,6 +121,7 @@ export function MyTeam({ data, actions }: PageProps) {
             <div className="p-actions">
               <ExternalLink href={submission.demoUrl}>Submitted demo</ExternalLink>
               <ExternalLink href={submission.repoUrl}>Submitted repository</ExternalLink>
+              <ProjectLinks links={submission.links} />
             </div>
           </>
         ) : (
@@ -200,6 +203,7 @@ export function ProjectEditor({
     building: team.building,
     demoUrl: team.demoUrl,
     repoUrl: team.repoUrl,
+    links: team.links ?? [],
   });
   const cmd = useCommand(actions);
   return (
@@ -275,6 +279,11 @@ export function ProjectEditor({
             onChange={(e) => setForm({ ...form, repoUrl: e.target.value })}
           />
         </Field>
+        <ProjectLinksEditor
+          links={form.links}
+          onChange={(links) => setForm({ ...form, links })}
+          disabled={cmd.pending}
+        />
         <ErrorMessage>{cmd.error}</ErrorMessage>
         <div className="p-actions">
           <button className="button primary" disabled={cmd.pending}>
@@ -551,6 +560,7 @@ function SubmissionReview({
         <div className="p-actions">
           <ExternalLink href={team.demoUrl}>Demo</ExternalLink>
           <ExternalLink href={team.repoUrl}>Repository</ExternalLink>
+          <ProjectLinks links={team.links} />
         </div>
         {missing && (
           <ErrorMessage>

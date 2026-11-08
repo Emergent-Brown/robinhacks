@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Command } from '@robinhacks/core';
+import { MAX_PROJECT_LINKS, type Command } from '@robinhacks/core';
 import { platformCommandSchema } from './platform-schema';
 
 export const identifier = z
@@ -19,6 +19,16 @@ const url = z.union([
     .url()
     .refine((value) => /^https?:\/\//i.test(value), 'Use an HTTP or HTTPS URL.'),
 ]);
+const projectLinks = z
+  .array(
+    z
+      .object({
+        label: line(40).min(1),
+        url: url.refine((value) => value.length > 0, 'Add a URL or remove this link.'),
+      })
+      .strict(),
+  )
+  .max(MAX_PROJECT_LINKS);
 const role = z.enum(['organizer', 'judge', 'captain', 'member']);
 const status = z.enum(['approved', 'pending', 'suspended']);
 const teamProfile = {
@@ -29,6 +39,7 @@ const teamProfile = {
   building: line(1200).optional(),
   demoUrl: url.optional(),
   repoUrl: url.optional(),
+  links: projectLinks.optional(),
 };
 const teamCorrection = { commandId, teamId: identifier, expectedVersion: version };
 const reason = line(500).min(5);
@@ -87,6 +98,7 @@ const eventCommandSchema = z.discriminatedUnion('type', [
           building: line(1200).min(1).optional(),
           demoUrl: url.optional(),
           repoUrl: url.optional(),
+          links: projectLinks.optional(),
           commitSha: z
             .string()
             .regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i)
@@ -182,6 +194,7 @@ const eventCommandSchema = z.discriminatedUnion('type', [
           building: line(1200).optional(),
           demoUrl: url.optional(),
           repoUrl: url.optional(),
+          links: projectLinks.optional(),
           update: line(500).optional(),
         })
         .strict()

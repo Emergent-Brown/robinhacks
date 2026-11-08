@@ -1,0 +1,31 @@
+.p-project-links {
+  min-width: 0;
+  margin: 16px 0;
+  padding: 0;
+  border: 0;
+}
+.p-project-links legend {
+  font-weight: 700;
+}
+.p-project-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin: 16px 0;
+}
+.p-project-link-row .field {
+  margin: 0;
+  min-width: 0;
+}
+.p-project-link-row .button {
+  min-height: 44px;
+}
+@media (max-width: 600px) {
+  .p-project-link-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .p-project-link-row .button {
+    justify-self: start;
+  }
+}

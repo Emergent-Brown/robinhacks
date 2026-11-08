@@ -48,6 +48,12 @@ export interface Member {
   status: 'approved' | 'pending' | 'suspended';
   version: number;
 }
+export const MAX_PROJECT_LINKS = 8;
+export interface ProjectLink {
+  label: string;
+  url: string;
+}
+
 export interface Team {
   id: string;
   name: string;
@@ -59,6 +65,7 @@ export interface Team {
   building: string;
   demoUrl: string;
   repoUrl: string;
+  links?: ProjectLink[];
   update: string;
   updatedAt: number;
   eligibility: 'active' | 'withdrawn' | 'disqualified';
@@ -123,13 +130,22 @@ export type TeamProfilePatch = Partial<
     | 'building'
     | 'demoUrl'
     | 'repoUrl'
+    | 'links'
     | 'update'
   >
 >;
 export type SubmissionPatch = Partial<
   Pick<
     import('./platform').ProjectSubmission,
-    'name' | 'pitch' | 'problem' | 'building' | 'demoUrl' | 'repoUrl' | 'commitSha' | 'techStack'
+    | 'name'
+    | 'pitch'
+    | 'problem'
+    | 'building'
+    | 'demoUrl'
+    | 'repoUrl'
+    | 'links'
+    | 'commitSha'
+    | 'techStack'
   >
 >;
 export type TeamManagementCommand =
@@ -226,7 +242,15 @@ export type Command =
       patch: Partial<
         Pick<
           Team,
-          'name' | 'pitch' | 'category' | 'problem' | 'building' | 'demoUrl' | 'repoUrl' | 'update'
+          | 'name'
+          | 'pitch'
+          | 'category'
+          | 'problem'
+          | 'building'
+          | 'demoUrl'
+          | 'repoUrl'
+          | 'links'
+          | 'update'
         >
       >;
     }

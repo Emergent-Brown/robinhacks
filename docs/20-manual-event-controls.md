@@ -37,6 +37,13 @@ that have already opened. Results review and published events remain locked.
 
 ## Manual event controls
 
+Teams can add optional resources under **My team → Edit project → Additional links**.
+Choose or type a label (such as Demo video, GitHub, or Website), enter the full
+HTTP/HTTPS URL, then save the project. Up to eight additional links appear on
+the project profile. Existing profile locks still apply during funding and after
+final submission. Final submissions preserve these links for judges; organizers
+can correct submitted links through the existing paused evidence-correction flow.
+
 Funding rounds, final submissions, and the community ballot open and close only
 when an organizer presses the corresponding control. There is no duration input,
 automatic cutoff, or countdown. A round remains open past suggested times until

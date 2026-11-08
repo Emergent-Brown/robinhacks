@@ -1,3 +1,4 @@
+import { ProjectLinksEditor } from './ProjectLinks';
 import { useState } from 'react';
 import type { ProjectSubmission, Team, TeamProfilePatch } from '@robinhacks/core';
 import { Dialog, Field } from '../ui/primitives';
@@ -215,6 +216,7 @@ function EditTeam({
     building: team.building,
     demoUrl: team.demoUrl,
     repoUrl: team.repoUrl,
+    links: team.links ?? [],
     update: team.update,
   });
   const cmd = useCommand(actions);
@@ -284,6 +286,11 @@ function EditTeam({
             onChange={(event) => setForm({ ...form, update: event.target.value })}
           />
         </Field>
+        <ProjectLinksEditor
+          links={form.links ?? []}
+          onChange={(links) => setForm({ ...form, links })}
+          disabled={cmd.pending || changed || !!locked}
+        />
         <ErrorMessage>{cmd.error}</ErrorMessage>
         <button className="button primary" disabled={cmd.pending || changed || !!locked}>
           {cmd.pending ? 'Saving…' : 'Save project'}
@@ -449,6 +456,7 @@ function EditSubmission({
     building: submission.building,
     demoUrl: submission.demoUrl,
     repoUrl: submission.repoUrl,
+    links: submission.links ?? [],
     commitSha: submission.commitSha,
     techStack: submission.techStack,
   });
@@ -495,6 +503,11 @@ function EditSubmission({
             complete
             value={form}
             onChange={(key, value) => setForm({ ...form, [key]: value })}
+          />
+          <ProjectLinksEditor
+            links={form.links}
+            onChange={(links) => setForm({ ...form, links })}
+            disabled={cmd.pending || changed}
           />
           <Field label="Full Git commit SHA">
             <input

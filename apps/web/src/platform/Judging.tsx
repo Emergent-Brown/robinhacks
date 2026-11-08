@@ -1,3 +1,4 @@
+import { ProjectLinks } from './ProjectLinks';
 import { useEffect, useState } from 'react';
 import { JudgingReview } from './JudgingReview';
 import { isJudgingScore, JUDGING_SCORE_MAX, type JudgingEntry } from '@robinhacks/core';
@@ -190,6 +191,7 @@ export function Judging({ data, actions }: PageProps) {
                   <div className="p-actions">
                     <ExternalLink href={submission.demoUrl}>Submitted demo</ExternalLink>
                     <ExternalLink href={submission.repoUrl}>Submitted code</ExternalLink>
+                    <ProjectLinks links={submission.links} />
                   </div>
                   <p className="muted">Submitted {stamp(submission.submittedAt)}</p>
                 </>

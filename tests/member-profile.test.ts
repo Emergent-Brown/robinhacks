@@ -250,6 +250,77 @@ describe('judge access capacity', () => {
 });
 
 describe('project sectors', () => {
+  it('saves, updates and removes additional links with the project version guard', async () => {
+    const h = fixture('registration');
+    const teamPath = `${root}/teams/team-1`;
+    const original = h.repository.dump()[teamPath] as Team;
+    const links = [
+      { label: 'Demo video', url: 'https://example.test/video' },
+      { label: 'GitHub', url: 'https://github.com/example/project' },
+      { label: 'Website', url: 'https://example.test' },
+    ];
+    await h.service.execute(actor, {
+      type: 'updateTeam',
+      commandId: 'save-project-links',
+      expectedVersion: original.version,
+      patch: { links },
+    });
+    expect(h.repository.dump()[teamPath]).toMatchObject({ links, version: original.version + 1 });
+    await expect(
+      h.service.execute(actor, {
+        type: 'updateTeam',
+        commandId: 'stale-project-links',
+        expectedVersion: original.version,
+        patch: { links: [] },
+      }),
+    ).rejects.toMatchObject({ code: 'TEAM_CHANGED' });
+    await h.service.execute(actor, {
+      type: 'updateTeam',
+      commandId: 'remove-project-links',
+      expectedVersion: original.version + 1,
+      patch: { links: [] },
+    });
+    expect((h.repository.dump()[teamPath] as Team).links).toEqual([]);
+  });
+
+  it('validates link labels, protocols and limits for participants and organizer corrections', () => {
+    for (const type of ['updateTeam', 'adminUpdateTeam', 'adminUpdateSubmission']) {
+      const base = {
+        type,
+        commandId: 'validate-project-links',
+        expectedVersion: 1,
+        ...(type !== 'updateTeam' ? { teamId: 'team-1' } : {}),
+        ...(type === 'adminUpdateSubmission' ? { reason: 'Correct submitted links' } : {}),
+      };
+      expect(() =>
+        parseCommand({
+          ...base,
+          patch: { links: [{ label: 'Video', url: 'https://example.test/video' }] },
+        }),
+      ).not.toThrow();
+      for (const links of [
+        [{ label: '', url: 'https://example.test' }],
+        [{ label: 'Video', url: '' }],
+        [{ label: 'Video', url: 'javascript:alert(1)' }],
+        [{ label: 'Video', url: 'data:text/html,hello' }],
+        Array.from({ length: 9 }, () => ({ label: 'Video', url: 'https://example.test' })),
+      ])
+        expect(() => parseCommand({ ...base, patch: { links } })).toThrow();
+    }
+  });
+
+  it('keeps additional links locked during funding', async () => {
+    const h = fixture();
+    const team = h.repository.dump()[`${root}/teams/team-1`] as Team;
+    await expect(
+      h.service.execute(actor, {
+        type: 'updateTeam',
+        commandId: 'locked-project-links',
+        expectedVersion: team.version,
+        patch: { links: [{ label: 'Video', url: 'https://example.test' }] },
+      }),
+    ).rejects.toMatchObject({ code: 'ROUND_OPEN' });
+  });
   it('keeps demo sectors and lets a captain change their sector before funding', async () => {
     const h = fixture('registration');
     const teamPath = `${root}/teams/team-1`;

@@ -151,6 +151,7 @@ export class ProjectService {
       building: team.building,
       demoUrl: team.demoUrl,
       repoUrl: team.repoUrl,
+      links: structuredClone(team.links ?? []),
       commitSha: command.commitSha.toLowerCase(),
       techStack: command.techStack.trim(),
       roster: members

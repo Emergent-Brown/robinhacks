@@ -1,3 +1,4 @@
+import { ProjectLinks } from './ProjectLinks';
 import { useEffect, useState } from 'react';
 import { ExternalLink, TeamMark } from '../ui/primitives';
 import {
@@ -246,6 +247,7 @@ export function ProjectDetail({ data, actions, id }: PageProps & { id: string })
             <div className="p-actions">
               <ExternalLink href={team.demoUrl}>Open demo</ExternalLink>
               <ExternalLink href={team.repoUrl}>Source code</ExternalLink>
+              <ProjectLinks links={team.links} />
             </div>
           </Panel>
         </div>

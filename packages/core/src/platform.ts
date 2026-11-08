@@ -1,3 +1,4 @@
+import type { ProjectLink } from './types';
 import { defaultEventDetails } from './event-schedule';
 
 /** Version-two event contracts. Credits are sealed allocations, never tradable money. */
@@ -125,6 +126,7 @@ export interface ProjectSubmission {
   building: string;
   demoUrl: string;
   repoUrl: string;
+  links?: ProjectLink[];
   commitSha: string;
   techStack: string;
   roster: Array<{ uid: string; name: string }>;

@@ -326,6 +326,8 @@ describe('append-only checkpoints and final project evidence', () => {
   });
   it('freezes a complete source commit, profile, evidence and roster without private email', async () => {
     const h = fixture('submission');
+    const links = [{ label: 'Demo video', url: 'https://example.test/video' }];
+    await h.set(paths.team('alpha'), { ...project('alpha', 'captain-a'), links });
     await h.run('captain-a', {
       type: 'submitProject',
       expectedTeamVersion: 1,
@@ -338,6 +340,7 @@ describe('append-only checkpoints and final project evidence', () => {
       submittedAt: NOW,
       pitch: 'A useful project.',
       repoUrl: 'https://github.com/example/alpha',
+      links,
     });
     expect(submitted?.roster).toEqual([
       { uid: 'captain-a', name: 'captain-a' },
@@ -354,6 +357,9 @@ describe('append-only checkpoints and final project evidence', () => {
     await h.set(paths.team('alpha'), { ...project('alpha', 'captain-a'), pitch: 'Changed later.' });
     expect((await h.get<ProjectSubmission>(paths.doc('submissions', 'alpha')))?.pitch).toBe(
       'A useful project.',
+    );
+    expect((await h.get<ProjectSubmission>(paths.doc('submissions', 'alpha')))?.links).toEqual(
+      links,
     );
   });
   it('requires full commit IDs and current profile versions, and keeps submissions open until manually closed', async () => {
