@@ -5,6 +5,7 @@ import {
 } from '../apps/web/src/platform/funding-leaderboard';
 
 const round = {
+  weightBps: 10000,
   state: 'closed' as const,
   eligibleTeamIds: ['zero-b', 'second', 'winner-b', 'zero-a', 'winner-a'],
   totals: { 'winner-a': 100, 'winner-b': 100, second: 30, 'zero-a': 0, 'zero-b': 0, outsider: 999 },
@@ -12,15 +13,17 @@ const round = {
 const nameFor = (id: string) => id;
 
 describe('funding leaderboard', () => {
-  it('ranks summed credits across rounds, including teams that joined later', () => {
+  it('ranks weighted credits across rounds, including teams that joined later', () => {
     const rounds: Parameters<typeof totalFundingLeaderboard>[0] = [
       {
         state: 'closed' as const,
+        weightBps: 4000,
         eligibleTeamIds: ['alpha', 'beta', 'zero'],
         totals: { alpha: 100, beta: 60, zero: 0, outsider: 999 },
       },
       {
         state: 'closed' as const,
+        weightBps: 3500,
         eligibleTeamIds: ['alpha', 'beta', 'late', 'zero'],
         totals: { alpha: 10, beta: 80, late: 110, zero: 0 },
       },
@@ -33,14 +36,49 @@ describe('funding leaderboard', () => {
         rank,
       })),
     ).toEqual([
-      { teamId: 'beta', credits: 140, rank: 1 },
-      { teamId: 'alpha', credits: 110, rank: 2 },
-      { teamId: 'late', credits: 110, rank: 2 },
+      { teamId: 'beta', credits: 52, rank: 1 },
+      { teamId: 'alpha', credits: 43.5, rank: 2 },
+      { teamId: 'late', credits: 38.5, rank: 3 },
       { teamId: 'zero', credits: 0, rank: 4 },
     ]);
     expect(fundingLeaderboard(rounds[0], nameFor)[0].teamId).toBe('alpha');
     expect(fundingLeaderboard(rounds[1], nameFor)[0].teamId).toBe('late');
     expect(rounds).toEqual(original);
+  });
+  it('lets weights change the winner while retaining raw per-round rankings', () => {
+    const early = {
+      ...round,
+      weightBps: 4000,
+      eligibleTeamIds: ['a', 'b'],
+      totals: { a: 100, b: 0 },
+    };
+    const later = { ...early, weightBps: 3500, totals: { a: 0, b: 110 } };
+    expect(
+      totalFundingLeaderboard([early, later], nameFor).map((row) => [
+        row.teamId,
+        row.credits,
+        row.rank,
+      ]),
+    ).toEqual([
+      ['a', 40, 1],
+      ['b', 38.5, 2],
+    ]);
+    expect(fundingLeaderboard(later, nameFor)[0].credits).toBe(110);
+  });
+  it('preserves exact weighted ties instead of accumulating floating-point errors', () => {
+    const early = {
+      ...round,
+      weightBps: 3333,
+      eligibleTeamIds: ['a', 'b'],
+      totals: { a: 3, b: 1 },
+    };
+    const later = { ...early, totals: { a: 0, b: 2 } };
+    expect(
+      totalFundingLeaderboard([early, later], nameFor).map((row) => [row.credits, row.rank]),
+    ).toEqual([
+      [0.9999, 1],
+      [0.9999, 1],
+    ]);
   });
   it('excludes open, voided and withheld rounds from cumulative totals', () => {
     expect(

@@ -35,8 +35,8 @@ export function Results({ data, actions }: PageProps) {
 
       <Panel title="Overall funding ranking">
         <p className="muted">
-          Total credits received across completed rounds, highest first. Round reward weights do not
-          affect this ranking. Equal totals share a place. Funding does not determine the judges’
+          Credits received in each completed round × that round’s weight, added together. Highest
+          weighted total first; equal totals share a place. Funding does not determine the judges’
           winner.
         </p>
         {blindJudge ? (
@@ -44,7 +44,7 @@ export function Results({ data, actions }: PageProps) {
             Funding totals stay hidden from judges until results are finalized.
           </p>
         ) : totals.length ? (
-          <FundingTable rows={totals} ownTeamId={data.member?.teamId} />
+          <FundingTable rows={totals} ownTeamId={data.member?.teamId} weighted />
         ) : (
           <Blank>
             Totals appear after the organizer closes a round. Open and voided rounds are not
@@ -188,7 +188,15 @@ export function Results({ data, actions }: PageProps) {
 }
 
 /** The same columns and tie ranks apply to overall and per-round funding. */
-function FundingTable({ rows, ownTeamId }: { rows: FundingStanding[]; ownTeamId?: string | null }) {
+function FundingTable({
+  rows,
+  ownTeamId,
+  weighted = false,
+}: {
+  rows: FundingStanding[];
+  ownTeamId?: string | null;
+  weighted?: boolean;
+}) {
   return (
     <div className="p-table-wrap">
       <table className="p-table">
@@ -197,7 +205,7 @@ function FundingTable({ rows, ownTeamId }: { rows: FundingStanding[]; ownTeamId?
             <th scope="col">Rank</th>
             <th scope="col">Project</th>
             <th scope="col" aria-sort="descending">
-              Total credits received
+              {weighted ? 'Weighted credits' : 'Total credits received'}
             </th>
           </tr>
         </thead>
@@ -211,7 +219,7 @@ function FundingTable({ rows, ownTeamId }: { rows: FundingStanding[]; ownTeamId?
                 </button>
                 {entry.teamId === ownTeamId && <span className="muted"> (your team)</span>}
               </td>
-              <td>{entry.credits.toLocaleString()}</td>
+              <td>{entry.credits.toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
             </tr>
           ))}
         </tbody>
