@@ -324,7 +324,7 @@ function Operations({ data, actions }: PageProps) {
                   missingCheckpoints.length
                     ? 'Open without checkpoint updates?'
                     : 'Open funding round',
-                  `${missingCheckpoints.length ? `Missing updates: ${missingCheckpoints.map((team) => team.name).join(', ')}. These teams will still participate, but cannot post a checkpoint for this round once it opens. ` : ''}Open ${settings.funding.roundNames[settings.currentRound]} now? It stays open until you close it. ${settings.currentRound === 0 ? 'This locks the roster, funding settings, and judging rubric.' : ''}`,
+                  `${missingCheckpoints.length ? `Missing updates: ${missingCheckpoints.map((team) => team.name).join(', ')}. These teams will still participate and can publish their first checkpoint while this round is open. ` : ''}Open ${settings.funding.roundNames[settings.currentRound]} now? It stays open until you close it. ${settings.currentRound === 0 ? 'This locks the roster, funding settings, and judging rubric.' : ''}`,
                   {
                     type: 'openFundingRound',
                     allowMissingCheckpoints: missingCheckpoints.length > 0,

@@ -30,6 +30,11 @@ the team and an available role, then **Save team and role**. No pause is needed.
 The four-person limit still applies. Moving an existing teammate or changing
 their role requires a pause. Published and award-review rosters remain locked.
 
+Use **Admin → Teams → Create team** to create a late team without pausing, then
+assign its captain and teammates in People. It can join future funding rounds;
+creating it does not change the eligible teams, budgets, or credits in rounds
+that have already opened. Results review and published events remain locked.
+
 ## Manual event controls
 
 Funding rounds, final submissions, and the community ballot open and close only
@@ -37,7 +42,9 @@ when an organizer presses the corresponding control. There is no duration input,
 automatic cutoff, or countdown. A round remains open past suggested times until
 someone closes it. If checkpoints are missing, **Open next round** names those
 teams and asks you to confirm opening anyway. They remain eligible to invest and
-receive funding, but cannot add a checkpoint for that round after it opens. The
+receive funding and can publish their first checkpoint for that round while it is
+open, from **My team → Publish a checkpoint update**. A team with an existing
+checkpoint cannot edit or replace it during the round. Closed rounds stay locked. The
 audit record lists any missing checkpoints you confirmed. Approved captains and
 round-three final submissions remain required. Closing commits all allocations
 atomically.

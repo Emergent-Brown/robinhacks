@@ -103,7 +103,7 @@ describe('organizer team and person management', () => {
     ).rejects.toMatchObject({ code: 'MEMBERSHIP_REQUIRED' });
   });
 
-  it('creates teams before funding and rejects normalized duplicate names and later entrants', async () => {
+  it('creates teams and rejects normalized duplicate names', async () => {
     const h = fixture();
     await h.execute({ type: 'adminCreateTeam', name: 'Project Atlas' });
     const created = (h.rows('teams') as Team[]).find((team) => team.name === 'Project Atlas')!;
@@ -111,11 +111,39 @@ describe('organizer team and person management', () => {
     await expect(
       h.execute({ type: 'adminCreateTeam', name: 'ＰＲＯＪＥＣＴ  atlas' }),
     ).rejects.toMatchObject({ code: 'TEAM_EXISTS' });
-    const started = fixture('funding');
-    await started.patch(root, { paused: true });
+  });
+
+  it('creates a late team and assigns its captain without pausing or altering funding history', async () => {
+    const h = fixture('funding');
+    const before = h.repository.dump();
+    await h.execute({ type: 'adminCreateTeam', name: 'Late entrant' });
+    const created = (h.rows('teams') as Team[]).find((team) => team.name === 'Late entrant')!;
+    await h.execute({
+      type: 'adminAssignMember',
+      uid: attendee.uid,
+      teamId: created.id,
+      role: 'captain',
+      expectedVersion: 0,
+    });
+    expect(h.get<Team>(`teams/${created.id}`).captainUid).toBe(attendee.uid);
+    expect(h.event().paused).toBe(false);
+    for (const [path, value] of Object.entries(before))
+      if (/\/(fundingRounds|roundAllocations|roundEntitlements)\//.test(path))
+        expect(h.repository.dump()[path]).toEqual(value);
+  });
+
+  it.each([
+    [{ phase: 'FINALIZING' }, 'AWARDS_PREVIEW_EXISTS'],
+    [{ phase: 'FINALIZED' }, 'EVENT_READ_ONLY'],
+    [{ phase: 'CANCELLED' }, 'EVENT_READ_ONLY'],
+    [{ phase: 'ARCHIVED' }, 'EVENT_READ_ONLY'],
+    [{ activeOperationId: 'closing-round' }, 'OPERATION_RUNNING'],
+  ] as const)('blocks late team creation when unavailable: %j', async (patch, code) => {
+    const h = fixture('funding');
+    await h.patch(root, patch);
     await expect(
-      started.execute({ type: 'adminCreateTeam', name: 'Late entrant' }),
-    ).rejects.toMatchObject({ code: 'ROSTER_LOCKED' });
+      h.execute({ type: 'adminCreateTeam', name: 'Late entrant' }),
+    ).rejects.toMatchObject({ code });
   });
 
   it('assigns unassigned people without opening self-service formation and preserves status constraints', async () => {

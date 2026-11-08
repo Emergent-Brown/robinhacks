@@ -7,3 +7,4 @@ export * from './sealed-funding';
 export * from './posters';
 export * from './judging';
 export * from './signup-policy';
+export * from './checkpoint-policy';

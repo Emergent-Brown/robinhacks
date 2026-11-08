@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { ProjectSubmission, Team, TeamProfilePatch } from '@robinhacks/core';
 import { Dialog, Field } from '../ui/primitives';
 import { Blank, ErrorMessage, Panel, platform, teams, useCommand, type PageProps } from './shared';
-import { managementLockReason } from './admin-management';
+import { managementLockReason, teamCreationLockReason } from './admin-management';
 import { SectorPicker } from './SectorPicker';
 import { resolveProjectSector } from './project-discovery';
 import './admin-management.css';
@@ -24,10 +24,7 @@ export function AdminTeams({ data, actions }: PageProps) {
         .includes(search.trim().toLowerCase()),
   );
   const submissions = platform(data).submissions;
-  const canCreate =
-    !locked &&
-    !data.event!.platform!.rulesLockedAt &&
-    ['DRAFT', 'REGISTRATION'].includes(data.event!.phase);
+  const canCreate = !teamCreationLockReason(data);
   return (
     <>
       <Panel
@@ -49,8 +46,9 @@ export function AdminTeams({ data, actions }: PageProps) {
         {locked && <p className="p-note">{locked}</p>}
         {!!data.event!.platform!.rulesLockedAt && (
           <p className="muted">
-            All competing teams were fixed when funding began. Existing teams and their people can
-            be corrected while paused.
+            You can create a team without pausing. New teams can join future funding rounds;
+            already-open and completed rounds keep their original teams. Pause to edit existing
+            teams.
           </p>
         )}
         <div className="p-admin-toolbar">
@@ -188,11 +186,12 @@ function CreateTeam({ data, actions, onClose }: PageProps & { onClose: () => voi
           />
         </Field>
         <p className="muted">
-          After creating the team, use People to assign its captain and teammates. All teams must be
-          created before the first funding round.
+          After creating the team, use People to assign its captain and teammates. New teams can
+          join future funding rounds. They cannot invest or receive credits in a round that has
+          already opened.
         </p>
         <ErrorMessage>{cmd.error}</ErrorMessage>
-        <button className="button primary" disabled={cmd.pending || !!managementLockReason(data)}>
+        <button className="button primary" disabled={cmd.pending || !!teamCreationLockReason(data)}>
           {cmd.pending ? 'Creating…' : 'Create team'}
         </button>
       </form>

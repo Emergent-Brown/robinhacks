@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Team } from '@robinhacks/core';
+import { CheckpointPolicy } from '@robinhacks/core';
 import { Dialog, ExternalLink, Field } from '../ui/primitives';
 import { SectorPicker } from './SectorPicker';
 import { resolveProjectSector } from './project-discovery';
@@ -140,8 +141,9 @@ export function MyTeam({ data, actions }: PageProps) {
       </Panel>
       {['captain', 'member'].includes(data.member!.role) &&
         !data.event!.paused &&
-        !['FINALIZING', 'FINALIZED', 'CANCELLED', 'ARCHIVED'].includes(data.event!.phase) &&
-        config(data).currentRound < 3 && <UpdateEditor data={data} actions={actions} />}
+        !['FINALIZING', 'FINALIZED', 'CANCELLED', 'ARCHIVED'].includes(data.event!.phase) && (
+          <UpdateEditor data={data} actions={actions} />
+        )}
       <Panel title="Published updates">
         {!state.updates.some((u) => u.teamId === team.id) ? (
           <Blank>Publish a short update before the first round.</Blank>
@@ -343,15 +345,40 @@ function ProfileBioEditor({ data, actions }: PageProps) {
   );
 }
 function UpdateEditor({ data, actions }: PageProps) {
-  const [round, setRound] = useState(Math.min(3, Math.max(1, config(data).currentRound + 1)));
+  const state = platform(data);
+  const availableRounds = [1, 2, 3].filter((number) =>
+    CheckpointPolicy.canPublish(
+      data.event!,
+      state.rounds,
+      state.updates,
+      ownTeam(data)!.id,
+      number,
+    ),
+  );
+  const [selectedRound, setRound] = useState<number | null>(null);
+  const round =
+    selectedRound !== null && availableRounds.includes(selectedRound)
+      ? selectedRound
+      : (availableRounds[0] ?? 3);
   const [form, setForm] = useState({ works: '', changed: '', evidenceUrl: '', incomplete: '' });
-  const [confirm, setConfirm] = useState(false);
+  const [reviewRound, setReviewRound] = useState<number | null>(null);
   const cmd = useCommand(actions);
+  if (!availableRounds.length)
+    return (
+      <Panel title="Checkpoint updates">
+        <p>
+          No checkpoint is available to publish. Published updates stay visible below and cannot be
+          edited.
+        </p>
+      </Panel>
+    );
   return (
     <Panel title="Publish a checkpoint update">
       <p className="muted">
         Share what you built, tried, or learned. A working demo is not required. Updates remain
-        public and cannot be edited; publish a correction as a new update if needed.
+        public and cannot be edited. During an open round, you can publish only if your team has not
+        posted a checkpoint for that round. Before a round opens, you can add a correction as a
+        separate update.
       </p>
       <details className="p-prose">
         <summary>Checkpoint examples</summary>
@@ -382,17 +409,13 @@ function UpdateEditor({ data, actions }: PageProps) {
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          setConfirm(true);
+          setReviewRound(round);
         }}
       >
         <Field label="Checkpoint">
           <select value={round} onChange={(event) => setRound(Number(event.target.value))}>
             {config(data).funding.roundNames.map((name, index) => (
-              <option
-                key={name}
-                value={index + 1}
-                disabled={index + 1 <= config(data).currentRound}
-              >
+              <option key={name} value={index + 1} disabled={!availableRounds.includes(index + 1)}>
                 {name}
               </option>
             ))}
@@ -449,10 +472,10 @@ function UpdateEditor({ data, actions }: PageProps) {
         </Field>
         <button className="button primary">Review update</button>
       </form>
-      {confirm && (
-        <Dialog title="Publish this update?" onClose={() => setConfirm(false)}>
+      {reviewRound !== null && (
+        <Dialog title="Publish this update?" onClose={() => setReviewRound(null)}>
           <div className="p-prose">
-            <h3>{config(data).funding.roundNames[round - 1]}</h3>
+            <h3>{config(data).funding.roundNames[reviewRound - 1]}</h3>
             <p>
               <strong>Progress:</strong> {form.works}
             </p>
@@ -470,8 +493,8 @@ function UpdateEditor({ data, actions }: PageProps) {
             className="button primary"
             disabled={cmd.pending}
             onClick={() =>
-              void cmd.run({ type: 'publishUpdate', round, ...form }, () => {
-                setConfirm(false);
+              void cmd.run({ type: 'publishUpdate', round: reviewRound, ...form }, () => {
+                setReviewRound(null);
                 setForm({ works: '', changed: '', evidenceUrl: '', incomplete: '' });
               })
             }

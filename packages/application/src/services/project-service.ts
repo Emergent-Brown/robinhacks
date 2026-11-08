@@ -6,6 +6,7 @@ import type {
   ProjectUpdate,
 } from '@robinhacks/core';
 import { requireState } from '../errors';
+import { CheckpointPolicy } from '@robinhacks/core';
 import { receipt, type CommandContext } from './context';
 import { PlatformPermissions as Guard } from './platform-permissions';
 
@@ -54,10 +55,9 @@ export class ProjectService {
         'Choose one of the three funding rounds.',
       );
       requireState(
-        command.round > config.currentRound &&
-          !rounds.some((round) => round.number >= command.round),
+        CheckpointPolicy.windowOpen(event, rounds, command.round),
         'UPDATE_LOCKED',
-        'Publish the checkpoint before its funding round opens.',
+        'Checkpoints can be published before a round or while that round is open, but not after it closes.',
       );
       const [existing, previousId] = await Promise.all([
         tx.list<ProjectUpdate>(paths.collection('projectUpdates'), 301),
@@ -68,6 +68,11 @@ export class ProjectService {
         !previousId,
         'COMMAND_CONFLICT',
         'This update identifier already exists. Start a new update.',
+      );
+      requireState(
+        CheckpointPolicy.canPublish(event, rounds, existing, team.id, command.round),
+        'UPDATE_LOCKED',
+        'Your team already published a checkpoint for this round. It cannot be edited or replaced during funding.',
       );
       requireState(
         existing.length < 300 && existing.filter((update) => update.teamId === team.id).length < 10,

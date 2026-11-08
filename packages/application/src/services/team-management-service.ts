@@ -22,7 +22,7 @@ const participant = (member: Member) => !['organizer', 'judge'].includes(member.
 /** Organizer corrections change the live workspace, never settled funding records. */
 export class TeamManagementService {
   async execute(context: CommandContext, command: TeamManagementCommand) {
-    this.assertEditable(context, command.type !== 'adminAssignMember');
+    this.assertEditable(context, !['adminAssignMember', 'adminCreateTeam'].includes(command.type));
     if (command.type === 'adminCreateTeam') return this.create(context, command);
     if (command.type === 'adminAssignMember') return this.assign(context, command);
     if (command.type === 'adminUpdateMember') return this.updateMember(context, command);
@@ -68,12 +68,6 @@ export class TeamManagementService {
     command: Extract<TeamManagementCommand, { type: 'adminCreateTeam' }>,
   ) {
     const { tx, paths, now } = context;
-    requireState(
-      !context.event.platform?.rulesLockedAt &&
-        ['DRAFT', 'REGISTRATION'].includes(context.event.phase),
-      'ROSTER_LOCKED',
-      'Create all teams before the first funding round. Existing team rosters can still be corrected while paused.',
-    );
     const teams = await tx.list<Team>(paths.collection('teams'), RULES.maxTeams + 1);
     requireState(
       teams.length < RULES.maxTeams,
@@ -108,7 +102,7 @@ export class TeamManagementService {
     this.audit(context, command, null, team);
     this.touch(context);
     return {
-      message: `${team.name} created. Assign an approved captain in People before opening its next funding round.`,
+      message: `${team.name} created. Assign an approved captain in People. Already-open and completed funding rounds keep their original teams.`,
     };
   }
 

@@ -22,6 +22,11 @@ export function managementLockReason(data: AppSnapshot): string {
   return '';
 }
 
+/** New teams do not change the eligibility snapshots of existing funding rounds. */
+export function teamCreationLockReason(data: AppSnapshot): string {
+  return eventManagementLockReason(data);
+}
+
 /** Adding an approved unassigned person does not disrupt an existing team assignment. */
 export function assignmentLockReason(data: AppSnapshot, member: Member): string {
   const canAdd =

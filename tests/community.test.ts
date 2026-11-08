@@ -208,6 +208,91 @@ describe('append-only checkpoints and final project evidence', () => {
     evidenceUrl: 'https://example.test/demo',
     incomplete: 'Mobile polish.',
   };
+  async function openCheckpointRound(number: number) {
+    const h = fixture();
+    const event = (await h.get<EventConfig>(root))!;
+    await h.patchEvent({
+      phase: 'SEED_OPEN',
+      platform: { ...event.platform!, currentRound: number },
+    });
+    await h.set(paths.doc('fundingRounds', `funding-${number}`), {
+      id: `funding-${number}`,
+      number,
+      name: `Round ${number}`,
+      state: 'open',
+      openedAt: NOW - 1000,
+      closesAt: null,
+      closedAt: null,
+      weightBps: 10000,
+      minimumDenominator: 200,
+      eligibleTeamIds: [...teamIds],
+      totals: {},
+      voidReason: '',
+      version: 1,
+    } satisfies FundingRound);
+    return h;
+  }
+  it.each([1, 2, 3])(
+    'allows only the first team checkpoint during open round %i',
+    async (round) => {
+      const h = await openCheckpointRound(round);
+      await h.run('teammate', { ...update, round, evidenceUrl: '' }, 'first-mid-round');
+      const original = await h.get(paths.doc('projectUpdates', 'first-mid-round'));
+      expect(original).toMatchObject({
+        teamId: 'alpha',
+        round,
+        createdAt: NOW,
+        authorName: 'teammate',
+      });
+      await expect(
+        h.run('captain-a', { ...update, round, works: 'Replace the progress.' }),
+      ).rejects.toMatchObject({ code: 'UPDATE_LOCKED' });
+      expect(await h.get(paths.doc('projectUpdates', 'first-mid-round'))).toEqual(original);
+      await expect(h.run('captain-b', { ...update, round })).resolves.toBeDefined();
+    },
+  );
+  it('keeps a pre-round checkpoint locked after opening and serializes competing first posts', async () => {
+    const h = await openCheckpointRound(2);
+    const results = await Promise.allSettled([
+      h.run('teammate', { ...update, round: 2 }),
+      h.run('captain-a', { ...update, round: 2 }),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.find((result) => result.status === 'rejected')).toMatchObject({
+      reason: { code: 'UPDATE_LOCKED' },
+    });
+    const early = fixture();
+    await early.run('captain-a', update);
+    const active = await openCheckpointRound(1);
+    await early.patchEvent((await active.get<EventConfig>(root))!);
+    await early.set(
+      paths.doc('fundingRounds', 'funding-1'),
+      await active.get(paths.doc('fundingRounds', 'funding-1')),
+    );
+    await expect(early.run('teammate', update)).rejects.toMatchObject({ code: 'UPDATE_LOCKED' });
+  });
+  it.each(['closed', 'void'] as const)(
+    'does not reopen checkpoints for a %s round',
+    async (state) => {
+      const h = await openCheckpointRound(2);
+      const path = paths.doc('fundingRounds', 'funding-2');
+      await h.set(path, { ...(await h.get<FundingRound>(path))!, state });
+      await expect(h.run('teammate', { ...update, round: 2 })).rejects.toMatchObject({
+        code: 'UPDATE_LOCKED',
+      });
+    },
+  );
+  it('blocks mid-round updates during pause and active round operations', async () => {
+    const h = await openCheckpointRound(2);
+    await h.patchEvent({ paused: true });
+    await expect(h.run('teammate', { ...update, round: 2 })).rejects.toMatchObject({
+      code: 'EVENT_PAUSED',
+    });
+    await h.patchEvent({ paused: false, activeOperationId: 'close-round' });
+    await expect(h.run('teammate', { ...update, round: 2 })).rejects.toMatchObject({
+      code: 'UPDATE_LOCKED',
+    });
+  });
   it('archives separate updates with author and server timestamp', async () => {
     const h = fixture();
     await h.run('captain-a', update);
