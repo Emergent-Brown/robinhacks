@@ -151,6 +151,14 @@ function Operations({ data, actions }: PageProps) {
   const settings = config(data);
   const active = state.rounds.find((round) => round.state === 'open');
   const nextRound = settings.currentRound + 1;
+  const missingSubmissions =
+    nextRound === 3
+      ? teams(data).filter(
+          (team) =>
+            team.eligibility === 'active' &&
+            !state.submissions.some((submission) => submission.teamId === team.id),
+        )
+      : [];
   const missingCheckpoints = teams(data).filter(
     (team) =>
       team.eligibility === 'active' &&
@@ -268,8 +276,8 @@ function Operations({ data, actions }: PageProps) {
                 })}
             </ul>
             <span>
-              Every active team needs an approved captain; round 3 also needs final submissions. You
-              can confirm opening without missing checkpoint updates.
+              Every active team needs an approved captain. You can confirm opening without missing
+              checkpoint updates or final submissions.
             </span>
           </div>
         )}
@@ -321,13 +329,16 @@ function Operations({ data, actions }: PageProps) {
               }
               onOpen={() =>
                 review(
-                  missingCheckpoints.length
-                    ? 'Open without checkpoint updates?'
-                    : 'Open funding round',
-                  `${missingCheckpoints.length ? `Missing updates: ${missingCheckpoints.map((team) => team.name).join(', ')}. These teams will still participate and can publish their first checkpoint while this round is open. ` : ''}Open ${settings.funding.roundNames[settings.currentRound]} now? It stays open until you close it. ${settings.currentRound === 0 ? 'This locks the roster, funding settings, and judging rubric.' : ''}`,
+                  missingSubmissions.length
+                    ? 'Open without final submissions?'
+                    : missingCheckpoints.length
+                      ? 'Open without checkpoint updates?'
+                      : 'Open funding round',
+                  `${missingSubmissions.length ? `Missing final submissions: ${missingSubmissions.map((team) => team.name).join(', ')}. These teams can still invest and receive funding. Opening this round closes final submissions; teams without a submission will not be included in judging. ` : ''}${missingCheckpoints.length ? `Missing updates: ${missingCheckpoints.map((team) => team.name).join(', ')}. These teams will still participate and can publish their first checkpoint while this round is open. ` : ''}Open ${settings.funding.roundNames[settings.currentRound]} now? It stays open until you close it. ${settings.currentRound === 0 ? 'This locks the roster, funding settings, and judging rubric.' : ''}`,
                   {
                     type: 'openFundingRound',
                     allowMissingCheckpoints: missingCheckpoints.length > 0,
+                    allowMissingSubmissions: missingSubmissions.length > 0,
                     ...phaseVersion,
                   },
                 )

@@ -10,6 +10,7 @@ import type {
   Team,
 } from '@robinhacks/core';
 import { FundingService } from '../packages/application/src/services/funding-service';
+import { parseCommand } from '../packages/application/src/command-schema';
 import { MemoryRepository, type DocumentMap } from '../packages/application/src/memory-repository';
 import { EventPaths } from '../packages/application/src/paths';
 
@@ -613,7 +614,7 @@ describe('sealed funding application boundaries', () => {
     ).rejects.toMatchObject({ code: 'ROUND_CLOSED' });
   });
 
-  it('requires final submissions for round three and never creates a fourth round', async () => {
+  it('requires final submissions by default for round three and never creates a fourth round', async () => {
     const h = fixture();
     await h.open();
     h.setNow(61_000);
@@ -637,5 +638,57 @@ describe('sealed funding application boundaries', () => {
     await h.finish();
     await expect(h.open()).rejects.toMatchObject({ code: 'ROUND_LIMIT' });
     expect((await h.snapshot('captain-a')).entitlements).toHaveLength(3);
+  });
+  it('allows an organizer to confirm missing final submissions without excluding teams', async () => {
+    const h = fixture();
+    await h.open();
+    await h.finish();
+    await h.open();
+    await h.finish();
+    const override = {
+      type: 'openFundingRound',
+      expectedPhaseVersion: h.currentEvent().phaseVersion,
+      allowMissingSubmissions: true,
+    };
+    await expect(
+      h.command('organizer', { ...override, allowMissingSubmissions: false }),
+    ).rejects.toMatchObject({ code: 'SUBMISSION_REQUIRED' });
+    await expect(h.command('captain-a', override)).rejects.toMatchObject({
+      code: 'ORGANIZER_REQUIRED',
+    });
+    await expect(
+      h.command('organizer', { ...override, expectedPhaseVersion: 0 }),
+    ).rejects.toMatchObject({ code: 'PHASE_CHANGED' });
+    await h.change(h.paths.member('captain-c'), { status: 'pending' });
+    await expect(h.command('organizer', override)).rejects.toMatchObject({
+      code: 'TEAM_NOT_APPROVED',
+    });
+    await h.change(h.paths.member('captain-c'), { status: 'approved' });
+    await h.repository.transaction(async (tx) => tx.delete(h.paths.doc('projectUpdates', 'c-3')));
+    await expect(h.command('organizer', override)).rejects.toMatchObject({
+      code: 'CHECKPOINT_REQUIRED',
+    });
+    const result = await h.command('organizer', { ...override, allowMissingCheckpoints: true });
+    expect(result.message).toContain('Organizer confirmed opening without final submissions from:');
+    expect(result.message).toContain(
+      'Organizer confirmed opening without checkpoint updates from:',
+    );
+    expect(h.currentEvent().platform).toMatchObject({ currentRound: 3, submissionsOpen: false });
+    const final = (await h.snapshot('captain-a')).rounds.find((round) => round.number === 3)!;
+    expect(final.eligibleTeamIds).toEqual(ids);
+    await h.save({ b: 60, c: 40 });
+    await h.finish();
+    expect(
+      (await h.snapshot('captain-a')).rounds.find((round) => round.number === 3)?.totals.b,
+    ).toBe(60);
+  });
+  it('accepts only a boolean for the missing-submission confirmation', () => {
+    const command = {
+      type: 'openFundingRound',
+      commandId: 'confirm-final-submissions',
+      expectedPhaseVersion: 0,
+    };
+    expect(() => parseCommand({ ...command, allowMissingSubmissions: true })).not.toThrow();
+    expect(() => parseCommand({ ...command, allowMissingSubmissions: 'true' })).toThrow();
   });
 });

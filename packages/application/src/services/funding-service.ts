@@ -228,11 +228,14 @@ export class FundingService {
       'CHECKPOINT_REQUIRED',
       `Checkpoint updates missing: ${missingCheckpoints.map((team) => team.name).join(', ')}. Confirm opening without these updates, or publish them first.`,
     );
+    const missingSubmissions =
+      number === 3
+        ? active.filter((team) => !submissions.some((submission) => submission.teamId === team.id))
+        : [];
     requireState(
-      number !== 3 ||
-        active.every((team) => submissions.some((submission) => submission.teamId === team.id)),
+      missingSubmissions.length === 0 || command.allowMissingSubmissions === true,
       'SUBMISSION_REQUIRED',
-      'Every active team must submit its final project before the final funding round.',
+      `Final submissions missing: ${missingSubmissions.map((team) => team.name).join(', ')}. Confirm opening without these submissions, or collect them first.`,
     );
     const now = context.clock.now();
     context.now = now;
@@ -266,7 +269,7 @@ export class FundingService {
       },
     });
     return {
-      message: `${round.name} is open. Each team has a new ${platform.funding.budget}-credit budget.${missingCheckpoints.length ? ` Organizer confirmed opening without checkpoint updates from: ${missingCheckpoints.map((team) => team.name).join(', ')}.` : ''}`,
+      message: `${round.name} is open. Each team has a new ${platform.funding.budget}-credit budget.${missingCheckpoints.length ? ` Organizer confirmed opening without checkpoint updates from: ${missingCheckpoints.map((team) => team.name).join(', ')}.` : ''}${missingSubmissions.length ? ` Organizer confirmed opening without final submissions from: ${missingSubmissions.map((team) => team.name).join(', ')}.` : ''}`,
     };
   }
 

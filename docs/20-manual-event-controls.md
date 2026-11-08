@@ -52,8 +52,11 @@ teams and asks you to confirm opening anyway. They remain eligible to invest and
 receive funding and can publish their first checkpoint for that round while it is
 open, from **My team → Publish a checkpoint update**. A team with an existing
 checkpoint cannot edit or replace it during the round. Closed rounds stay locked. The
-audit record lists any missing checkpoints you confirmed. Approved captains and
-round-three final submissions remain required. Closing commits all allocations
+audit record lists any missing checkpoints you confirmed. Approved captains remain required. For round three, organizers can also confirm opening
+without final submissions. The confirmation lists missing teams and records the
+override in the audit log. Those teams can invest and receive funding, but
+opening round three closes submissions and teams without submitted evidence are
+not included in judging. Closing commits all allocations
 atomically.
 
 The suggested round schedule is available to organizers for planning. Changing
